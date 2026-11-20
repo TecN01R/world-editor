@@ -33,6 +33,8 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
     private let engine = FitEngine()
     private let measurer = TextKitMeasurer()
 
+    private var areaTrailing: NSLayoutConstraint!
+    private var railCenterX: NSLayoutConstraint!
     private var index = 0
     private var heldSize = 0.0
     private var heldLength = 0
@@ -53,10 +55,11 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         NSLayoutConstraint.activate([
             area.topAnchor.constraint(equalTo: safe.topAnchor, constant: 12),
             area.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 16),
-            area.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -40),
             area.bottomAnchor.constraint(lessThanOrEqualTo: safe.bottomAnchor, constant: -16),
             area.bottomAnchor.constraint(lessThanOrEqualTo: view.keyboardLayoutGuide.topAnchor, constant: -12),
         ])
+        areaTrailing = area.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -40)
+        areaTrailing.isActive = true
         let fill = area.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor, constant: -12)
         fill.priority = .defaultHigh
         fill.isActive = true
@@ -77,11 +80,13 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         rail.onSelect = { [weak self] i in self?.show(i, caret: .end, direction: 0) }
         view.addSubview(rail)
         NSLayoutConstraint.activate([
-            rail.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -4),
             rail.centerYAnchor.constraint(equalTo: area.centerYAnchor),
             rail.widthAnchor.constraint(equalToConstant: 32),
             rail.heightAnchor.constraint(lessThanOrEqualTo: area.heightAnchor, multiplier: 0.7),
         ])
+
+        railCenterX = rail.centerXAnchor.constraint(equalTo: view.trailingAnchor, constant: -20)
+        railCenterX.isActive = true
 
         for dir in [UISwipeGestureRecognizer.Direction.up, .down] {
             let s = UISwipeGestureRecognizer(target: self, action: #selector(swiped(_:)))
@@ -91,6 +96,16 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
 
         let c = library.cursor
         show(c.paragraph, caret: .offset(c.offset), direction: 0)
+    }
+
+    /// On the Duo the paragraph dots sit in the side column with the app's
+    /// other controls, and the text gets the full width up to it.
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        let column = view.safeAreaInsets.right
+        let hasColumn = column >= 40
+        areaTrailing.constant = hasColumn ? -12 : -40
+        railCenterX.constant = hasColumn ? -column / 2 : -20
     }
 
     override func viewDidAppear(_ animated: Bool) {
