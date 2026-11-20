@@ -1,0 +1,87 @@
+import UIKit
+import WriterCore
+
+/// Converts between the document model (text + style runs + paragraph kind)
+/// and the attributed strings the text views edit. Bold and italic live in
+/// font traits, so UIKit's own ⌘B/⌘I and Format menu stay in sync for free.
+enum RichText {
+    static func font(_ base: UIFont, _ style: InlineStyle) -> UIFont {
+        var traits = base.fontDescriptor.symbolicTraits
+        if style.contains(.bold) { traits.insert(.traitBold) } else { traits.remove(.traitBold) }
+        if style.contains(.italic) { traits.insert(.traitItalic) } else { traits.remove(.traitItalic) }
+        guard let d = base.fontDescriptor.withSymbolicTraits(traits) else { return base }
+        return UIFont(descriptor: d, size: base.pointSize)
+    }
+
+    static func style(of font: UIFont?) -> InlineStyle {
+        guard let traits = font?.fontDescriptor.symbolicTraits else { return [] }
+        var style: InlineStyle = []
+        if traits.contains(.traitBold) { style.insert(.bold) }
+        if traits.contains(.traitItalic) { style.insert(.italic) }
+        return style
+    }
+
+    /// `text` with `attributes`, its fonts adjusted for each run.
+    static func attributed(_ text: String, runs: [StyleRun], attributes: [NSAttributedString.Key: Any]) -> NSMutableAttributedString {
+        let s = NSMutableAttributedString(string: text, attributes: attributes)
+        guard let base = attributes[.font] as? UIFont else { return s }
+        for run in runs where run.location + run.length <= s.length {
+            s.addAttribute(.font, value: font(base, run.style), range: NSRange(location: run.location, length: run.length))
+        }
+        return s
+    }
+
+    /// Style runs of `range`, relative to its start.
+    static func runs(in s: NSAttributedString, range: NSRange? = nil) -> [StyleRun] {
+        let range = range ?? NSRange(location: 0, length: s.length)
+        var runs: [StyleRun] = []
+        s.enumerateAttribute(.font, in: range) { value, r, _ in
+            let style = Self.style(of: value as? UIFont)
+            if !style.isEmpty { runs.append(StyleRun(location: r.location - range.location, length: r.length, style: style)) }
+        }
+        return runs
+    }
+
+    // MARK: Lists
+
+    // One shared list per kind: TextKit numbers consecutive paragraphs that
+    // carry the same list, so separate runs restart at 1.
+    static let bulletList = NSTextList(markerFormat: .disc, options: 0)
+    static let numberedList = NSTextList(markerFormat: .decimal, options: 0)
+
+    static func list(for kind: ParagraphKind) -> NSTextList? {
+        switch kind {
+        case .body: nil
+        case .bullet: bulletList
+        case .numbered: numberedList
+        }
+    }
+
+    static func kind(of style: NSParagraphStyle?) -> ParagraphKind {
+        guard let list = style?.textLists.last else { return .body }
+        return list.markerFormat == .decimal ? .numbered : .bullet
+    }
+
+    /// The whole text view's content as paragraphs. The final line has no
+    /// character to carry its paragraph style when empty, so `trailingKind`
+    /// (the typing attributes' list) stands in for it.
+    static func paragraphs(from s: NSAttributedString, trailingKind: ParagraphKind) -> [Paragraph] {
+        let ns = s.string as NSString
+        var result: [Paragraph] = []
+        var location = 0
+        while true {
+            let end = ns.range(of: "\n", range: NSRange(location: location, length: ns.length - location)).location
+            let lineEnd = end == NSNotFound ? ns.length : end
+            let range = NSRange(location: location, length: lineEnd - location)
+            let kind: ParagraphKind
+            if location < ns.length {
+                kind = Self.kind(of: s.attribute(.paragraphStyle, at: location, effectiveRange: nil) as? NSParagraphStyle)
+            } else {
+                kind = trailingKind   // empty final line
+            }
+            result.append(Paragraph(text: ns.substring(with: range), kind: kind, runs: runs(in: s, range: range)))
+            guard end != NSNotFound else { return result }
+            location = end + 1
+        }
+    }
+}

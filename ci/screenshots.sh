@@ -44,7 +44,8 @@ while IFS='|' read -r UDID NAME; do
     echo "   $name"
   }
 
-  shoot page        -screenshotText "First paragraph in page view.\\nSecond one, a little longer so it wraps onto another line."
+  shoot edit        -screenshotRich YES
+  shoot pages       -screenshotPages YES
   shoot focus-pages -screenshotText "First page.\\nSecond page.\\nThird page, where the caret is." -startInFocus YES
   # Fitting edge cases, only when Focus mode itself changed.
   if [ "${FULL_SHOTS:-true}" = "true" ]; then
@@ -53,11 +54,28 @@ while IFS='|' read -r UDID NAME; do
     shoot focus-short -screenshotText "Hi. This" -startInFocus YES
     shoot focus-long  -screenshotText "$LONG" -startInFocus YES
   fi
+  # Unfolded (experimental): simctl has no fold command, so ask the Simulator
+  # app's own menus to open the device, then shoot the inner display. Never
+  # fails the job; it prints what it finds so the next attempt can be exact.
+  if [ "$DISPLAY_ID" != "" ] && [ "${UNFOLD:-true}" = "true" ]; then
+    open -a Simulator --args -CurrentDeviceUDID "$UDID" || true
+    sleep 6
+    osascript ci/unfold.applescript 2>&1 | sed 's/^/   unfold: /' || true
+    sleep 3
+    INNER=$(xcrun simctl io "$UDID" screenshot "$OUT/probe.png" 2>&1 | sed -nE 's/.*--display=([0-9]+).*/\1/p' | sort -n | tail -1)
+    rm -f "$OUT/probe.png"
+    if [ -n "$INNER" ] && [ "$INNER" != "$DISPLAY_ID" ]; then
+      DISPLAY_ID="$INNER"
+      shoot unfolded-edit  -screenshotRich YES
+      shoot unfolded-pages -screenshotPages YES
+    fi
+  fi
 done < devices.txt
 
 ls -l "$OUT"
 
 # Leaving the simulator running makes the runner's cleanup take ~45 s.
+pkill -x Simulator || true
 pkill -9 -f CoreSimulator || true
 
 # JPEGs for the ci-screenshots branch (the workflow publishes $OUT/jpg).

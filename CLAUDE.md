@@ -24,6 +24,11 @@ UI frameworks. Fedora is only the xtool build machine.
 
 - Dark mode first: design and review UI in dark appearance (CI screenshots
   are dark); light mode must still work.
+- Accessibility is not optional: Dynamic Type for all text (Focus mode
+  sizes itself to the page), VoiceOver labels on every control, standard
+  controls over custom ones.
+- Naming: a note is a **page**; the two ways to view one are **Edit** and
+  **Focus** mode.
 - Push straight to `main`. Don't create branches: this environment can't
   delete them, so they pile up.
 

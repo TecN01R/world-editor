@@ -31,7 +31,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
     private let rail = ParagraphRail()
     private let area = UILayoutGuide()
     private let engine = FitEngine()
-    private let measurer = TextKitMeasurer()
+    private var measurer = TextKitMeasurer()
 
     private var index = 0
     private var heldSize = 0.0
@@ -70,6 +70,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         textView.tintColor = .systemOrange
         textView.autocapitalizationType = .sentences
         textView.inlinePredictionType = .no         // ghost text would be content we didn't measure
+        textView.allowsEditingTextAttributes = true // ⌘B, ⌘I and the Format menu
         textView.onBackspaceAtStart = { [weak self] in self?.mergeWithPrevious() }
         view.addSubview(textView)
 
@@ -111,7 +112,8 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         let paragraphs = library.document.paragraphs
         index = max(0, min(i, paragraphs.count - 1))
         heldSize = 0
-        textView.text = paragraphs[index].text
+        let p = paragraphs[index]
+        textView.attributedText = RichText.attributed(p.text, runs: p.runs, attributes: TextKitMeasurer.attributes(size: 17))  // resized by layoutText
         layoutText(animated: false, allowGrow: true)
         let len = (textView.text as NSString).length
         let loc: Int
@@ -156,28 +158,19 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
     func textView(_ tv: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
         guard text.contains("\n") else { return true }
         // Return (or a multi-line paste) splits the paragraph into pages.
-        let current = (tv.text as NSString).replacingCharacters(in: range, with: text)
-        let caret = range.location + (text as NSString).length
-        let pieces = current.components(separatedBy: "\n")
-        let linesBeforeCaret = (current as NSString).substring(to: caret).components(separatedBy: "\n")
-        let target = index + linesBeforeCaret.count - 1
-        let offset = (linesBeforeCaret.last ?? "").count
+        var caret = (index: index, offset: 0)
         library.update { doc in
-            doc.setText(pieces[0], at: index)
-            var at = index
-            for piece in pieces.dropFirst() {
-                at = doc.split(at: at, offset: doc.paragraphs[at].text.count)
-                doc.setText(piece, at: at)
-            }
+            doc.setText(tv.text, runs: RichText.runs(in: tv.attributedText), at: index)
+            caret = doc.replace(range.location..<(range.location + range.length), in: index, with: text)
         }
-        show(target, caret: .offset(offset), direction: 1)
+        show(caret.index, caret: .offset(caret.offset), direction: 1)
         return false
     }
 
     func textViewDidChange(_ tv: UITextView) {
         // Deleting may grow the size freely; typing forward only grows for a clear win.
         let shrank = (tv.text as NSString).length < heldLength
-        library.update { $0.setText(tv.text, at: index) }
+        library.update { $0.setText(tv.text, runs: RichText.runs(in: tv.attributedText), at: index) }
         layoutText(animated: true, allowGrow: shrank)
         updateRail()
     }
@@ -192,6 +185,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         let frame = area.layoutFrame
         guard frame.width > 0, frame.height > 0 else { return }
         let text = textView.text ?? ""
+        measurer.runs = RichText.runs(in: textView.attributedText)
         let page = (width: Double(frame.width), height: Double(frame.height))
         var fit = engine.fit(text, in: page, measurer: measurer,
                              held: heldSize, allowGrow: allowGrow || heldSize == 0)
@@ -225,9 +219,12 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
     private func apply(_ fit: FitResult, in frame: CGRect) -> (top: CGFloat, height: CGFloat) {
         let selection = textView.selectedRange
         let attrs = TextKitMeasurer.attributes(size: fit.fontSize)
-        textView.typingAttributes = attrs
-        textView.attributedText = NSAttributedString(string: textView.text ?? "", attributes: attrs)
+        let styled = Paragraph(text: textView.text ?? "", runs: measurer.runs)
+        textView.attributedText = RichText.attributed(styled.text, runs: styled.runs, attributes: attrs)
         textView.selectedRange = selection
+        var typing = attrs
+        typing[.font] = RichText.font(TextKitMeasurer.font(CGFloat(fit.fontSize)), styled.style(at: selection.location))
+        textView.typingAttributes = typing
 
         let caretRoom = CGFloat(fit.fontSize * 0.06) + 2
         let width = min(frame.width, CGFloat(fit.blockSize.width) + caretRoom)
