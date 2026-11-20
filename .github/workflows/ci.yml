@@ -48,12 +48,20 @@ jobs:
           echo "changed=$(echo "$files" | has '^(App/|ci/|project\.yml|Package\.swift|Packages/WriterKit/Sources/FocusLayout/)')" >> "$GITHUB_OUTPUT"
           echo "focus=$(echo "$files" | has '(Focus|TextKitMeasurer|ci/screenshots)')" >> "$GITHUB_OUTPUT"
           echo "layout=$( (echo "$files" | grep -E '^(Package\.swift|xtool\.yml)$'; echo "$added" | grep '\.swift$') | has . )" >> "$GITHUB_OUTPUT"
+      # The cold Duo boot (~1–2 min) is the slowest thing in the job, so it
+      # starts first. The builds use -sdk rather than -destination so that
+      # xcodebuild doesn't wait on the booting simulator.
+      - name: Start booting the Duo simulator
+        if: steps.ui.outputs.changed == 'true'
+        run: |
+          python3 ci/pick_devices.py > devices.txt
+          while IFS='|' read -r UDID NAME; do xcrun simctl boot "$UDID" & done < devices.txt
       - name: Check the xtool package layout builds (same sources xtool builds on Linux)
         if: steps.ui.outputs.layout == 'true'
         run: |
           set -o pipefail
           xcodebuild build -scheme WorldEditor \
-            -destination 'generic/platform=iOS Simulator' \
+            -sdk iphonesimulator \
             -derivedDataPath build-spm ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
             COMPILER_INDEX_STORE_ENABLE=NO CODE_SIGNING_ALLOWED=NO | tail -5
       - name: Restore XcodeGen
@@ -75,13 +83,11 @@ jobs:
           set -o pipefail
           xcodebuild build \
             -project WorldEditor.xcodeproj -scheme WorldEditor \
-            -destination 'generic/platform=iOS Simulator' \
+            -sdk iphonesimulator \
             -derivedDataPath build \
             ARCHS=arm64 ONLY_ACTIVE_ARCH=YES COMPILER_INDEX_STORE_ENABLE=NO \
             CODE_SIGNING_ALLOWED=NO > build.log || { tail -40 build.log; exit 1; }
           tail -3 build.log
-      # Booting while xcodebuild starts stalls it for ~1.5 min on this
-      # runner, so the simulator boots only after the build.
       - name: Screenshots in the simulator
         if: steps.ui.outputs.changed == 'true'
         env:

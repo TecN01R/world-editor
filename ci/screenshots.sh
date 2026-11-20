@@ -36,7 +36,7 @@ while IFS='|' read -r UDID NAME; do
     # Foldables expose several displays. Only the first (the outer screen)
     # is captured: the simulator boots folded, so the inner one is black.
     if [ -z "${DISPLAY_ID:-}" ] && ! err=$(xcrun simctl io "$UDID" screenshot "$OUT/$SLUG-$name.png" 2>&1 >/dev/null); then
-      DISPLAY_ID=$(echo "$err" | sed -nE 's/.*--display=([0-9]+).*/\1/p' | head -1)
+      DISPLAY_ID=$(echo "$err" | sed -nE 's/.*--display=([0-9]+).*/\1/p' | sort -n | head -1)
     fi
     if [ -n "${DISPLAY_ID:-}" ]; then
       xcrun simctl io "$UDID" screenshot --display="$DISPLAY_ID" "$OUT/$SLUG-display$DISPLAY_ID-$name.png" >/dev/null
