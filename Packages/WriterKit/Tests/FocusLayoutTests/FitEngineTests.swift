@@ -3,7 +3,7 @@ import XCTest
 
 /// Monospaced fake: every character is 0.5em wide, wrapping on spaces.
 struct FakeMeasurer: TextMeasurer {
-    func measure(_ text: String, fontSize: Double, width: Double) -> Measurement {
+    func measure(_ text: String, fontSize: Double, width: Double) -> TextMeasurement {
         let charW = 0.5 * fontSize
         var lines = 1, lineLen = 0.0, widest = 0.0, fits = true
         for word in text.split(separator: " ", omittingEmptySubsequences: false) {
@@ -14,7 +14,7 @@ struct FakeMeasurer: TextMeasurer {
             widest = max(widest, lineLen)
         }
         let lh = FitEngine.lineHeight(for: fontSize) * fontSize
-        return Measurement(width: widest, height: Double(lines) * lh, lineCount: lines, fitsWithoutBreakingWords: fits)
+        return TextMeasurement(width: widest, height: Double(lines) * lh, lineCount: lines, fitsWithoutBreakingWords: fits)
     }
     func ink(_ text: String) -> InkMetrics {
         InkMetrics(ascent: 0.92, descent: 0.26, inkAscent: 0.72, inkDescent: text.contains("g") ? 0.22 : 0)
