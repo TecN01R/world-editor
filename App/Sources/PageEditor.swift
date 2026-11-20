@@ -53,7 +53,10 @@ struct PageEditor: UIViewRepresentable {
         weak var textView: UITextView?
         /// Replacing the text moves the selection; that isn't the user moving the caret.
         private var isRendering = false
-        lazy var formatBar = FormatBar { [weak self] action in self?.perform(action) }
+        // TEMPORARY (comparison): `-stockFormatBar YES` shows the stock UIToolbar.
+        lazy var formatBar: UIView & FormatControls = UserDefaults.standard.bool(forKey: "stockFormatBar")
+            ? StockFormatBar { [weak self] action in self?.perform(action) }
+            : FormatBar { [weak self] action in self?.perform(action) }
 
         lazy var titleField: UITextField = {
             let f = UITextField()
@@ -195,7 +198,30 @@ struct PageEditor: UIViewRepresentable {
 /// keeps its bar, matching it: one Liquid Glass capsule across the writing
 /// width (clear of the Duo's side column), buttons spread evenly, a small gap
 /// above the keyboard. Buttons show the state of the selection.
-final class FormatBar: UIView {
+protocol FormatControls { func update(bold: Bool, italic: Bool, kind: ParagraphKind) }
+
+/// TEMPORARY (comparison): the plain system toolbar, laid out entirely by iOS.
+final class StockFormatBar: UIToolbar, FormatControls {
+    private var all: [UIBarButtonItem] = []
+
+    init(onAction: @escaping (FormatBar.Action) -> Void) {
+        super.init(frame: CGRect(x: 0, y: 0, width: 320, height: 44))
+        func item(_ symbol: String, _ title: String, _ action: FormatBar.Action) -> UIBarButtonItem {
+            UIBarButtonItem(title: title, image: UIImage(systemName: symbol), primaryAction: UIAction(title: title) { _ in onAction(action) })
+        }
+        all = [item("bold", "Bold", .style(.bold)), item("italic", "Italic", .style(.italic)),
+               item("list.bullet", "Bulleted List", .list(.bullet)), item("list.number", "Numbered List", .list(.numbered))]
+        items = all
+        sizeToFit()
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    func update(bold: Bool, italic: Bool, kind: ParagraphKind) {
+        for (item, on) in zip(all, [bold, italic, kind == .bullet, kind == .numbered]) { item.isSelected = on }
+    }
+}
+
+final class FormatBar: UIView, FormatControls {
     enum Action { case style(InlineStyle), list(ParagraphKind) }
 
     private static let capsuleHeight: CGFloat = 48, gap: CGFloat = 8
