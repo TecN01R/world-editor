@@ -24,6 +24,11 @@ while IFS='|' read -r UDID NAME; do
   xcrun simctl bootstatus "$UDID" -b
   xcrun simctl status_bar "$UDID" override --time 9:41 --batteryLevel 100 --cellularBars 4 || true
   xcrun simctl install "$UDID" "$APP"
+  # Skip the one-time "slide to type" keyboard tip.
+  xcrun simctl spawn "$UDID" defaults write com.apple.keyboard.preferences DidShowContinuousPathIntroduction -bool true || true
+  # Discover how this Xcode exposes fold control, so unfolded screenshots can follow.
+  xcrun simctl help 2>&1 | grep -iE "fold|hinge|posture|display" || echo "   (no fold commands listed in simctl help)"
+  xcrun simctl io "$UDID" help 2>&1 | grep -iE "fold|hinge|posture" || true
 
   shoot() {
     local name="$1"; shift
