@@ -12,7 +12,7 @@ on:
         default: false
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}-${{ github.event_name }}   # manual runs don't cancel pushes
   cancel-in-progress: true
 
 jobs:
