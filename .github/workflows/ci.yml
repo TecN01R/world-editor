@@ -47,6 +47,15 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO | tee build.log
+      - name: Screenshots in the simulator
+        run: ci/screenshots.sh
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots/
+          if-no-files-found: ignore
       - name: Upload build log on failure
         if: failure()
         uses: actions/upload-artifact@v4

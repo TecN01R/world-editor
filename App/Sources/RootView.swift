@@ -2,7 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(Library.self) private var library
-    @State private var focusMode = false
+    @State private var focusMode = UserDefaults.standard.bool(forKey: "startInFocus")
     @State private var showModels = false
 
     var body: some View {
