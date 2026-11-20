@@ -1,0 +1,94 @@
+name: TestFlight
+
+# Archives, signs and uploads to TestFlight entirely on GitHub's Macs.
+# Signing is cloud-managed: Xcode creates and fetches certificates and
+# profiles itself using an App Store Connect API key, so no Mac or keychain
+# export is ever needed. Setup steps: docs/setup.md.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  upload:
+    runs-on: xcode-27
+    environment: testflight
+    env:
+      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+      BUNDLE_ID: ${{ vars.BUNDLE_ID }}
+    steps:
+      - name: Check configuration
+        env:
+          KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ISSUER: ${{ secrets.ASC_ISSUER_ID }}
+          KEY: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
+        run: |
+          missing=""
+          [ -n "$APPLE_TEAM_ID" ] || missing="$missing APPLE_TEAM_ID(variable)"
+          [ -n "$BUNDLE_ID" ] || missing="$missing BUNDLE_ID(variable)"
+          [ -n "$KEY_ID" ] || missing="$missing ASC_KEY_ID(secret)"
+          [ -n "$ISSUER" ] || missing="$missing ASC_ISSUER_ID(secret)"
+          [ -n "$KEY" ] || missing="$missing ASC_PRIVATE_KEY_BASE64(secret)"
+          if [ -n "$missing" ]; then
+            echo "::error::Not configured yet. Missing:$missing. See docs/setup.md."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - name: Install App Store Connect API key
+        env:
+          KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          KEY: ${{ secrets.ASC_PRIVATE_KEY_BASE64 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/asc"
+          echo "$KEY" | base64 --decode > "$RUNNER_TEMP/asc/AuthKey_$KEY_ID.p8"
+
+      - name: Generate project
+        run: brew install xcodegen && xcodegen generate
+
+      - name: Archive
+        env:
+          KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ISSUER: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project WorldEditor.xcodeproj -scheme WorldEditor \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/WorldEditor.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_$KEY_ID.p8" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" | tee archive.log
+
+      - name: Export and upload to TestFlight
+        env:
+          KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ISSUER: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          sed "s/TEAM_ID_PLACEHOLDER/$APPLE_TEAM_ID/" ci/ExportOptions.plist > "$RUNNER_TEMP/ExportOptions.plist"
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/WorldEditor.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey_$KEY_ID.p8" \
+            -authenticationKeyID "$KEY_ID" \
+            -authenticationKeyIssuerID "$ISSUER" | tee export.log
+
+      - name: Remove API key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/asc"
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testflight-logs
+          path: "*.log"

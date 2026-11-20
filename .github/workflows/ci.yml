@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Fast, cheap feedback: the shared logic (document model, fitting, provenance,
+  # guardrails, model catalogue) is Foundation-only and tests on Linux.
+  core-tests-linux:
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test WriterKit
+        run: swift test --package-path Packages/WriterKit
+
+  # Full iOS build on a Mac with Xcode 27. No signing: this only proves the
+  # app compiles and the package tests pass on Apple platforms.
+  ios-build:
+    runs-on: xcode-27
+    needs: core-tests-linux
+    env:
+      APPLE_TEAM_ID: ""
+      BUNDLE_ID: com.tecn01r.worldeditor
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tool versions
+        run: xcodebuild -version && swift --version
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate project
+        run: xcodegen generate
+      - name: Test WriterKit on macOS
+        run: swift test --package-path Packages/WriterKit
+      - name: Build app for iOS Simulator
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project WorldEditor.xcodeproj -scheme WorldEditor \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO | tee build.log
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-log
+          path: build.log
