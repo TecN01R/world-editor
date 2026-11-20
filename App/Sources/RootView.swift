@@ -10,6 +10,7 @@ struct RootView: View {
 
     var body: some View {
         @Bindable var library = library
+        if UserDefaults.standard.bool(forKey: "iconGallery") { IconGallery() } else {
         NavigationSplitView(preferredCompactColumn: $column) {
             PageList(selection: $library.selection) {
                 library.newPage()
@@ -23,6 +24,28 @@ struct RootView: View {
                                        description: Text("Choose a page or start a new one."))
             }
         }
+        }
+    }
+}
+
+/// TEMPORARY: candidate symbols for the Focus button, for Kevin to choose from.
+private struct IconGallery: View {
+    static let symbols = ["text.viewfinder", "scope", "viewfinder", "eye", "text.magnifyingglass",
+                          "doc.text.viewfinder", "rectangle.and.text.magnifyingglass", "text.page",
+                          "book.pages", "smallcircle.filled.circle", "circle.circle", "rectangle.center.inset.filled"]
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 22) {
+            ForEach(Array(Self.symbols.enumerated()), id: \.offset) { i, name in
+                VStack(spacing: 8) {
+                    Image(systemName: name).font(.system(size: 34)).frame(height: 44)
+                    Text("\(i + 1). \(name)").font(.caption).multilineTextAlignment(.center)
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 60)
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 }
 
