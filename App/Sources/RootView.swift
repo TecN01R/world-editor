@@ -30,6 +30,7 @@ struct PageList: View {
     @Environment(Library.self) private var library
     @Binding var selection: UUID?
     let newPage: () -> Void
+    @State private var showModels = false
 
     var body: some View {
         List(selection: $selection) {
@@ -58,14 +59,19 @@ struct PageList: View {
                 Button("New Page", systemImage: "square.and.pencil", action: newPage)
                     .keyboardShortcut("n")
             }
+            // Its own glass capsule, apart from New Page.
+            ToolbarSpacer(.fixed, placement: .primaryAction)
+            ToolbarItem(placement: .primaryAction) {
+                Button("On-device Models", systemImage: "cpu") { showModels = true }
+            }
         }
+        .sheet(isPresented: $showModels) { ModelsView() }
     }
 }
 
 /// One page, in Edit mode or Focus mode.
 struct EditorView: View {
     @State private var focusMode = UserDefaults.standard.bool(forKey: "startInFocus")
-    @State private var showModels = false
 
     var body: some View {
         ZStack {
@@ -89,17 +95,6 @@ struct EditorView: View {
                 }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
             }
-            if !focusMode {
-                // Items in one placement share a glass capsule; the spacer
-                // gives the models button its own, as system apps do.
-                ToolbarSpacer(.fixed, placement: .primaryAction)
-                ToolbarItem(placement: .primaryAction) {
-                    Button { showModels = true } label: {
-                        Label("On-device Models", systemImage: "cpu")
-                    }
-                }
-            }
         }
-        .sheet(isPresented: $showModels) { ModelsView() }
     }
 }

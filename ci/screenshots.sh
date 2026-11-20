@@ -57,11 +57,12 @@ while IFS='|' read -r UDID NAME; do
   # Unfolded (experimental): simctl has no fold command, so ask the Simulator
   # app's own menus to open the device, then shoot the inner display. Never
   # fails the job; it prints what it finds so the next attempt can be exact.
-  if [ -n "$DISPLAY_ID" ] && [ "${UNFOLD:-true}" = "true" ]; then (
+  if [ -n "$DISPLAY_ID" ] && [ "${UNFOLD:-false}" = "true" ]; then (
     set +e +o pipefail
     # Xcode 27 replaced Simulator.app with Device Hub; use whichever exists.
-    HUB=$(find /Applications "$(xcode-select -p)/Applications" -maxdepth 5 -name "*.app" \
-            \( -iname "Device Hub.app" -o -iname "Simulator.app" \) 2>/dev/null | head -1)
+    HUB=$( (mdfind "kMDItemCFBundleIdentifier == 'com.apple.iphonesimulator'";
+            mdfind "kMDItemDisplayName == '*Device Hub*'";
+            find / -maxdepth 7 \( -name "Simulator.app" -o -name "Device Hub.app" \) -prune 2>/dev/null) | head -1)
     echo "   unfold: app=${HUB:-none}"
     [ -n "$HUB" ] || exit 0
     open -a "$HUB" --args -CurrentDeviceUDID "$UDID"
