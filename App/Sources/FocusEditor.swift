@@ -3,8 +3,8 @@ import UIKit
 import WriterCore
 import FocusLayout
 
-/// Focus mode: one paragraph per page, set as large as the page allows.
-/// The available area ends at `keyboardLayoutGuide`, the system's exact
+/// Focus mode: one paragraph per page, set as large as the page allows and
+/// centred on it. The page ends at `keyboardLayoutGuide`, the system's exact
 /// keyboard position, so there is nothing to estimate and nothing scrolls.
 ///
 /// Everything but the writing hides (the paragraph dots dim) while you write:
@@ -36,19 +36,13 @@ final class FocusTextView: UITextView {
 @MainActor
 final class FocusViewController: UIViewController, UITextViewDelegate {
     private let library: Library
-    private let textView = FocusTextView(usingTextLayoutManager: false) // TextKit 1, same as the measurer
+    private let textView = FocusTextView()
     private let rail = ParagraphRail()
-    /// Active while the controls show, stepping the dots down below the side
-    /// column's buttons; otherwise they sit centred on the page.
-    private lazy var railBelowButtons = rail.topAnchor.constraint(greaterThanOrEqualTo: view.topAnchor)
     private static let railResting: CGFloat = 0.35
     private let area = UILayoutGuide()
-    private let engine = FitEngine()
-    private var measurer = TextKitMeasurer()
 
     private var index = 0
-    private var heldSize = 0.0
-    private var heldLength = 0
+    private var size = 0.0   // current font size; 0 until the page is first fitted
 
     init(library: Library) {
         self.library = library
@@ -63,22 +57,22 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         view.addLayoutGuide(area)
         view.keyboardLayoutGuide.followsUndockedKeyboard = true
         // The page is laid out against the screen edges, not the safe area:
-        // revealing the bars (on the Duo, the side column's buttons and
+        // revealing the bars (on the Duo, the side column's button and
         // status) then draws them over the writing instead of reflowing it.
+        // It ends just above the keyboard (or the bottom of the screen).
+        let fill = area.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor, constant: -12)
+        fill.priority = .defaultHigh
         NSLayoutConstraint.activate([
             area.topAnchor.constraint(equalTo: view.topAnchor, constant: 32),
             area.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             area.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40),
             area.bottomAnchor.constraint(lessThanOrEqualTo: view.bottomAnchor, constant: -24),
             area.bottomAnchor.constraint(lessThanOrEqualTo: view.keyboardLayoutGuide.topAnchor, constant: -12),
+            fill,
         ])
-        let fill = area.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor, constant: -12)
-        fill.priority = .defaultHigh
-        fill.isActive = true
 
         textView.delegate = self
         textView.isScrollEnabled = false            // never scrolls: the text is sized to fit instead
-        textView.clipsToBounds = false              // descenders/overhangs may draw past the box
         textView.backgroundColor = .clear
         textView.textContainerInset = .zero
         textView.textContainer.lineFragmentPadding = 0
@@ -89,15 +83,14 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         textView.onBackspaceAtStart = { [weak self] in self?.mergeWithPrevious() }
         view.addSubview(textView)
 
+        // The dots: centred on the page, always there, quiet while you write.
         rail.translatesAutoresizingMaskIntoConstraints = false
         rail.onSelect = { [weak self] i in self?.show(i, caret: .end, direction: 0) }
+        rail.alpha = Self.railResting
         view.addSubview(rail)
-        rail.alpha = Self.railResting   // always there, quiet while you write
-        let railCentred = rail.centerYAnchor.constraint(equalTo: area.centerYAnchor)
-        railCentred.priority = .defaultHigh
         NSLayoutConstraint.activate([
             rail.centerXAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            railCentred,
+            rail.centerYAnchor.constraint(equalTo: area.centerYAnchor),
             rail.widthAnchor.constraint(equalToConstant: 32),
             rail.heightAnchor.constraint(lessThanOrEqualTo: area.heightAnchor, multiplier: 0.7),
         ])
@@ -123,10 +116,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        // The Duo's side-column buttons end a little under halfway down.
-        let below = view.bounds.height * 0.45
-        if railBelowButtons.constant != below { railBelowButtons.constant = below }
-        layoutText(animated: false, allowGrow: true)
+        fit(mayGrow: true)   // keyboard, rotation, fold: take the best size
     }
 
     // MARK: Paging
@@ -136,10 +126,10 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
     private func show(_ i: Int, caret: Caret, direction: Int) {
         let paragraphs = library.document.paragraphs
         index = max(0, min(i, paragraphs.count - 1))
-        heldSize = 0
+        size = 0
         let p = paragraphs[index]
-        textView.attributedText = RichText.attributed(p.text, runs: p.runs, attributes: TextKitMeasurer.attributes(size: 17))  // resized by layoutText
-        layoutText(animated: false, allowGrow: true)
+        textView.attributedText = RichText.attributed(p.text, runs: p.runs, attributes: Self.attributes(17))
+        fit(mayGrow: true)
         let len = (textView.text as NSString).length
         let loc: Int
         switch caret {
@@ -147,6 +137,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         case .offset(let o): loc = max(0, min(o, len))
         }
         textView.selectedRange = NSRange(location: loc, length: 0)
+        updateTypingAttributes()
         updateRail()
         library.cursor = (index, loc)
         if direction != 0 {
@@ -165,15 +156,11 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
     private var controlsVisible = false
     private var hideTimer: Timer?
 
-    /// The paragraph dots brighten and step down with the rest of the controls.
+    /// The dots brighten with the rest of the controls.
     func setControls(visible: Bool) {
         guard visible != controlsVisible else { return }
         controlsVisible = visible
-        railBelowButtons.isActive = visible
-        UIView.animate(withDuration: 0.25) {
-            self.rail.alpha = visible ? 1 : Self.railResting
-            self.view.layoutIfNeeded()
-        }
+        UIView.animate(withDuration: 0.25) { self.rail.alpha = visible ? 1 : Self.railResting }
         hideTimer?.invalidate()
         if visible {
             // Shown for a moment, like video controls, unless you use them.
@@ -222,10 +209,10 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
 
     func textViewDidChange(_ tv: UITextView) {
         if controlsVisible { onControlsChange?(false) }   // writing again: out of the way
-        // Deleting may grow the size freely; typing forward only grows for a clear win.
-        let shrank = (tv.text as NSString).length < heldLength
+        let before = library.document.paragraphs[index].length
         library.update { $0.setText(tv.text, runs: RichText.runs(in: tv.attributedText), at: index) }
-        layoutText(animated: true, allowGrow: shrank)
+        // Deleting may grow the size freely; typing forward only for a clear win.
+        fit(mayGrow: (tv.text as NSString).length < before, animated: true)
         updateRail()
     }
 
@@ -235,99 +222,85 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
 
     // MARK: Fitting
 
-    private func layoutText(animated: Bool, allowGrow: Bool) {
-        let frame = area.layoutFrame
-        guard frame.width > 0, frame.height > 0 else { return }
+    /// New York at `size`, natural line spacing: TextKit's line boxes hold
+    /// every glyph, so nothing clips and the measurement is the layout.
+    static func attributes(_ size: CGFloat) -> [NSAttributedString.Key: Any] {
+        let base = UIFont.systemFont(ofSize: size)
+        let font = UIFont(descriptor: base.fontDescriptor.withDesign(.serif) ?? base.fontDescriptor, size: size)
+        return [.font: font, .foregroundColor: UIColor.label]
+    }
+
+    private func styled(_ size: Double) -> NSAttributedString {
         let text = textView.text ?? ""
-        measurer.runs = RichText.runs(in: textView.attributedText)
-        let page = (width: Double(frame.width), height: Double(frame.height))
-        var fit = engine.fit(text, in: page, measurer: measurer,
-                             held: heldSize, allowGrow: allowGrow || heldSize == 0)
-        var extent = apply(fit, in: frame)
+        return RichText.attributed(text.isEmpty ? "M" : text, runs: RichText.runs(in: textView.attributedText),
+                                   attributes: Self.attributes(CGFloat(size)))
+    }
 
-        // Ground truth: position and verify using where TextKit actually drew
-        // the glyphs, not the prediction. If the real block is taller than the
-        // page, step down until it truly fits. Nothing may hang off the top or
-        // under the keyboard.
-        var k = FitEngine.steps.firstIndex(of: fit.fontSize) ?? 0
-        while k > 0, extent.height > frame.height + 0.5 {
-            k -= 1
-            fit = engine.fit(text, in: page, measurer: measurer, held: FitEngine.steps[k], allowGrow: false)
-            extent = apply(fit, in: frame)
+    /// Whether the paragraph fits the page at `size`: its height, and no word
+    /// wider than a line (words never break).
+    private func fits(_ size: Double, in page: CGSize) -> Bool {
+        let s = styled(size)
+        let longestWord = Self.words.matches(in: s.string, range: NSRange(location: 0, length: s.length))
+            .map { s.attributedSubstring(from: $0.range).size().width }.max() ?? 0
+        guard longestWord <= page.width else { return false }
+        return height(of: s, width: page.width) <= page.height
+    }
+
+    private func height(of s: NSAttributedString, width: CGFloat) -> CGFloat {
+        ceil(s.boundingRect(with: CGSize(width: width, height: .greatestFiniteMagnitude),
+                            options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil).height)
+    }
+
+    private static let words = try! NSRegularExpression(pattern: "\\S+")
+
+    /// Sets the paragraph as large as the page allows and centres it between
+    /// the top of the screen and the keyboard.
+    private func fit(mayGrow: Bool, animated: Bool = false) {
+        let page = area.layoutFrame
+        guard page.width > 0, page.height > 0 else { return }
+        let best = FocusFit.largest { fits($0, in: page.size) }
+        let newSize = FocusFit.settle(best: best, current: size, mayGrow: mayGrow)
+
+        if newSize != size { apply(newSize) }
+        // The text view has the final say: if its layout is ever taller than
+        // the page, step down rather than let anything hang off it.
+        var h = measuredHeight(width: page.width)
+        while h > page.height, size > FocusFit.minSize {
+            apply(max(FocusFit.minSize, size * 0.97))
+            h = measuredHeight(width: page.width)
         }
-
-        let changed = fit.fontSize != heldSize
-        heldSize = fit.fontSize
-        heldLength = (text as NSString).length
-        if animated && changed {
+        let frame = CGRect(x: page.minX, y: page.midY - h / 2, width: page.width, height: h)
+        guard frame != textView.frame else { return }
+        if animated {
             UIView.animate(withDuration: 0.17, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
-                self.view.layoutIfNeeded()
+                self.textView.frame = frame
             }
-        }
-    }
-
-    /// Applies the size, then positions the text view so the visible block
-    /// (top of the tallest letter to the bottom of the last line, or of a
-    /// deeper descender) is centred in `frame`. Returns that block, in the
-    /// text view's own coordinates, as measured from the real layout.
-    private func apply(_ fit: FitResult, in frame: CGRect) -> (top: CGFloat, height: CGFloat) {
-        let selection = textView.selectedRange
-        let attrs = TextKitMeasurer.attributes(size: fit.fontSize)
-        let styled = Paragraph(text: textView.text ?? "", runs: measurer.runs)
-        textView.attributedText = RichText.attributed(styled.text, runs: styled.runs, attributes: attrs)
-        textView.selectedRange = selection
-        var typing = attrs
-        typing[.font] = RichText.font(TextKitMeasurer.font(CGFloat(fit.fontSize)), styled.style(at: selection.location))
-        textView.typingAttributes = typing
-
-        let caretRoom = CGFloat(fit.fontSize * 0.06) + 2
-        let width = min(frame.width, CGFloat(fit.blockSize.width) + caretRoom)
-        let height = textView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
-        textView.frame = CGRect(x: frame.minX, y: frame.minY, width: width, height: height)
-
-        let block = visibleBlock(fontSize: fit.fontSize)
-        let top = FitEngine.centredTop(blockHeight: Double(block.height),
-                                       areaTop: Double(frame.minY), areaBottom: Double(frame.maxY), margin: 0)
-        textView.frame.origin.y = CGFloat(top) - block.top
-        return block
-    }
-
-    /// Measures the drawn block from TextKit: first baseline minus the tallest
-    /// glyph's ascent, down to the larger of the last line box and the deepest
-    /// descender below the last baseline.
-    private func visibleBlock(fontSize: Double) -> (top: CGFloat, height: CGFloat) {
-        let lm = textView.layoutManager
-        let container = textView.textContainer
-        lm.ensureLayout(for: container)
-        let ink = measurer.ink(textView.text ?? "")
-        let s = CGFloat(fontSize)
-        let glyphs = lm.numberOfGlyphs
-
-        func baseline(ofGlyph g: Int) -> (CGFloat, CGRect) {
-            let frag = lm.lineFragmentRect(forGlyphAt: g, effectiveRange: nil)
-            return (frag.minY + lm.location(forGlyphAt: g).y, frag)
-        }
-
-        let firstBaseline: CGFloat, lastBaseline: CGFloat, lastLineBottom: CGFloat
-        if glyphs == 0 {
-            // Empty paragraph: TextKit lays out an "extra" line for the caret.
-            let frag = lm.extraLineFragmentRect
-            let f = TextKitMeasurer.font(s)
-            firstBaseline = frag.maxY + f.descender
-            lastBaseline = firstBaseline
-            lastLineBottom = frag.maxY
         } else {
-            let (b0, _) = baseline(ofGlyph: 0)
-            let (b1, lastFrag) = baseline(ofGlyph: glyphs - 1)
-            firstBaseline = b0
-            lastBaseline = b1
-            lastLineBottom = lm.extraLineFragmentTextContainer == nil ? lastFrag.maxY
-                : max(lastFrag.maxY, lm.extraLineFragmentRect.maxY)
+            textView.frame = frame
         }
-        let inset = textView.textContainerInset.top
-        let top = inset + firstBaseline - CGFloat(ink.inkAscent) * s - 0.03 * s
-        let bottom = inset + max(lastLineBottom, lastBaseline + CGFloat(ink.inkDescent) * s + 0.03 * s)
-        return (top, bottom - top)
+    }
+
+    private func apply(_ newSize: Double) {
+        size = newSize
+        let selection = textView.selectedRange
+        textView.attributedText = RichText.attributed(textView.text ?? "", runs: RichText.runs(in: textView.attributedText),
+                                                      attributes: Self.attributes(CGFloat(size)))
+        textView.selectedRange = selection
+        updateTypingAttributes()
+    }
+
+    private func measuredHeight(width: CGFloat) -> CGFloat {
+        textView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
+    }
+
+    /// New text continues the style before the caret.
+    private func updateTypingAttributes() {
+        let p = Paragraph(text: textView.text ?? "", runs: RichText.runs(in: textView.attributedText))
+        var typing = Self.attributes(CGFloat(max(size, 17)))
+        if let base = typing[.font] as? UIFont {
+            typing[.font] = RichText.font(base, p.style(at: textView.selectedRange.location))
+        }
+        textView.typingAttributes = typing
     }
 }
 
