@@ -92,7 +92,7 @@ struct EditorView: View {
                     withAnimation(.smooth(duration: 0.3)) { focusMode.toggle() }
                 } label: {
                     Label(focusMode ? "Edit" : "Focus",
-                          systemImage: focusMode ? "doc.plaintext" : "textformat.size.larger")
+                          systemImage: focusMode ? "doc.plaintext" : "textformat.size")
                 }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
             }
