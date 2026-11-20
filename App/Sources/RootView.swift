@@ -81,6 +81,7 @@ struct EditorView: View {
                     .transition(.opacity)
             } else {
                 PageEditor()
+                    .ignoresSafeArea(.keyboard)   // text scrolls behind the glass format bar, as in Notes
                     .transition(.opacity)
             }
         }
@@ -91,7 +92,7 @@ struct EditorView: View {
                     withAnimation(.smooth(duration: 0.3)) { focusMode.toggle() }
                 } label: {
                     Label(focusMode ? "Edit" : "Focus",
-                          systemImage: focusMode ? "text.alignleft" : "arrow.up.left.and.arrow.down.right")
+                          systemImage: focusMode ? "doc.plaintext" : "textformat.size.larger")
                 }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
             }

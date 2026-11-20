@@ -273,6 +273,12 @@ final class FormatBar: UIView {
 /// The page's text view. Lays out the title above the writing whenever its
 /// width changes (rotation, fold), in a readable column of ~36em.
 final class PageTextView: UITextView {
+    override init(frame: CGRect, textContainer: NSTextContainer?) {
+        super.init(frame: frame, textContainer: textContainer)
+        keyboardLayoutGuide.followsUndockedKeyboard = true
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
     var titleField: UITextField? {
         didSet { oldValue?.removeFromSuperview(); titleField.map(addSubview) }   // scrolls with the page
     }
@@ -285,7 +291,14 @@ final class PageTextView: UITextView {
         let side = max(22, (width - column) / 2)
         let titleHeight = ceil(title.font?.lineHeight ?? 34) + 8
         title.frame = CGRect(x: side, y: 28, width: max(0, width - 2 * side), height: titleHeight)
-        let inset = UIEdgeInsets(top: title.frame.maxY + 14, left: side, bottom: 240, right: side)
+        let inset = UIEdgeInsets(top: title.frame.maxY + 14, left: side, bottom: 40, right: side)
         if textContainerInset != inset { textContainerInset = inset }
+
+        // The view runs under the keyboard; keep everything scrollable above it.
+        let covered = max(0, bounds.maxY - keyboardLayoutGuide.layoutFrame.minY)
+        if contentInset.bottom != covered {
+            contentInset.bottom = covered
+            verticalScrollIndicatorInsets.bottom = covered
+        }
     }
 }
