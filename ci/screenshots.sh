@@ -44,17 +44,26 @@ while IFS='|' read -r UDID NAME; do
     echo "   $name"
   }
 
-  shoot edit        -screenshotRich YES
-  shoot edit-stock  -screenshotRich YES -stockFormatBar YES   # TEMPORARY comparison
-  shoot pages       -screenshotPages YES
-  shoot focus-pages -screenshotText "First page.\\nSecond page.\\nThird page, where the caret is." -startInFocus YES
-  # Fitting edge cases, only when Focus mode itself changed.
-  if [ "${FULL_SHOTS:-true}" = "true" ]; then
-    shoot focus-empty -screenshotText EMPTY -startInFocus YES
-    shoot focus-g     -screenshotText "g" -startInFocus YES
-    shoot focus-short -screenshotText "Hi. This" -startInFocus YES
+  case "$NAME" in
+  iPad*)   # stand-in for the unfolded Duo: the wide layouts only
+    shoot edit        -screenshotRich YES
+    shoot pages       -screenshotPages YES
     shoot focus-long  -screenshotText "$LONG" -startInFocus YES
-  fi
+    ;;
+  *)
+    shoot edit        -screenshotRich YES
+    shoot icons       -iconGallery YES   # TEMPORARY: Focus icon candidates
+    shoot pages       -screenshotPages YES
+    shoot focus-pages -screenshotText "First page.\\nSecond page.\\nThird page, where the caret is." -startInFocus YES
+    # Fitting edge cases, only when Focus mode itself changed.
+    if [ "${FULL_SHOTS:-true}" = "true" ]; then
+      shoot focus-empty -screenshotText EMPTY -startInFocus YES
+      shoot focus-g     -screenshotText "g" -startInFocus YES
+      shoot focus-short -screenshotText "Hi. This" -startInFocus YES
+      shoot focus-long  -screenshotText "$LONG" -startInFocus YES
+    fi
+    ;;
+  esac
   # Unfolded (experimental): simctl has no fold command, so ask the Simulator
   # app's own menus to open the device, then shoot the inner display. Never
   # fails the job; it prints what it finds so the next attempt can be exact.

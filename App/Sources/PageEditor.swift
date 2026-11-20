@@ -53,10 +53,7 @@ struct PageEditor: UIViewRepresentable {
         weak var textView: UITextView?
         /// Replacing the text moves the selection; that isn't the user moving the caret.
         private var isRendering = false
-        // TEMPORARY (comparison): `-stockFormatBar YES` shows the stock UIToolbar.
-        lazy var formatBar: UIView & FormatControls = UserDefaults.standard.bool(forKey: "stockFormatBar")
-            ? StockFormatBar { [weak self] action in self?.perform(action) }
-            : FormatBar { [weak self] action in self?.perform(action) }
+        lazy var formatBar = FormatBar { [weak self] action in self?.perform(action) }
 
         lazy var titleField: UITextField = {
             let f = UITextField()
@@ -198,101 +195,45 @@ struct PageEditor: UIViewRepresentable {
 /// keeps its bar, matching it: one Liquid Glass capsule across the writing
 /// width (clear of the Duo's side column), buttons spread evenly, a small gap
 /// above the keyboard. Buttons show the state of the selection.
-protocol FormatControls { func update(bold: Bool, italic: Bool, kind: ParagraphKind) }
-
-/// TEMPORARY (comparison): the plain system toolbar, laid out entirely by iOS.
-final class StockFormatBar: UIToolbar, FormatControls {
-    private var all: [UIBarButtonItem] = []
-
-    init(onAction: @escaping (FormatBar.Action) -> Void) {
-        super.init(frame: CGRect(x: 0, y: 0, width: 320, height: 44))
-        func item(_ symbol: String, _ title: String, _ action: FormatBar.Action) -> UIBarButtonItem {
-            UIBarButtonItem(title: title, image: UIImage(systemName: symbol), primaryAction: UIAction(title: title) { _ in onAction(action) })
-        }
-        all = [item("bold", "Bold", .style(.bold)), item("italic", "Italic", .style(.italic)),
-               item("list.bullet", "Bulleted List", .list(.bullet)), item("list.number", "Numbered List", .list(.numbered))]
-        items = all
-        sizeToFit()
-    }
-    required init?(coder: NSCoder) { fatalError() }
-
-    func update(bold: Bool, italic: Bool, kind: ParagraphKind) {
-        for (item, on) in zip(all, [bold, italic, kind == .bullet, kind == .numbered]) { item.isSelected = on }
-    }
-}
-
-final class FormatBar: UIView, FormatControls {
+/// Bold, italic, bulleted and numbered list above the keyboard: the stock
+/// system toolbar, laid out by iOS, with a small gap above the keyboard as in
+/// Notes. Buttons show the state of the selection. (When more tools arrive,
+/// this may become a scrolling bar like Notes'.)
+final class FormatBar: UIView {
     enum Action { case style(InlineStyle), list(ParagraphKind) }
 
-    private static let capsuleHeight: CGFloat = 48, gap: CGFloat = 8
-    private let onAction: (Action) -> Void
-    private var bold: UIButton!, italic: UIButton!, bullets: UIButton!, numbers: UIButton!
+    private static let gap: CGFloat = 8
+    private let toolbar = UIToolbar()
+    private var buttons: [UIBarButtonItem] = []
 
     init(onAction: @escaping (Action) -> Void) {
-        self.onAction = onAction
-        super.init(frame: CGRect(x: 0, y: 0, width: 320, height: Self.capsuleHeight + Self.gap * 2))
+        super.init(frame: CGRect(x: 0, y: 0, width: 320, height: 44 + Self.gap))
         autoresizingMask = .flexibleHeight
-        bold = button("bold", "Bold", .style(.bold))
-        italic = button("italic", "Italic", .style(.italic))
-        bullets = button("list.bullet", "Bulleted List", .list(.bullet))
-        numbers = button("list.number", "Numbered List", .list(.numbered))
-
-        let capsule = UIVisualEffectView(effect: UIGlassEffect())
-        capsule.layer.cornerRadius = Self.capsuleHeight / 2
-        capsule.layer.cornerCurve = .continuous
-        capsule.clipsToBounds = true
-        let row = UIStackView(arrangedSubviews: [bold, italic, bullets, numbers])
-        row.distribution = .fillEqually
-        row.alignment = .center
-        capsule.contentView.addSubview(row)
-        addSubview(capsule)
-        for v in [capsule, row] as [UIView] { v.translatesAutoresizingMaskIntoConstraints = false }
+        func item(_ symbol: String, _ title: String, _ action: Action) -> UIBarButtonItem {
+            let item = UIBarButtonItem(title: title, image: UIImage(systemName: symbol),
+                                       primaryAction: UIAction(title: title) { _ in onAction(action) })
+            item.accessibilityLabel = title
+            return item
+        }
+        buttons = [item("bold", "Bold", .style(.bold)), item("italic", "Italic", .style(.italic)),
+                   item("list.bullet", "Bulleted List", .list(.bullet)),
+                   item("list.number", "Numbered List", .list(.numbered))]
+        toolbar.items = buttons
+        toolbar.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(toolbar)
         NSLayoutConstraint.activate([
-            capsule.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: 16),
-            capsule.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -16),
-            capsule.topAnchor.constraint(equalTo: topAnchor, constant: Self.gap),
-            capsule.heightAnchor.constraint(equalToConstant: Self.capsuleHeight),
-            row.leadingAnchor.constraint(equalTo: capsule.contentView.leadingAnchor, constant: 8),
-            row.trailingAnchor.constraint(equalTo: capsule.contentView.trailingAnchor, constant: -8),
-            row.topAnchor.constraint(equalTo: capsule.contentView.topAnchor),
-            row.bottomAnchor.constraint(equalTo: capsule.contentView.bottomAnchor),
+            toolbar.leadingAnchor.constraint(equalTo: leadingAnchor),
+            toolbar.trailingAnchor.constraint(equalTo: trailingAnchor),
+            toolbar.topAnchor.constraint(equalTo: topAnchor),
+            toolbar.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -Self.gap),
         ])
     }
     required init?(coder: NSCoder) { fatalError() }
 
-    override var intrinsicContentSize: CGSize {
-        CGSize(width: UIView.noIntrinsicMetric, height: Self.capsuleHeight + Self.gap * 2)
-    }
-
-    private func button(_ symbol: String, _ title: String, _ action: Action) -> UIButton {
-        var config = UIButton.Configuration.plain()
-        config.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(textStyle: .title3))
-        config.cornerStyle = .capsule
-        config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14)
-        let b = UIButton(configuration: config, primaryAction: UIAction { [weak self] _ in self?.onAction(action) })
-        b.tintColor = .label
-        b.accessibilityLabel = title
-        b.showsLargeContentViewer = true          // long-press shows the name at large text sizes
-        b.largeContentTitle = title
-        b.addInteraction(UILargeContentViewerInteraction())
-        // Selected: a filled accent circle, as in the system's own format bars.
-        b.configurationUpdateHandler = { b in
-            var c = b.configuration
-            c?.background.backgroundColor = b.isSelected ? .tintColor : .clear
-            c?.baseForegroundColor = b.isSelected ? .white : .label
-            b.configuration = c
-        }
-        return b
-    }
+    override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: 44 + Self.gap) }
 
     func update(bold: Bool, italic: Bool, kind: ParagraphKind) {
-        self.bold.isSelected = bold
-        self.italic.isSelected = italic
-        bullets.isSelected = kind == .bullet
-        numbers.isSelected = kind == .numbered
-        for b in [self.bold, self.italic, bullets, numbers] {
-            b?.accessibilityTraits = b?.isSelected == true ? [.button, .selected] : .button
-        }
+        for (item, on) in zip(buttons, [bold, italic, kind == .bullet, kind == .numbered]) { item.isSelected = on }
     }
 }
 
