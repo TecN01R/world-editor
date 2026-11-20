@@ -57,24 +57,25 @@ while IFS='|' read -r UDID NAME; do
   # Unfolded (experimental): simctl has no fold command, so ask the Simulator
   # app's own menus to open the device, then shoot the inner display. Never
   # fails the job; it prints what it finds so the next attempt can be exact.
-  if [ "$DISPLAY_ID" != "" ] && [ "${UNFOLD:-true}" = "true" ]; then
+  if [ -n "$DISPLAY_ID" ] && [ "${UNFOLD:-true}" = "true" ]; then (
+    set +e +o pipefail
     # Xcode 27 replaced Simulator.app with Device Hub; use whichever exists.
-    ls "$(xcode-select -p)/Applications" | sed 's/^/   app: /'
-    HUB=$(ls -d "$(xcode-select -p)"/Applications/*.app | grep -iE 'Device Hub|Simulator' | head -1 || true)
-    if [ -n "$HUB" ]; then
-      open -a "$HUB" --args -CurrentDeviceUDID "$UDID" || true
-      sleep 8
-      osascript ci/unfold.applescript "$(basename "$HUB" .app)" 2>&1 | sed 's/^/   unfold: /' || true
-      sleep 3
-    fi
-    INNER=$( (xcrun simctl io "$UDID" screenshot "$OUT/probe.png" 2>&1 || true) | sed -nE 's/.*--display=([0-9]+).*/\1/p' | sort -n | tail -1)
+    HUB=$(find /Applications "$(xcode-select -p)/Applications" -maxdepth 5 -name "*.app" \
+            \( -iname "Device Hub.app" -o -iname "Simulator.app" \) 2>/dev/null | head -1)
+    echo "   unfold: app=${HUB:-none}"
+    [ -n "$HUB" ] || exit 0
+    open -a "$HUB" --args -CurrentDeviceUDID "$UDID"
+    sleep 8
+    osascript ci/unfold.applescript "$(basename "$HUB" .app)" 2>&1 | sed 's/^/   unfold: /'
+    sleep 3
+    INNER=$(xcrun simctl io "$UDID" screenshot "$OUT/probe.png" 2>&1 | sed -nE 's/.*--display=([0-9]+).*/\1/p' | sort -n | tail -1)
     rm -f "$OUT/probe.png"
     if [ -n "$INNER" ] && [ "$INNER" != "$DISPLAY_ID" ]; then
       DISPLAY_ID="$INNER"
       shoot unfolded-edit  -screenshotRich YES
       shoot unfolded-pages -screenshotPages YES
     fi
-  fi
+  ) fi
 done < devices.txt
 
 ls -l "$OUT"
