@@ -54,7 +54,7 @@ struct FactExtractor {
 
     /// Uses the on-device system model only. Server-backed models (which the
     /// iOS 27 framework can also reach) are never used.
-    func extract(from paragraph: Paragraph, in document: Document) async throws -> [Fact] {
+    func extract(from paragraph: Paragraph, in document: WriterCore.Document) async throws -> [Fact] {
         let model = SystemLanguageModel.default
         guard case .available = model.availability else { return [] }
         let session = LanguageModelSession(model: model, instructions: Self.instructions)

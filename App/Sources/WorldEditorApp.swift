@@ -16,7 +16,7 @@ struct WorldEditorApp: App {
 /// Holds the open document and saves it shortly after each edit.
 @MainActor @Observable
 final class Library {
-    private(set) var document: Document
+    private(set) var document: WriterCore.Document
     private let store: DocumentStore?
     private var saveTask: Task<Void, Never>?
 
@@ -27,10 +27,10 @@ final class Library {
         let dir = URL.applicationSupportDirectory.appendingPathComponent("Documents", isDirectory: true)
         let store = try? DocumentStore(directory: dir)
         self.store = store
-        self.document = (try? store?.all())?.first ?? Document()
+        self.document = (try? store?.all())?.first ?? WriterCore.Document()
     }
 
-    func update(_ change: (inout Document) -> Void) {
+    func update(_ change: (inout WriterCore.Document) -> Void) {
         change(&document)
         scheduleSave()
     }
