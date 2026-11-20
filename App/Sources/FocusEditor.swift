@@ -269,7 +269,14 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
             apply(max(FocusFit.minSize, size * 0.97))
             h = measuredHeight(width: page.width)
         }
-        let frame = CGRect(x: page.minX, y: page.midY - h / 2, width: page.width, height: h)
+        // Centre what's drawn, not the line boxes: a lone "g" has empty space
+        // above it in its line box. The boxes (and so the caret) still stay on
+        // the page and clear of the keyboard.
+        let ink = textView.text.isEmpty ? CGRect(x: 0, y: 0, width: 0, height: h)
+            : textView.attributedText.boundingRect(with: CGSize(width: page.width, height: .greatestFiniteMagnitude),
+                                                   options: [.usesLineFragmentOrigin, .usesDeviceMetrics], context: nil)
+        let y = min(max(page.midY - ink.midY, page.minY - 24), page.maxY - h)
+        let frame = CGRect(x: page.minX, y: y, width: page.width, height: h)
         guard frame != textView.frame else { return }
         if animated {
             UIView.animate(withDuration: 0.17, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
