@@ -30,7 +30,13 @@ while IFS='|' read -r UDID NAME; do
     xcrun simctl terminate "$UDID" "$BUNDLE" >/dev/null 2>&1 || true
     xcrun simctl launch "$UDID" "$BUNDLE" "$@" >/dev/null
     sleep 5
-    xcrun simctl io "$UDID" screenshot "$OUT/$SLUG-$name.png" >/dev/null
+    # Foldables expose several displays; capture each one that exists.
+    local err
+    if ! err=$(xcrun simctl io "$UDID" screenshot "$OUT/$SLUG-$name.png" 2>&1 >/dev/null); then
+      for d in $(echo "$err" | sed -nE 's/.*--display=([0-9]+).*/\1/p'); do
+        xcrun simctl io "$UDID" screenshot --display="$d" "$OUT/$SLUG-display$d-$name.png" >/dev/null
+      done
+    fi
     echo "   $name"
   }
 
