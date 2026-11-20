@@ -28,7 +28,7 @@ struct TextKitMeasurer: TextMeasurer {
         ]
     }
 
-    func measure(_ text: String, fontSize: Double, width: Double) -> Measurement {
+    func measure(_ text: String, fontSize: Double, width: Double) -> TextMeasurement {
         let attrs = Self.attributes(size: fontSize)
         let storage = NSTextStorage(string: text.isEmpty ? "M" : text, attributes: attrs)
         let layout = NSLayoutManager()
@@ -53,7 +53,7 @@ struct TextKitMeasurer: TextMeasurer {
             .map { ($0 as NSString).size(withAttributes: [.font: font, .kern: attrs[.kern] ?? 0]).width }
             .max() ?? 0
 
-        return Measurement(width: Double(widest), height: Double(used.height),
+        return TextMeasurement(width: Double(widest), height: Double(used.height),
                            lineCount: max(lines, 1), fitsWithoutBreakingWords: longest <= CGFloat(width))
     }
 

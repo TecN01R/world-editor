@@ -7,12 +7,12 @@ import Foundation
 public protocol TextMeasurer {
     /// Size of the laid-out text when wrapped to `width` at `fontSize`.
     /// `fitsWithoutBreakingWords` is false if a single word is wider than `width`.
-    func measure(_ text: String, fontSize: Double, width: Double) -> Measurement
+    func measure(_ text: String, fontSize: Double, width: Double) -> TextMeasurement
     /// Ink extents of the glyphs actually present, per point of font size.
     func ink(_ text: String) -> InkMetrics
 }
 
-public struct Measurement: Sendable, Equatable {
+public struct TextMeasurement: Sendable, Equatable {
     public var width: Double
     public var height: Double        // sum of line boxes
     public var lineCount: Int
@@ -87,7 +87,7 @@ public struct FitEngine: Sendable {
         let sample = text.isEmpty ? "M" : text
         let ink = measurer.ink(sample)
 
-        func geometry(_ s: Double) -> (top: Double, bottom: Double, m: Measurement) {
+        func geometry(_ s: Double) -> (top: Double, bottom: Double, m: TextMeasurement) {
             let lh = Self.lineHeight(for: s) * s
             let half = (lh - (ink.ascent + ink.descent) * s) / 2
             let m = measurer.measure(sample, fontSize: s, width: area.width)
