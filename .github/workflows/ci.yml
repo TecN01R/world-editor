@@ -118,7 +118,10 @@ jobs:
             [ "$state" = "failure" ] || [ "$state" = "cancelled" ] && { echo "Build failed"; exit 1; }
             sleep 3
           done
-          gh run download "${{ github.run_id }}" -R "${{ github.repository }}" -n app
+          for attempt in 1 2 3 4; do   # the runner's network occasionally times out
+            gh run download "${{ github.run_id }}" -R "${{ github.repository }}" -n app && break
+            [ "$attempt" = 4 ] && exit 1; sleep 5
+          done
           mkdir -p app && tar -xzf app.tar.gz -C app
       - name: Screenshots in the simulator
         if: steps.ui.outputs.changed == 'true'
