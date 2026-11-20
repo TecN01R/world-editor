@@ -46,7 +46,10 @@ jobs:
           echo "$KEY" | base64 --decode > "$RUNNER_TEMP/asc/AuthKey_$KEY_ID.p8"
 
       - name: Generate project
-        run: brew install xcodegen && xcodegen generate
+        run: |
+          curl -fsSL https://github.com/yonaskolb/XcodeGen/releases/latest/download/xcodegen.zip -o /tmp/xcodegen.zip
+          unzip -q /tmp/xcodegen.zip -d /tmp/xcodegen
+          /tmp/xcodegen/xcodegen/bin/xcodegen generate
 
       - name: Archive
         env:
