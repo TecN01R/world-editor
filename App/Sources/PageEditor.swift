@@ -10,35 +10,22 @@ struct PageEditor: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(library: library) }
 
-    func makeUIView(context: Context) -> UITextView {
-        let tv = UITextView(usingTextLayoutManager: true)
+    func makeUIView(context: Context) -> PageTextView {
+        let tv = PageTextView(usingTextLayoutManager: true)
         tv.delegate = context.coordinator
         tv.backgroundColor = .systemBackground
         tv.alwaysBounceVertical = true
         tv.keyboardDismissMode = .interactive
         tv.allowsEditingTextAttributes = true      // ⌘B, ⌘I and the Format menu
-        tv.textContainerInset = UIEdgeInsets(top: 72, left: 0, bottom: 240, right: 0)
         tv.inputAccessoryView = context.coordinator.formatBar
+        tv.titleField = context.coordinator.titleField
         context.coordinator.textView = tv
-        tv.addSubview(context.coordinator.titleField)   // scrolls with the page
         context.coordinator.render(selection: nil)
         context.coordinator.restoreCaret()
         return tv
     }
 
-    func updateUIView(_ tv: UITextView, context: Context) {
-        // Readable measure: centre a column of ~36em on wide screens (unfolded).
-        let width = tv.bounds.width
-        let column = min(width - 44, 36 * Self.font.pointSize)
-        let side = max(22, (width - column) / 2)
-        let title = context.coordinator.titleField
-        let titleHeight = ceil(title.font?.lineHeight ?? 34) + 8
-        title.frame = CGRect(x: side, y: 28, width: max(0, width - 2 * side), height: titleHeight)
-        let top = title.frame.maxY + 14
-        if tv.textContainerInset.left != side || tv.textContainerInset.top != top {
-            tv.textContainerInset = UIEdgeInsets(top: top, left: side, bottom: 240, right: side)
-        }
-    }
+    func updateUIView(_ tv: PageTextView, context: Context) {}
 
     /// Bold New York, scaled with Dynamic Type.
     static var titleFont: UIFont { newYork(30, weight: .bold, scaledAs: .title1) }
@@ -205,31 +192,71 @@ struct PageEditor: UIViewRepresentable {
 }
 
 /// Bold, italic, bulleted and numbered list, above the keyboard where Notes
-/// keeps them. Buttons show the state of the selection.
-final class FormatBar: UIToolbar {
+/// keeps its bar, matching it: one Liquid Glass capsule across the writing
+/// width (clear of the Duo's side column), buttons spread evenly, a small gap
+/// above the keyboard. Buttons show the state of the selection.
+final class FormatBar: UIView {
     enum Action { case style(InlineStyle), list(ParagraphKind) }
 
+    private static let capsuleHeight: CGFloat = 48, gap: CGFloat = 8
     private let onAction: (Action) -> Void
-    private var bold: UIBarButtonItem!, italic: UIBarButtonItem!
-    private var bullets: UIBarButtonItem!, numbers: UIBarButtonItem!
+    private var bold: UIButton!, italic: UIButton!, bullets: UIButton!, numbers: UIButton!
 
     init(onAction: @escaping (Action) -> Void) {
         self.onAction = onAction
-        super.init(frame: CGRect(x: 0, y: 0, width: 320, height: 44))
-        bold = item("bold", "Bold", .style(.bold))
-        italic = item("italic", "Italic", .style(.italic))
-        bullets = item("list.bullet", "Bulleted List", .list(.bullet))
-        numbers = item("list.number", "Numbered List", .list(.numbered))
-        items = [.flexibleSpace(), bold, italic, bullets, numbers, .flexibleSpace()]   // one glass group, centred
-        sizeToFit()
+        super.init(frame: CGRect(x: 0, y: 0, width: 320, height: Self.capsuleHeight + Self.gap * 2))
+        autoresizingMask = .flexibleHeight
+        bold = button("bold", "Bold", .style(.bold))
+        italic = button("italic", "Italic", .style(.italic))
+        bullets = button("list.bullet", "Bulleted List", .list(.bullet))
+        numbers = button("list.number", "Numbered List", .list(.numbered))
+
+        let capsule = UIVisualEffectView(effect: UIGlassEffect())
+        capsule.layer.cornerRadius = Self.capsuleHeight / 2
+        capsule.layer.cornerCurve = .continuous
+        capsule.clipsToBounds = true
+        let row = UIStackView(arrangedSubviews: [bold, italic, bullets, numbers])
+        row.distribution = .fillEqually
+        row.alignment = .center
+        capsule.contentView.addSubview(row)
+        addSubview(capsule)
+        for v in [capsule, row] as [UIView] { v.translatesAutoresizingMaskIntoConstraints = false }
+        NSLayoutConstraint.activate([
+            capsule.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor, constant: 16),
+            capsule.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor, constant: -16),
+            capsule.topAnchor.constraint(equalTo: topAnchor, constant: Self.gap),
+            capsule.heightAnchor.constraint(equalToConstant: Self.capsuleHeight),
+            row.leadingAnchor.constraint(equalTo: capsule.contentView.leadingAnchor, constant: 8),
+            row.trailingAnchor.constraint(equalTo: capsule.contentView.trailingAnchor, constant: -8),
+            row.topAnchor.constraint(equalTo: capsule.contentView.topAnchor),
+            row.bottomAnchor.constraint(equalTo: capsule.contentView.bottomAnchor),
+        ])
     }
     required init?(coder: NSCoder) { fatalError() }
 
-    private func item(_ symbol: String, _ title: String, _ action: Action) -> UIBarButtonItem {
-        let item = UIBarButtonItem(title: title, image: UIImage(systemName: symbol),
-                                   primaryAction: UIAction(title: title) { [weak self] _ in self?.onAction(action) })
-        item.accessibilityLabel = title
-        return item
+    override var intrinsicContentSize: CGSize {
+        CGSize(width: UIView.noIntrinsicMetric, height: Self.capsuleHeight + Self.gap * 2)
+    }
+
+    private func button(_ symbol: String, _ title: String, _ action: Action) -> UIButton {
+        var config = UIButton.Configuration.plain()
+        config.image = UIImage(systemName: symbol, withConfiguration: UIImage.SymbolConfiguration(textStyle: .title3))
+        config.cornerStyle = .capsule
+        config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14)
+        let b = UIButton(configuration: config, primaryAction: UIAction { [weak self] _ in self?.onAction(action) })
+        b.tintColor = .label
+        b.accessibilityLabel = title
+        b.showsLargeContentViewer = true          // long-press shows the name at large text sizes
+        b.largeContentTitle = title
+        b.addInteraction(UILargeContentViewerInteraction())
+        // Selected: a filled accent circle, as in the system's own format bars.
+        b.configurationUpdateHandler = { b in
+            var c = b.configuration
+            c?.background.backgroundColor = b.isSelected ? .tintColor : .clear
+            c?.baseForegroundColor = b.isSelected ? .white : .label
+            b.configuration = c
+        }
+        return b
     }
 
     func update(bold: Bool, italic: Bool, kind: ParagraphKind) {
@@ -237,5 +264,28 @@ final class FormatBar: UIToolbar {
         self.italic.isSelected = italic
         bullets.isSelected = kind == .bullet
         numbers.isSelected = kind == .numbered
+        for b in [self.bold, self.italic, bullets, numbers] {
+            b?.accessibilityTraits = b?.isSelected == true ? [.button, .selected] : .button
+        }
+    }
+}
+
+/// The page's text view. Lays out the title above the writing whenever its
+/// width changes (rotation, fold), in a readable column of ~36em.
+final class PageTextView: UITextView {
+    var titleField: UITextField? {
+        didSet { oldValue?.removeFromSuperview(); titleField.map(addSubview) }   // scrolls with the page
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard let title = titleField else { return }
+        let width = bounds.width
+        let column = min(width - 44, 36 * PageEditor.font.pointSize)
+        let side = max(22, (width - column) / 2)
+        let titleHeight = ceil(title.font?.lineHeight ?? 34) + 8
+        title.frame = CGRect(x: side, y: 28, width: max(0, width - 2 * side), height: titleHeight)
+        let inset = UIEdgeInsets(top: title.frame.maxY + 14, left: side, bottom: 240, right: side)
+        if textContainerInset != inset { textContainerInset = inset }
     }
 }
