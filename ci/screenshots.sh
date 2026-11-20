@@ -57,3 +57,15 @@ while IFS='|' read -r UDID NAME; do
 done < devices.txt
 
 ls -l "$OUT"
+
+# Print each screenshot into the job log as base64 JPEG between markers, so the
+# Claude session can read them from the log (it can't reach artifact storage).
+# Inner display shots are skipped while the simulator boots folded (all black).
+for f in "$OUT"/*.png; do
+  case "$f" in *display3*) continue;; esac
+  name="$(basename "${f%.png}")"
+  sips -s format jpeg -s formatOptions 72 -Z 1400 "$f" --out "/tmp/$name.jpg" >/dev/null
+  echo "=====BEGIN-SCREENSHOT $name.jpg"
+  base64 -b 76 -i "/tmp/$name.jpg"
+  echo "=====END-SCREENSHOT"
+done

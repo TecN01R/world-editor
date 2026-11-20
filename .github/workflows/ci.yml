@@ -76,14 +76,6 @@ jobs:
       - name: Screenshots in the simulator
         if: steps.ui.outputs.changed == 'true'
         run: ci/screenshots.sh
-      - name: Upload screenshots
-        if: always() && steps.ui.outputs.changed == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: screenshots
-          path: screenshots/
-          if-no-files-found: ignore
-          retention-days: 1   # temporary: reviewed in chat, never committed
       - name: Upload build log on failure
         if: failure()
         uses: actions/upload-artifact@v4
