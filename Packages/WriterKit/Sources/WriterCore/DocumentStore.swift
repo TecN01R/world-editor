@@ -7,12 +7,12 @@ public final class DocumentStore: @unchecked Sendable {
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
         e.outputFormatting = [.prettyPrinted, .sortedKeys]
-        e.dateEncodingStrategy = .iso8601
+        e.dateEncodingStrategy = .deferredToDate   // full precision; ISO 8601 drops fractions
         return e
     }()
     private let decoder: JSONDecoder = {
         let d = JSONDecoder()
-        d.dateDecodingStrategy = .iso8601
+        d.dateDecodingStrategy = .deferredToDate
         return d
     }()
 
