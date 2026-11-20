@@ -105,13 +105,26 @@ jobs:
           while IFS='|' read -r UDID NAME; do xcrun simctl boot "$UDID"; done < devices.txt
       # Unfolds the Duo for the inner-display shots (simctl can't). Installed
       # while the app builds; if it fails, only the unfolded shots are skipped.
-      - name: Install hinge
+      # Homebrew's own overhead made installing take ~9 min, so the installed
+      # keg and its compiled helper are cached. Bump the key to update hinge.
+      - name: Restore hinge
+        id: hinge
         if: steps.ui.outputs.changed == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            /opt/homebrew/Cellar/hinge
+            ~/.cache/hinge
+          key: hinge-0.3.1-xcode27.1
+      - name: Install hinge (cache miss only)
+        if: steps.ui.outputs.changed == 'true' && steps.hinge.outputs.cache-hit != 'true'
         continue-on-error: true
         env:
           HOMEBREW_NO_AUTO_UPDATE: "1"
           HOMEBREW_NO_INSTALL_CLEANUP: "1"
         run: brew install artemnovichkov/tap/hinge
+      - if: steps.ui.outputs.changed == 'true'
+        run: ls -d /opt/homebrew/Cellar/hinge/*/bin 2>/dev/null | head -1 >> "$GITHUB_PATH" || true
       # The public artifact list lags minutes behind an upload, so wait on
       # the build job's upload step instead, then fetch through the runner.
       - name: Wait for the app from the build job

@@ -7,18 +7,21 @@ import WriterCore
 struct RootView: View {
     @Environment(Library.self) private var library
     @State private var column: NavigationSplitViewColumn = Screenshots.opensList ? .sidebar : .detail
+    @State private var focusMode = UserDefaults.standard.bool(forKey: "startInFocus")
 
     var body: some View {
         @Bindable var library = library
         if UserDefaults.standard.bool(forKey: "iconGallery") { IconGallery() } else {
-        NavigationSplitView(preferredCompactColumn: $column) {
+        // Focus mode takes the whole display: the pages list steps aside when unfolded.
+        NavigationSplitView(columnVisibility: .constant(focusMode ? .detailOnly : .automatic),
+                            preferredCompactColumn: $column) {
             PageList(selection: $library.selection) {
                 library.newPage()
                 column = .detail
             }
         } detail: {
             if let id = library.selection {
-                EditorView().id(id)
+                EditorView(focusMode: $focusMode).id(id)
             } else {
                 ContentUnavailableView("No Page Open", systemImage: "doc.text",
                                        description: Text("Choose a page or start a new one."))
@@ -94,7 +97,7 @@ struct PageList: View {
 
 /// One page, in Edit mode or Focus mode.
 struct EditorView: View {
-    @State private var focusMode = UserDefaults.standard.bool(forKey: "startInFocus")
+    @Binding var focusMode: Bool
 
     var body: some View {
         ZStack {
