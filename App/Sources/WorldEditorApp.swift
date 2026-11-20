@@ -45,8 +45,9 @@ final class Library {
             pages = Screenshots.pages()
             if !Screenshots.opensList, let open = pages.first {
                 selection = open.id
+                // Typed text: caret at its end. Rich sample: at the top, title in view.
                 let last = open.paragraphs.count - 1
-                cursor = (last, open.paragraphs[last].length)
+                if !Screenshots.isRich { cursor = (last, open.paragraphs[last].length) }
             }
             return
         }
@@ -99,8 +100,9 @@ final class Library {
 /// - `-screenshotPages YES`: several pages, showing the pages list
 enum Screenshots {
     private static let defaults = UserDefaults.standard
-    static var isActive: Bool { defaults.string(forKey: "screenshotText") != nil || defaults.bool(forKey: "screenshotRich") || opensList }
+    static var isActive: Bool { defaults.string(forKey: "screenshotText") != nil || isRich || opensList }
     static var opensList: Bool { defaults.bool(forKey: "screenshotPages") }
+    static var isRich: Bool { defaults.bool(forKey: "screenshotRich") }
 
     static func pages() -> [WriterCore.Document] {
         if let seeded = defaults.string(forKey: "screenshotText") {
@@ -109,7 +111,7 @@ enum Screenshots {
         }
         let rich = WriterCore.Document(title: "Harbour Notes", paragraphs: [
             Paragraph(text: "The tide came in faster than the charts promised.",
-                      runs: [StyleRun(location: 14, length: 6, style: .italic)]),
+                      runs: [StyleRun(location: 17, length: 6, style: .italic)]),
             Paragraph(text: "Lantern oil", kind: .bullet),
             Paragraph(text: "Rope, two coils", kind: .bullet),
             Paragraph(text: "Check the north mooring", kind: .numbered,
