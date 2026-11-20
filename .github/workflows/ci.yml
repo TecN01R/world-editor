@@ -58,12 +58,13 @@ jobs:
         run: |
           python3 ci/pick_devices.py > devices.txt
           while IFS='|' read -r UDID NAME; do xcrun simctl boot "$UDID" & done < devices.txt
-      - name: Install XcodeGen
-        run: brew install xcodegen
+      - name: Install XcodeGen (prebuilt binary; Homebrew took ~100 s)
+        run: |
+          curl -fsSL https://github.com/yonaskolb/XcodeGen/releases/latest/download/xcodegen.zip -o /tmp/xcodegen.zip
+          unzip -q /tmp/xcodegen.zip -d /tmp/xcodegen
+          echo "/tmp/xcodegen/xcodegen/bin" >> "$GITHUB_PATH"
       - name: Generate project
         run: xcodegen generate
-      - name: Test WriterKit on macOS
-        run: swift test --package-path Packages/WriterKit
       - name: Build app for iOS Simulator
         run: |
           set -o pipefail

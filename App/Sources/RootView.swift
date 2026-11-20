@@ -38,7 +38,9 @@ private struct SideRail: View {
             let x = column >= 40 ? geo.size.width + column / 2 : geo.size.width - 28
             let count: CGFloat = focusMode ? 1 : 2
             let height = count * Self.button + (count - 1) * Self.spacing
-            let top = Self.statusBarBottom(in: geo) + 12
+            // On the Duo the status items fill the top of the column; the
+            // reported status bar frame doesn't cover them, so keep clear of it.
+            let top = max(Self.statusBarBottom(in: geo) + 12, column >= 40 ? 160 : 0)
 
             GlassEffectContainer(spacing: Self.spacing) {
                 VStack(spacing: Self.spacing) {
@@ -61,6 +63,7 @@ private struct SideRail: View {
                     }
                 }
                 .buttonStyle(.glass)
+                .tint(.primary)   // legible on the dark-first palette
                 .buttonBorderShape(.circle)
             }
             .fixedSize()
