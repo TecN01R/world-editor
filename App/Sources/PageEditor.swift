@@ -191,10 +191,6 @@ struct PageEditor: UIViewRepresentable {
     }
 }
 
-/// Bold, italic, bulleted and numbered list, above the keyboard where Notes
-/// keeps its bar, matching it: one Liquid Glass capsule across the writing
-/// width (clear of the Duo's side column), buttons spread evenly, a small gap
-/// above the keyboard. Buttons show the state of the selection.
 /// Bold, italic, bulleted and numbered list above the keyboard: the stock
 /// system toolbar, laid out by iOS, with a small gap above the keyboard as in
 /// Notes. Buttons show the state of the selection. (When more tools arrive,
@@ -203,11 +199,12 @@ final class FormatBar: UIView {
     enum Action { case style(InlineStyle), list(ParagraphKind) }
 
     private static let gap: CGFloat = 8
+    private static let height: CGFloat = 44 + gap
     private let toolbar = UIToolbar()
     private var buttons: [UIBarButtonItem] = []
 
     init(onAction: @escaping (Action) -> Void) {
-        super.init(frame: CGRect(x: 0, y: 0, width: 320, height: 44 + Self.gap))
+        super.init(frame: CGRect(x: 0, y: 0, width: 320, height: Self.height))
         autoresizingMask = .flexibleHeight
         func item(_ symbol: String, _ title: String, _ action: Action) -> UIBarButtonItem {
             let item = UIBarButtonItem(title: title, image: UIImage(systemName: symbol),
@@ -230,7 +227,7 @@ final class FormatBar: UIView {
     }
     required init?(coder: NSCoder) { fatalError() }
 
-    override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: 44 + Self.gap) }
+    override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: Self.height) }
 
     func update(bold: Bool, italic: Bool, kind: ParagraphKind) {
         for (item, on) in zip(buttons, [bold, italic, kind == .bullet, kind == .numbered]) { item.isSelected = on }

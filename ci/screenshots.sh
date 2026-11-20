@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Launches the simulator build on a few iPhone simulators (including any
-# foldable "Duo" device the installed runtimes offer) and captures page view
-# and Focus mode with the software keyboard up. Output: screenshots/jpg/*.jpg
+# Launches the simulator build on the Duo simulator (see ci/pick_devices.py)
+# and captures Edit and Focus mode with the software keyboard up, folded and,
+# when hinge can open it, unfolded. Output: screenshots/jpg/*.jpg
 set -euo pipefail
 
 APP="${1:-build/Build/Products/Debug-iphonesimulator/WorldEditor.app}"
@@ -12,6 +12,7 @@ mkdir -p "$OUT"
 # Show the on-screen keyboard instead of assuming a hardware keyboard.
 defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false
 
+PAGES="First page.\\nSecond page.\\nThird page, where the caret is."
 LONG="Hi. This is exactly what I wanted. Can we keep this design while vertically centering?"
 [ -s devices.txt ] || python3 ci/pick_devices.py > devices.txt
 cat devices.txt
@@ -44,10 +45,10 @@ while IFS='|' read -r UDID NAME; do
     echo "   $name"
   }
 
-  shoot edit        -screenshotRich YES
-    shoot pages       -screenshotPages YES
-  shoot focus-pages -screenshotText "First page.\\nSecond page.\\nThird page, where the caret is." -startInFocus YES
-  shoot focus-controls -screenshotText "First page.\\nSecond page.\\nThird page, where the caret is." -startInFocus YES -focusControls YES
+  shoot edit           -screenshotRich YES
+  shoot pages          -screenshotPages YES
+  shoot focus-pages    -screenshotText "$PAGES" -startInFocus YES
+  shoot focus-controls -screenshotText "$PAGES" -startInFocus YES -focusControls YES
   # Fitting edge cases, only when Focus mode itself changed.
   if [ "${FULL_SHOTS:-true}" = "true" ]; then
     shoot focus-empty -screenshotText EMPTY -startInFocus YES
@@ -60,7 +61,6 @@ while IFS='|' read -r UDID NAME; do
   # button, from inside the simulator. Never fails the job.
   if [ -n "$DISPLAY_ID" ] && command -v hinge >/dev/null; then (
     set +e +o pipefail
-    hinge --help 2>&1 | head -20 | sed 's/^/   hinge: /'
     { hinge -d "$UDID" open || hinge -d "$UDID" 180; } 2>&1 | sed 's/^/   hinge: /'
     sleep 3
     INNER=$(xcrun simctl io "$UDID" screenshot "$OUT/probe.png" 2>&1 | sed -nE 's/.*--display=([0-9]+).*/\1/p' | sort -n | tail -1)
