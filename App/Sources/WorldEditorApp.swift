@@ -28,6 +28,15 @@ final class Library {
         let store = try? DocumentStore(directory: dir)
         self.store = store
         self.document = (try? store?.all())?.first ?? WriterCore.Document()
+
+        // Screenshot runs (CI): `-screenshotText "para one\npara two"` shows that
+        // text instead of saved notes. Nothing is saved unless it's edited.
+        if let seeded = UserDefaults.standard.string(forKey: "screenshotText") {
+            let text = seeded == "EMPTY" ? "" : seeded.replacingOccurrences(of: "\\n", with: "\n")
+            let paragraphs = text.components(separatedBy: "\n").map { Paragraph(text: $0) }
+            document = WriterCore.Document(paragraphs: paragraphs)
+            cursor = (paragraphs.count - 1, paragraphs.last?.text.count ?? 0)
+        }
     }
 
     func update(_ change: (inout WriterCore.Document) -> Void) {
