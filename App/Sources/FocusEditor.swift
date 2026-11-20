@@ -57,23 +57,19 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
 
         view.addLayoutGuide(area)
         view.keyboardLayoutGuide.followsUndockedKeyboard = true
-        let safe = view.safeAreaLayoutGuide
+        // The page is laid out against the screen edges, not the safe area:
+        // revealing the bars (on the Duo, the side column's buttons and
+        // status) then draws them over the writing instead of reflowing it.
         NSLayoutConstraint.activate([
-            // Keep a margin at the top even when the bars are hidden (safe area ≈ 0).
-            area.topAnchor.constraint(greaterThanOrEqualTo: safe.topAnchor, constant: 12),
-            area.topAnchor.constraint(greaterThanOrEqualTo: view.topAnchor, constant: 32),
-            area.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 16),
-            // Full width: the Duo's side column isn't reserved in Focus mode.
+            area.topAnchor.constraint(equalTo: view.topAnchor, constant: 32),
+            area.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
             area.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40),
-            area.bottomAnchor.constraint(lessThanOrEqualTo: safe.bottomAnchor, constant: -16),
+            area.bottomAnchor.constraint(lessThanOrEqualTo: view.bottomAnchor, constant: -24),
             area.bottomAnchor.constraint(lessThanOrEqualTo: view.keyboardLayoutGuide.topAnchor, constant: -12),
         ])
         let fill = area.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor, constant: -12)
         fill.priority = .defaultHigh
         fill.isActive = true
-        let pullUp = area.topAnchor.constraint(equalTo: view.topAnchor)   // as high as the minimums allow
-        pullUp.priority = .defaultLow
-        pullUp.isActive = true
 
         textView.delegate = self
         textView.isScrollEnabled = false            // never scrolls: the text is sized to fit instead
@@ -94,7 +90,8 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         rail.alpha = 0   // hidden with the other controls until revealed
         NSLayoutConstraint.activate([
             rail.centerXAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            rail.centerYAnchor.constraint(equalTo: area.centerYAnchor),
+            // Low on the page, clear of the side column's buttons when they show.
+            rail.bottomAnchor.constraint(equalTo: area.bottomAnchor),
             rail.widthAnchor.constraint(equalToConstant: 32),
             rail.heightAnchor.constraint(lessThanOrEqualTo: area.heightAnchor, multiplier: 0.7),
         ])

@@ -68,7 +68,6 @@ while IFS='|' read -r UDID NAME; do
     if [ -n "$INNER" ] && [ "$INNER" != "$DISPLAY_ID" ]; then
       DISPLAY_ID="$INNER"
       shoot unfolded-edit       -screenshotRich YES
-      shoot unfolded-pages      -screenshotPages YES
       shoot unfolded-focus-long -screenshotText "$LONG" -startInFocus YES
     fi
   ) fi
