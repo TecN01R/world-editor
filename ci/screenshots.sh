@@ -45,6 +45,7 @@ while IFS='|' read -r UDID NAME; do
   }
 
   shoot edit        -screenshotRich YES
+  shoot edit-stock  -screenshotRich YES -stockFormatBar YES   # TEMPORARY comparison
   shoot pages       -screenshotPages YES
   shoot focus-pages -screenshotText "First page.\\nSecond page.\\nThird page, where the caret is." -startInFocus YES
   # Fitting edge cases, only when Focus mode itself changed.
