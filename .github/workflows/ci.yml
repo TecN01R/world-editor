@@ -32,37 +32,42 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Did UI code change?
+      # Decides what this push needs: screenshots only for UI changes, the
+      # Focus edge-case shots only for Focus changes, and the xtool layout
+      # check only when the package manifest or the file list changes.
+      - name: What changed?
         id: ui
         run: |
           before="${{ github.event.before }}"
           if [ "${{ github.event_name }}" != "push" ] || ! git cat-file -e "$before" 2>/dev/null; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"; exit 0
+            printf 'changed=true\nfocus=true\nlayout=true\n' >> "$GITHUB_OUTPUT"; exit 0
           fi
-          if git diff --name-only "$before" "${{ github.sha }}" | grep -qE '^(App/|ci/|project\.yml|Package\.swift|Packages/WriterKit/Sources/FocusLayout/)'; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=false" >> "$GITHUB_OUTPUT"; echo "No UI changes: skipping screenshots."
-          fi
-      - name: Tool versions
-        run: xcodebuild -version && swift --version
-      - name: Build the xtool package for iOS (same sources xtool builds on Linux)
+          files=$(git diff --name-only "$before" "${{ github.sha }}")
+          added=$(git diff --name-only --diff-filter=ADR "$before" "${{ github.sha }}")
+          has() { grep -qE "$1" && echo true || echo false; }
+          echo "changed=$(echo "$files" | has '^(App/|ci/|project\.yml|Package\.swift|Packages/WriterKit/Sources/FocusLayout/)')" >> "$GITHUB_OUTPUT"
+          echo "focus=$(echo "$files" | has '(Focus|TextKitMeasurer|ci/screenshots)')" >> "$GITHUB_OUTPUT"
+          echo "layout=$( (echo "$files" | grep -E '^(Package\.swift|xtool\.yml)$'; echo "$added" | grep '\.swift$') | has . )" >> "$GITHUB_OUTPUT"
+      - name: Check the xtool package layout builds (same sources xtool builds on Linux)
+        if: steps.ui.outputs.layout == 'true'
         run: |
           set -o pipefail
           xcodebuild build -scheme WorldEditor \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build-spm ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
             COMPILER_INDEX_STORE_ENABLE=NO CODE_SIGNING_ALLOWED=NO | tail -5
-      - name: Start booting the Duo simulator (runs while we compile)
-        if: steps.ui.outputs.changed == 'true'
+      - name: Restore XcodeGen
+        id: xcodegen
+        uses: actions/cache@v4
+        with:
+          path: /tmp/xcodegen
+          key: xcodegen-1
+      - name: Install XcodeGen (prebuilt binary, only on a cache miss)
+        if: steps.xcodegen.outputs.cache-hit != 'true'
         run: |
-          python3 ci/pick_devices.py > devices.txt
-          while IFS='|' read -r UDID NAME; do xcrun simctl boot "$UDID" & done < devices.txt
-      - name: Install XcodeGen (prebuilt binary; Homebrew took ~100 s)
-        run: |
-          curl -fsSL https://github.com/yonaskolb/XcodeGen/releases/latest/download/xcodegen.zip -o /tmp/xcodegen.zip
+          curl -fsSL "https://github.com/yonaskolb/XcodeGen/releases/latest/download/xcodegen.zip" -o /tmp/xcodegen.zip
           unzip -q /tmp/xcodegen.zip -d /tmp/xcodegen
-          echo "/tmp/xcodegen/xcodegen/bin" >> "$GITHUB_PATH"
+      - run: echo "/tmp/xcodegen/xcodegen/bin" >> "$GITHUB_PATH"
       - name: Generate project
         run: xcodegen generate
       - name: Build app for iOS Simulator
@@ -73,9 +78,14 @@ jobs:
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build \
             ARCHS=arm64 ONLY_ACTIVE_ARCH=YES COMPILER_INDEX_STORE_ENABLE=NO \
-            CODE_SIGNING_ALLOWED=NO | tee build.log
+            CODE_SIGNING_ALLOWED=NO > build.log || { tail -40 build.log; exit 1; }
+          tail -3 build.log
+      # Booting while xcodebuild starts stalls it for ~1.5 min on this
+      # runner, so the simulator boots only after the build.
       - name: Screenshots in the simulator
         if: steps.ui.outputs.changed == 'true'
+        env:
+          FULL_SHOTS: ${{ steps.ui.outputs.focus }}
         run: ci/screenshots.sh
       - name: Upload build log on failure
         if: failure()
