@@ -21,8 +21,9 @@ jobs:
       - name: Test WriterKit
         run: swift test --package-path Packages/WriterKit
 
-  # Full iOS build on a Mac with Xcode 27. No signing: this only proves the
-  # app compiles and the package tests pass on Apple platforms.
+  # The iOS build and the simulator run on two Macs at once: a cold Duo boot
+  # takes 1-2 min and, on the same 3-core runner, slows the build to match.
+  # The build hands the app over as an artifact as soon as it exists.
   ios-build:
     runs-on: xcode-27
     env:
@@ -32,38 +33,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      # Decides what this push needs: screenshots only for UI changes, the
-      # Focus edge-case shots only for Focus changes, and the xtool layout
-      # check only when the package manifest or the file list changes.
       - name: What changed?
         id: ui
-        run: |
-          before="${{ github.event.before }}"
-          if [ "${{ github.event_name }}" != "push" ] || ! git cat-file -e "$before" 2>/dev/null; then
-            printf 'changed=true\nfocus=true\nlayout=true\n' >> "$GITHUB_OUTPUT"; exit 0
-          fi
-          files=$(git diff --name-only "$before" "${{ github.sha }}")
-          added=$(git diff --name-only --diff-filter=ADR "$before" "${{ github.sha }}")
-          has() { grep -qE "$1" && echo true || echo false; }
-          echo "changed=$(echo "$files" | has '^(App/|ci/|project\.yml|Package\.swift|Packages/WriterKit/Sources/FocusLayout/)')" >> "$GITHUB_OUTPUT"
-          echo "focus=$(echo "$files" | has '(Focus|TextKitMeasurer|ci/screenshots)')" >> "$GITHUB_OUTPUT"
-          echo "layout=$( (echo "$files" | grep -E '^(Package\.swift|xtool\.yml)$'; echo "$added" | grep '\.swift$') | has . )" >> "$GITHUB_OUTPUT"
-      # The cold Duo boot (~1–2 min) is the slowest thing in the job, so it
-      # starts first. The builds use -sdk rather than -destination so that
-      # xcodebuild doesn't wait on the booting simulator.
-      - name: Start booting the Duo simulator
-        if: steps.ui.outputs.changed == 'true'
-        run: |
-          python3 ci/pick_devices.py > devices.txt
-          while IFS='|' read -r UDID NAME; do xcrun simctl boot "$UDID" & done < devices.txt
-      - name: Check the xtool package layout builds (same sources xtool builds on Linux)
-        if: steps.ui.outputs.layout == 'true'
-        run: |
-          set -o pipefail
-          xcodebuild build -scheme WorldEditor \
-            -sdk iphonesimulator \
-            -derivedDataPath build-spm ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
-            COMPILER_INDEX_STORE_ENABLE=NO CODE_SIGNING_ALLOWED=NO | tail -5
+        run: ci/changes.sh "${{ github.event.before }}" "${{ github.sha }}" "${{ github.event_name }}"
       - name: Restore XcodeGen
         id: xcodegen
         uses: actions/cache@v4
@@ -75,27 +47,76 @@ jobs:
         run: |
           curl -fsSL "https://github.com/yonaskolb/XcodeGen/releases/latest/download/xcodegen.zip" -o /tmp/xcodegen.zip
           unzip -q /tmp/xcodegen.zip -d /tmp/xcodegen
-      - run: echo "/tmp/xcodegen/xcodegen/bin" >> "$GITHUB_PATH"
       - name: Generate project
-        run: xcodegen generate
+        run: /tmp/xcodegen/xcodegen/bin/xcodegen generate --quiet
+      # Only what a debug simulator build needs: no indexing, no previews
+      # dylib, no package/macro validation prompts, one architecture.
       - name: Build app for iOS Simulator
         run: |
-          set -o pipefail
           xcodebuild build \
             -project WorldEditor.xcodeproj -scheme WorldEditor \
-            -sdk iphonesimulator \
-            -derivedDataPath build \
-            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES COMPILER_INDEX_STORE_ENABLE=NO \
+            -sdk iphonesimulator -derivedDataPath build \
+            -skipPackagePluginValidation -skipMacroValidation \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
+            COMPILER_INDEX_STORE_ENABLE=NO ENABLE_DEBUG_DYLIB=NO ENABLE_PREVIEWS=NO \
+            CLANG_ENABLE_MODULE_DEBUGGING=NO \
             CODE_SIGNING_ALLOWED=NO > build.log || { tail -40 build.log; exit 1; }
-          tail -3 build.log
+          tail -2 build.log
+      - name: Hand the app to the screenshot job
+        if: steps.ui.outputs.changed == 'true'
+        run: tar -czf app.tar.gz -C build/Build/Products/Debug-iphonesimulator WorldEditor.app
+      - if: steps.ui.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app
+          path: app.tar.gz
+          retention-days: 1
+          compression-level: 0
+      # Checks the root Package.swift (what xtool builds on Fedora) still
+      # compiles. Runs after the app is handed over, so it never delays it.
+      - name: Check the xtool package layout builds
+        if: steps.ui.outputs.layout == 'true'
+        run: |
+          xcodebuild build -scheme WorldEditor -sdk iphonesimulator \
+            -derivedDataPath build-spm -skipPackagePluginValidation -skipMacroValidation \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES COMPILER_INDEX_STORE_ENABLE=NO \
+            CODE_SIGNING_ALLOWED=NO > spm.log || { tail -40 spm.log; exit 1; }
+
+  # Boots the Duo while the other Mac builds, then installs the app and
+  # prints dark-mode screenshots into the log.
+  screenshots:
+    runs-on: xcode-27
+    permissions:
+      actions: read
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: What changed?
+        id: ui
+        run: ci/changes.sh "${{ github.event.before }}" "${{ github.sha }}" "${{ github.event_name }}"
+      - name: Boot the Duo simulator
+        if: steps.ui.outputs.changed == 'true'
+        run: |
+          python3 ci/pick_devices.py > devices.txt
+          while IFS='|' read -r UDID NAME; do xcrun simctl boot "$UDID"; done < devices.txt
+      - name: Wait for the app from the build job
+        if: steps.ui.outputs.changed == 'true'
+        run: |
+          run="repos/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          for i in $(seq 1 180); do
+            [ "$(gh api "$run/artifacts" -q '[.artifacts[]|select(.name=="app")]|length')" != "0" ] && break
+            state=$(gh api "$run/jobs" -q '.jobs[]|select(.name=="ios-build")|.conclusion // ""')
+            [ "$state" = "failure" ] || [ "$state" = "cancelled" ] && { echo "Build failed"; exit 1; }
+            sleep 3
+          done
+          gh run download "${{ github.run_id }}" -R "${{ github.repository }}" -n app
+          mkdir -p app && tar -xzf app.tar.gz -C app
       - name: Screenshots in the simulator
         if: steps.ui.outputs.changed == 'true'
         env:
           FULL_SHOTS: ${{ steps.ui.outputs.focus }}
-        run: ci/screenshots.sh
-      - name: Upload build log on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-build-log
-          path: build.log
+        run: ci/screenshots.sh app/WorldEditor.app
