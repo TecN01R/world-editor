@@ -64,6 +64,8 @@ struct PageEditor: UIViewRepresentable {
     final class Coordinator: NSObject, UITextViewDelegate, UITextFieldDelegate {
         let library: Library
         weak var textView: UITextView?
+        /// Replacing the text moves the selection; that isn't the user moving the caret.
+        private var isRendering = false
         lazy var formatBar = FormatBar { [weak self] action in self?.perform(action) }
 
         lazy var titleField: UITextField = {
@@ -101,6 +103,8 @@ struct PageEditor: UIViewRepresentable {
         /// Shows the page as stored, keeping the selection.
         func render(selection: NSRange?) {
             guard let tv = textView else { return }
+            isRendering = true
+            defer { isRendering = false }
             let doc = library.document
             let s = NSMutableAttributedString()
             for (i, p) in doc.paragraphs.enumerated() {
@@ -144,6 +148,7 @@ struct PageEditor: UIViewRepresentable {
         }
 
         func textViewDidChangeSelection(_ tv: UITextView) {
+            guard !isRendering else { return }
             let (i, offset) = library.document.locate(tv.selectedRange.location)
             library.cursor = (i, offset)
             updateFormatBar()
@@ -215,7 +220,7 @@ final class FormatBar: UIToolbar {
         italic = item("italic", "Italic", .style(.italic))
         bullets = item("list.bullet", "Bulleted List", .list(.bullet))
         numbers = item("list.number", "Numbered List", .list(.numbered))
-        items = [bold, italic, UIBarButtonItem.flexibleSpace(), bullets, numbers]
+        items = [.flexibleSpace(), bold, italic, bullets, numbers, .flexibleSpace()]   // one glass group, centred
         sizeToFit()
     }
     required init?(coder: NSCoder) { fatalError() }

@@ -9,6 +9,20 @@ delay 1
 tell application "System Events"
 	log "processes: " & ((name of every process whose background only is false) as text)
 	tell process appName
+		set frontmost to true
+		delay 2
+		-- What the app exposes, for pinning the unfold control.
+		try
+			log "windows: " & ((name of every window) as text)
+			repeat with e in (entire contents of window 1)
+				try
+					log "ui: " & (role of e as text) & " | " & (description of e as text) & " | " & (name of e as text)
+				end try
+			end repeat
+		end try
+		try
+			log "menus: " & ((name of every menu bar item of menu bar 1) as text)
+		end try
 		set found to {}
 		set target to missing value
 		repeat with m in menu bar items of menu bar 1
