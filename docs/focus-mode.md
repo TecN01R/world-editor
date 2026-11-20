@@ -36,4 +36,4 @@ The native app implements the same rules in `FitEngine` (shared, tested) and
 - Vertical dots, one per paragraph; drag or tap to move. Current page is a
   pill; empty pages are hollow.
 - Swipe up/down to move between pages. VoiceOver can adjust the dots.
-- Switching between page view and Focus mode keeps the caret position.
+- Switching between Edit mode and Focus mode keeps the caret position.

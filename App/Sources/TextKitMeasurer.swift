@@ -1,10 +1,14 @@
 import UIKit
 import CoreText
 import FocusLayout
+import WriterCore
 
 /// Measures with the same TextKit 1 stack, font and paragraph style as the
 /// focus editor's text view, so fitting and display agree exactly.
 struct TextKitMeasurer: TextMeasurer {
+    /// Bold and italic runs of the text being fitted; they change its width.
+    var runs: [StyleRun] = []
+
     static func font(_ size: CGFloat) -> UIFont {
         let base = UIFont.systemFont(ofSize: size, weight: .regular)
         return UIFont(descriptor: base.fontDescriptor.withDesign(.serif) ?? base.fontDescriptor, size: size)
@@ -30,7 +34,9 @@ struct TextKitMeasurer: TextMeasurer {
 
     func measure(_ text: String, fontSize: Double, width: Double) -> TextMeasurement {
         let attrs = Self.attributes(size: fontSize)
-        let storage = NSTextStorage(string: text.isEmpty ? "M" : text, attributes: attrs)
+        let styled = text.isEmpty ? NSAttributedString(string: "M", attributes: attrs)
+                                  : RichText.attributed(text, runs: runs, attributes: attrs)
+        let storage = NSTextStorage(attributedString: styled)
         let layout = NSLayoutManager()
         let container = NSTextContainer(size: CGSize(width: width, height: .greatestFiniteMagnitude))
         container.lineFragmentPadding = 0
@@ -47,15 +53,15 @@ struct TextKitMeasurer: TextMeasurer {
         let used = layout.usedRect(for: container)
 
         // A single word wider than the page would be broken mid-word: not allowed.
-        let font = attrs[.font] as! UIFont
-        let wordAttrs: [NSAttributedString.Key: Any] = [.font: font, .kern: attrs[.kern] ?? 0]
-        let longest = text.split(whereSeparator: \.isWhitespace)
-            .map { (String($0) as NSString).size(withAttributes: wordAttrs).width }
+        let longest = Self.words.matches(in: styled.string, range: NSRange(location: 0, length: styled.length))
+            .map { styled.attributedSubstring(from: $0.range).size().width }
             .max() ?? 0
 
         return TextMeasurement(width: Double(widest), height: Double(used.height),
                                lineCount: max(lines, 1), fitsWithoutBreakingWords: longest <= CGFloat(width))
     }
+
+    private static let words = try! NSRegularExpression(pattern: "\\S+")
 
     func ink(_ text: String) -> InkMetrics {
         let size: CGFloat = 100
