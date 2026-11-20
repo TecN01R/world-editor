@@ -189,17 +189,18 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         let text = textView.text ?? ""
         var fit = engine.fit(text, in: (Double(frame.width), Double(frame.height)),
                              measurer: measurer, held: heldSize, allowGrow: allowGrow || heldSize == 0)
-        apply(fit, in: frame)
+        var extent = apply(fit, in: frame)
 
-        // Ground truth: if the real layout is taller than the fit predicted,
-        // step down until it truly fits. Nothing may hang under the keyboard.
+        // Ground truth: position and verify using where TextKit actually drew
+        // the glyphs, not the prediction. If the real block is taller than the
+        // page, step down until it truly fits. Nothing may hang off the top or
+        // under the keyboard.
         var k = FitEngine.steps.firstIndex(of: fit.fontSize) ?? 0
-        while k > 0, textView.sizeThatFits(CGSize(width: textView.bounds.width, height: .greatestFiniteMagnitude)).height
-                > frame.height + fit.topOverhang + 1 {
+        while k > 0, extent.height > frame.height + 0.5 {
             k -= 1
             fit = engine.fit(text, in: (Double(frame.width), Double(frame.height)), measurer: measurer,
                              held: FitEngine.steps[k], allowGrow: false)
-            apply(fit, in: frame)
+            extent = apply(fit, in: frame)
         }
 
         let changed = fit.fontSize != heldSize
@@ -212,7 +213,12 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         }
     }
 
-    private func apply(_ fit: FitResult, in frame: CGRect) {
+    /// Applies the size, then positions the text view so the visible block
+    /// (top of the tallest letter to the bottom of the last line, or of a
+    /// deeper descender) is centred in `frame`. Returns that block, in the
+    /// text view's own coordinates, as measured from the real layout.
+    @discardableResult
+    private func apply(_ fit: FitResult, in frame: CGRect) -> (top: CGFloat, height: CGFloat) {
         let selection = textView.selectedRange
         let attrs = TextKitMeasurer.attributes(size: fit.fontSize)
         textView.typingAttributes = attrs
@@ -222,11 +228,51 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         let caretRoom = CGFloat(fit.fontSize * 0.06) + 2
         let width = min(frame.width, CGFloat(fit.blockSize.width) + caretRoom)
         let height = textView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
-        let visible = CGFloat(fit.blockSize.height)
-        let top = FitEngine.centredTop(blockHeight: Double(visible),
-                                       areaTop: Double(frame.minY), areaBottom: Double(frame.maxY))
-        textView.frame = CGRect(x: frame.minX, y: CGFloat(top) - CGFloat(fit.topOverhang),
-                                width: width, height: height)
+        textView.frame = CGRect(x: frame.minX, y: frame.minY, width: width, height: height)
+
+        let block = visibleBlock(fontSize: fit.fontSize)
+        let top = FitEngine.centredTop(blockHeight: Double(block.height),
+                                       areaTop: Double(frame.minY), areaBottom: Double(frame.maxY), margin: 0)
+        textView.frame.origin.y = CGFloat(top) - block.top
+        return block
+    }
+
+    /// Measures the drawn block from TextKit: first baseline minus the tallest
+    /// glyph's ascent, down to the larger of the last line box and the deepest
+    /// descender below the last baseline.
+    private func visibleBlock(fontSize: Double) -> (top: CGFloat, height: CGFloat) {
+        let lm = textView.layoutManager
+        let container = textView.textContainer
+        lm.ensureLayout(for: container)
+        let ink = measurer.ink(textView.text ?? "")
+        let s = CGFloat(fontSize)
+        let glyphs = lm.numberOfGlyphs
+
+        func baseline(ofGlyph g: Int) -> (CGFloat, CGRect) {
+            let frag = lm.lineFragmentRect(forGlyphAt: g, effectiveRange: nil)
+            return (frag.minY + lm.location(forGlyphAt: g).y, frag)
+        }
+
+        let firstBaseline: CGFloat, lastBaseline: CGFloat, lastLineBottom: CGFloat
+        if glyphs == 0 {
+            // Empty paragraph: TextKit lays out an "extra" line for the caret.
+            let frag = lm.extraLineFragmentRect
+            let f = TextKitMeasurer.font(s)
+            firstBaseline = frag.maxY + f.descender
+            lastBaseline = firstBaseline
+            lastLineBottom = frag.maxY
+        } else {
+            let (b0, _) = baseline(ofGlyph: 0)
+            let (b1, lastFrag) = baseline(ofGlyph: glyphs - 1)
+            firstBaseline = b0
+            lastBaseline = b1
+            lastLineBottom = lm.extraLineFragmentTextContainer == nil ? lastFrag.maxY
+                : max(lastFrag.maxY, lm.extraLineFragmentRect.maxY)
+        }
+        let inset = textView.textContainerInset.top
+        let top = inset + firstBaseline - CGFloat(ink.inkAscent) * s - 0.03 * s
+        let bottom = inset + max(lastLineBottom, lastBaseline + CGFloat(ink.inkDescent) * s + 0.03 * s)
+        return (top, bottom - top)
     }
 }
 
