@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<title>Writer — prototype 1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300..600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f6f3ec;
+    --ink: #1d1b18;
+    --muted: #a39d92;
+    --faint: rgba(29,27,24,.08);
+    --accent: #c4572a;
+    --ui: ui-sans-serif, -apple-system, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+    --display: "Fraunces", ui-serif, "New York", Georgia, serif;
+    --text: "Source Serif 4", ui-serif, "New York", Georgia, serif;
+    --sat: env(safe-area-inset-top, 0px);
+    --sar: env(safe-area-inset-right, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+    --sal: env(safe-area-inset-left, 0px);
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #151410;
+      --ink: #ece7dc;
+      --muted: #6f6a60;
+      --faint: rgba(236,231,220,.08);
+      --accent: #e3824f;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--paper); color: var(--ink); -webkit-text-size-adjust: 100%; }
+  body { font-family: var(--ui); overscroll-behavior: none; }
+  /* In focus mode the document itself must have nothing to scroll:
+     take page view out of layout entirely, not just cover it. */
+  html.in-focus, html.in-focus body { overflow: hidden; height: 100%; overscroll-behavior: none; }
+  html.in-focus #bar, html.in-focus #trad { display: none; }
+
+  /* ---------- top bar ---------- */
+  #bar {
+    position: sticky; top: 0; z-index: 5;
+    display: flex; align-items: center;
+    padding: calc(var(--sat) + 10px) calc(var(--sar) + 16px) 10px calc(var(--sal) + 16px);
+    background: color-mix(in srgb, var(--paper) 82%, transparent);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  }
+  #meta { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+  #modeBtn {
+    position: fixed; z-index: 20;
+    top: calc(var(--sat) + 8px); right: calc(var(--sar) + 12px);
+    display: inline-flex; align-items: center; gap: 7px;
+    font: 500 14px/1 var(--ui); color: var(--ink);
+    background: var(--faint); border: 0; border-radius: 999px;
+    padding: 9px 14px 9px 12px; cursor: pointer;
+    transition: opacity .4s ease, background .2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #modeBtn:hover { background: color-mix(in srgb, var(--ink) 12%, transparent); }
+  #modeBtn svg { width: 16px; height: 16px; }
+  html.in-focus.typing #modeBtn { opacity: .14; }
+
+  /* ---------- traditional view ---------- */
+  #trad { padding: 8px calc(var(--sar) + 22px) calc(var(--sab) + 40vh) calc(var(--sal) + 22px); }
+  #doc {
+    max-width: 36rem; margin: 0 auto; outline: none;
+    font-family: var(--text); font-optical-sizing: auto;
+    font-size: clamp(18px, 1rem + .35vw, 21px); line-height: 1.62;
+    caret-color: var(--accent);
+    word-wrap: break-word; overflow-wrap: break-word;
+    padding-top: 6vh;
+  }
+  #doc p { margin: 0 0 .95em; min-height: 1.62em; }
+  #doc.empty p:first-child::before { content: "Start writing…"; color: var(--muted); pointer-events: none; }
+  ::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+
+  /* ---------- focus mode ---------- */
+  #focus {
+    position: fixed; left: 0; right: 0; top: 0; height: 100%;
+    background: var(--paper); z-index: 10;
+    touch-action: none;
+    opacity: 0; transition: opacity .22s ease;
+  }
+  #focus.shown { opacity: 1; }
+  #focus[hidden] { display: none; }
+  #stage {
+    position: absolute; left: 0; right: 0; top: 0; bottom: var(--kb, 0px);
+    padding:
+      calc(var(--sat) + 16px)   /* mode button floats over the text; JS assumes this 16px */
+      calc(var(--sar) + 40px)
+      calc(var(--sab) + max(28px, 6vmin))
+      calc(var(--sal) + max(14px, 3.5vmin));
+    display: flex; align-items: center; justify-content: center;
+    cursor: text;
+  }
+  /* Keyboard up: keep the last line clear of it, or iOS scrolls the page. */
+  html.kb #stage { padding-bottom: calc(28px + var(--panGuard, 0px)); }
+  html.kb #hint { display: none; }
+  #page { display: flex; align-items: center; justify-content: center; max-width: 100%; max-height: 100%; }
+  #wrap { position: relative; transform-origin: 0 0; will-change: transform; }
+  .ftype {
+    font-family: var(--display); font-optical-sizing: auto; font-weight: 370;
+    font-kerning: normal; font-variant-ligatures: common-ligatures;
+    white-space: pre-wrap; text-align: left;
+  }
+  #fta {
+    display: block; margin: 0; padding: 0; border: 0; box-sizing: border-box; outline: none; resize: none;
+    background: transparent; color: var(--ink); caret-color: var(--accent);
+    overflow: hidden; scrollbar-width: none;
+    border-radius: 0; -webkit-appearance: none; appearance: none;
+  }
+  #fta::-webkit-scrollbar { display: none; }
+  #measure {
+    position: absolute; left: -100000px; top: 0; visibility: hidden; pointer-events: none;
+    display: inline-block; contain: layout style;
+  }
+
+  #hint {
+    position: absolute; left: 0; right: 0; bottom: calc(var(--sab) + 18px + var(--kb, 0px));
+    text-align: center; font: 13px/1.4 var(--ui); color: var(--muted);
+    transition: opacity .5s ease; pointer-events: none;
+  }
+  #hint.off { opacity: 0; }
+
+  /* paragraph rail */
+  #rail {
+    position: absolute; top: calc((100% - var(--kb, 0px)) / 2); right: calc(var(--sar) + 4px); transform: translateY(-50%);
+    width: 36px; padding: 10px 0; touch-action: none; cursor: grab;
+    transition: opacity .3s;
+  }
+  #rail[hidden] { display: none; }
+  #rail.drag { cursor: grabbing; }
+  #dots { display: flex; flex-direction: column; align-items: center; }
+  .dot { height: var(--pitch, 20px); width: 36px; display: flex; align-items: center; justify-content: center; }
+  .dot::after {
+    content: ""; display: block;
+    width: min(7px, calc(var(--pitch) * .55)); height: min(7px, calc(var(--pitch) * .55));
+    border-radius: 99px; background: var(--muted); opacity: .7;
+    transition: height .18s ease, background .18s, opacity .18s;
+  }
+  .dot.empty::after { background: transparent; box-shadow: inset 0 0 0 1.5px var(--muted); }
+  .dot.on::after { background: var(--accent); opacity: 1; height: min(20px, calc(var(--pitch) * .85)); width: min(7px, calc(var(--pitch) * .55)); box-shadow: none; }
+  #rail.drag .dot::after { opacity: 1; }
+  html.typing #rail:not(.drag) { opacity: .55; }
+
+  #peek {
+    position: absolute; right: 40px; top: 0; transform: translateY(-50%);
+    max-width: min(60vw, 320px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font: 14px/1.2 var(--ui); color: var(--ink);
+    background: color-mix(in srgb, var(--paper) 88%, var(--ink));
+    padding: 7px 11px; border-radius: 10px;
+    opacity: 0; transition: opacity .15s; pointer-events: none;
+    box-shadow: 0 6px 24px rgba(0,0,0,.12);
+  }
+  #peek b { font-weight: 600; color: var(--accent); margin-right: 6px; font-variant-numeric: tabular-nums; }
+  #rail.drag #peek { opacity: 1; }
+
+  /* ---------- diagnostics (hold the mode button) ---------- */
+  #diagBox { position: fixed; z-index: 30; pointer-events: none; outline: 1px dashed #e5484d; }
+  #diag {
+    position: fixed; z-index: 31; left: calc(var(--sal) + 8px); bottom: calc(var(--kb, 0px) + 8px);
+    margin: 0; padding: 8px 10px; border-radius: 8px; pointer-events: none;
+    font: 11px/1.35 ui-monospace, Menlo, monospace; color: #fff; background: rgba(0,0,0,.72);
+  }
+  #diag[hidden], #diagBox[hidden] { display: none; }
+  #sentinel { position: fixed; inset: 0; pointer-events: none; visibility: hidden; }
+</style>
+</head>
+<body>
+
+<header id="bar"><span id="meta"></span></header>
+
+<button id="modeBtn" type="button" aria-label="Toggle focus mode"></button>
+
+<main id="trad">
+  <div id="doc" contenteditable="true" spellcheck="true" autocapitalize="sentences" aria-label="Document"></div>
+</main>
+
+<section id="focus" hidden aria-label="Focus mode">
+  <div id="stage">
+    <div id="page"><div id="wrap"><textarea id="fta" class="ftype" rows="1" spellcheck="true" autocapitalize="sentences" writingsuggestions="false" aria-label="Paragraph"></textarea></div></div>
+  </div>
+  <div id="hint">Return starts a new page</div>
+  <nav id="rail" hidden aria-label="Paragraphs"><div id="dots"></div><div id="peek"></div></nav>
+</section>
+
+<div id="measure" class="ftype" aria-hidden="true"></div>
+<div id="diagBox" hidden></div>
+<div id="sentinel" aria-hidden="true"></div>
+<pre id="diag" hidden></pre>
+
+<script>
+(() => {
+  'use strict';
+  const $ = s => document.querySelector(s);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const root = document.documentElement;
+
+  /* =====================================================================
+     Document model: an ordered list of plain-text paragraphs.
+     Both views read from and write to this; neither owns the content.
+     ===================================================================== */
+  const KEY = 'writer.doc.v1';
+  let paras = [''];
+  let cursor = { p: 0, o: 0 };
+  let mode = 'trad';
+  try {
+    const d = JSON.parse(localStorage.getItem(KEY));
+    if (d && Array.isArray(d.paras) && d.paras.length) {
+      paras = d.paras.map(String);
+      if (d.cursor) cursor = d.cursor;
+    }
+  } catch (_) {}
+
+  let saveTimer;
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(persist, 300);
+    updateMeta();
+  }
+  function persist() {
+    try { localStorage.setItem(KEY, JSON.stringify({ paras, cursor })); } catch (_) {}
+  }
+  addEventListener('visibilitychange', () => { if (document.hidden) { syncCursor(); persist(); } });
+  addEventListener('pagehide', () => { syncCursor(); persist(); });
+
+  const metaEl = $('#meta');
+  function updateMeta() {
+    const words = paras.join(' ').trim().split(/\s+/).filter(Boolean).length;
+    const n = paras.length;
+    metaEl.textContent = words ? `${words} word${words === 1 ? '' : 's'} · ${n} paragraph${n === 1 ? '' : 's'}` : '';
+    doc.classList.toggle('empty', n === 1 && !paras[0]);
+  }
+
+  /* =====================================================================
+     Traditional view: one contenteditable, one <p> per paragraph.
+     Structure-changing input (Enter, multi-line paste) goes through the
+     model; ordinary typing stays native so undo/autocorrect behave.
+     ===================================================================== */
+  const doc = $('#doc');
+
+  function renderTrad() {
+    doc.replaceChildren(...paras.map(t => {
+      const p = document.createElement('p');
+      if (t) p.textContent = t; else p.appendChild(document.createElement('br'));
+      return p;
+    }));
+    updateMeta();
+  }
+
+  function normalizeTrad() {
+    let changed = false;
+    for (const n of [...doc.childNodes]) {
+      if (n.nodeType === 1 && n.tagName === 'P') continue;
+      if (n.nodeType === 3 && !n.textContent) { n.remove(); continue; }
+      if (n.nodeType === 1 && n.tagName === 'BR') { n.remove(); changed = true; continue; }
+      const p = document.createElement('p');
+      if (n.nodeType === 1) p.textContent = n.textContent; else p.appendChild(n.cloneNode());
+      n.replaceWith(p);
+      changed = true;
+    }
+    if (!doc.children.length) { doc.innerHTML = '<p><br></p>'; changed = true; }
+    for (const p of doc.children) {
+      if (!p.textContent && !p.querySelector('br')) p.appendChild(document.createElement('br'));
+    }
+    return changed;
+  }
+
+  function readTrad() {
+    normalizeTrad();
+    paras = [...doc.children].map(p => p.textContent);
+    if (!paras.length) paras = [''];
+  }
+
+  function domToPos(node, off) {
+    const ps = doc.children;
+    if (node === doc) {
+      if (off >= ps.length) { const i = ps.length - 1; return { p: i, o: ps[i].textContent.length }; }
+      return { p: off, o: 0 };
+    }
+    let el = node.nodeType === 1 ? node : node.parentNode;
+    while (el && el.parentNode !== doc) el = el.parentNode;
+    const i = Array.prototype.indexOf.call(ps, el);
+    if (i < 0) return { p: 0, o: 0 };
+    const r = document.createRange();
+    r.selectNodeContents(el);
+    r.setEnd(node, off);
+    return { p: i, o: r.toString().length };
+  }
+
+  function getTradRange() {
+    const sel = getSelection();
+    if (!sel.rangeCount) return null;
+    const r = sel.getRangeAt(0);
+    if (!doc.contains(r.startContainer)) return null;
+    return { start: domToPos(r.startContainer, r.startOffset), end: domToPos(r.endContainer, r.endOffset) };
+  }
+
+  function setTradCaret(p, o) {
+    const el = doc.children[clamp(p, 0, doc.children.length - 1)];
+    if (!el) return;
+    const r = document.createRange();
+    const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let n, rem = o, placed = false;
+    while ((n = w.nextNode())) {
+      if (rem <= n.length) { r.setStart(n, rem); placed = true; break; }
+      rem -= n.length;
+    }
+    if (!placed) { r.selectNodeContents(el); r.collapse(!el.textContent); }
+    r.collapse(true);
+    const s = getSelection();
+    s.removeAllRanges();
+    s.addRange(r);
+  }
+
+  function revealTradCaret(center) {
+    const s = getSelection();
+    let rect = s.rangeCount ? s.getRangeAt(0).getBoundingClientRect() : null;
+    if (!rect || (!rect.height && !rect.top)) {
+      const el = doc.children[clamp(cursor.p, 0, doc.children.length - 1)];
+      if (!el) return;
+      rect = el.getBoundingClientRect();
+    }
+    const vv = window.visualViewport;
+    const top = vv ? vv.offsetTop : 0, h = (vv ? vv.height : innerHeight) - kbEst;
+    if (center) {
+      window.scrollBy(0, rect.top - (top + h * 0.38));
+    } else if (rect.bottom > top + h - 48 || rect.top < top + 64) {
+      window.scrollBy({ top: rect.top - (top + h * 0.55), behavior: 'smooth' });
+    }
+  }
+
+  // Insert text (possibly multi-line) at the current selection via the model.
+  function tradInsert(text) {
+    readTrad();
+    const s = getTradRange();
+    if (!s) return;
+    const lines = text.replace(/\r\n?/g, '\n').split('\n');
+    const before = paras[s.start.p].slice(0, s.start.o);
+    const after = paras[s.end.p].slice(s.end.o);
+    const lastLen = lines[lines.length - 1].length + (lines.length === 1 ? before.length : 0);
+    lines[0] = before + lines[0];
+    lines[lines.length - 1] += after;
+    paras.splice(s.start.p, s.end.p - s.start.p + 1, ...lines);
+    renderTrad();
+    cursor = { p: s.start.p + lines.length - 1, o: lastLen };
+    setTradCaret(cursor.p, cursor.o);
+    revealTradCaret(false);
+    save();
+  }
+
+  doc.addEventListener('beforeinput', e => {
+    const t = e.inputType;
+    if (t === 'insertParagraph' || t === 'insertLineBreak') { e.preventDefault(); tradInsert('\n'); }
+    else if (t.startsWith('format')) e.preventDefault();
+  });
+  doc.addEventListener('paste', e => {
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData('text/plain') || '';
+    if (!text) return;
+    if (text.includes('\n') || text.includes('\r')) tradInsert(text);
+    else document.execCommand('insertText', false, text);
+  });
+  doc.addEventListener('drop', e => e.preventDefault());
+  doc.addEventListener('input', () => {
+    const pos = getTradRange();
+    if (normalizeTrad() && pos) setTradCaret(pos.start.p, pos.start.o);
+    readTrad();
+    save();
+  });
+  document.addEventListener('selectionchange', () => {
+    if (mode !== 'trad') return;
+    const r = getTradRange();
+    if (r) cursor = r.start;
+  });
+
+  /* =====================================================================
+     Focus mode: one paragraph per page, set as large as the page allows.
+     ===================================================================== */
+  const focusEl = $('#focus'), stage = $('#stage'), page = $('#page'), wrap = $('#wrap');
+  const fta = $('#fta'), meas = $('#measure'), rail = $('#rail'), dots = $('#dots'), peek = $('#peek'), hint = $('#hint');
+
+  let idx = 0;
+  let held = 0;            // font size currently on screen
+  let heldLen = 0;         // paragraph length when `held` was set
+  let fitOverflow = false; // paragraph too long to fit even at MIN; may scroll inside its box
+
+  // Discrete size steps: changes feel like deliberate steps, not jitter.
+  const MIN = 16, RATIO = 1.022, STEPS = [];
+  for (let s = MIN; s < 3000; s *= RATIO) STEPS.push(Math.round(s * 10) / 10);
+
+  const LOG22 = Math.log(22), LOG180 = Math.log(180);
+  const tOf = s => clamp((Math.log(s) - LOG22) / (LOG180 - LOG22), 0, 1);
+  const lhFor = s => 1.36 - tOf(s) * 0.31;           // 1.36 small → 1.05 display
+  const lsFor = s => -0.004 - tOf(s) * 0.022;        // tighter tracking when huge
+  function applyType(el, s) {
+    el.style.fontSize = s + 'px';
+    el.style.lineHeight = lhFor(s);
+    el.style.letterSpacing = lsFor(s).toFixed(4) + 'em';
+  }
+
+  // Glyph extents for the paragraph, per 1px of font size.
+  const inkCtx = document.createElement('canvas').getContext('2d');
+  function inkMetrics(text) {
+    inkCtx.font = '370 100px Fraunces, ui-serif, "New York", Georgia, serif';
+    const m = inkCtx.measureText(text.trim() ? text : 'M');
+    return {
+      asc: Math.max(0, m.actualBoundingBoxAscent) / 100,   // tallest glyph
+      desc: Math.max(0, m.actualBoundingBoxDescent) / 100, // deepest glyph
+      A: (m.fontBoundingBoxAscent ?? 92) / 100,            // font's line ascent
+      D: (m.fontBoundingBoxDescent ?? 26) / 100,           // font's line descent
+    };
+  }
+
+  /* Host-frame scrolling. Inside an embedded frame (the Claude app), iOS may
+     scroll the whole frame to keep the caret clear of the keyboard. We can't
+     stop that from inside, but we can see it (IntersectionObserver against the
+     top viewport) and keep that much more room free next time. */
+  const framePan = { top: 0, bottom: 0 };
+  let panGuard = 0, lastUnpan = 0;
+  try { panGuard = Math.min(160, +localStorage.getItem('writer.panGuard.v6') || 0); } catch (_) {}
+  root.style.setProperty('--panGuard', panGuard + 'px');
+  try {
+    const th = Array.from({ length: 201 }, (_, i) => i / 200);
+    new IntersectionObserver(([e]) => {
+      framePan.top = Math.max(0, Math.round(e.intersectionRect.top - e.boundingClientRect.top));
+      framePan.bottom = Math.max(0, Math.round(e.boundingClientRect.bottom - e.intersectionRect.bottom));
+      // If the host scrolled us anyway while typing, the caret was too close to
+      // the keyboard for iOS's taste: remember to keep that much more room free.
+      if (framePan.top > 4 && mode === 'focus') {
+        // Ask the host to scroll our top back into view (allowed for embedded
+        // frames in WebKit); the layout now leaves the caret clear, so it holds.
+        const now = performance.now();
+        if (now - lastUnpan > 1500) {
+          lastUnpan = now;
+          requestAnimationFrame(() => stage.scrollIntoView({ block: 'start', inline: 'nearest' }));
+        }
+      }
+      if (framePan.top > 4 && mode === 'focus' && root.classList.contains('kb')) {
+        const g = Math.min(160, panGuard + framePan.top);
+        if (g > panGuard) {
+          panGuard = g;
+          root.style.setProperty('--panGuard', panGuard + 'px');
+          try { localStorage.setItem('writer.panGuard.v6', String(panGuard)); } catch (_) {}
+        }
+      }
+      if (diagOn && mode === 'focus') fit(false, false);
+    }, { threshold: th }).observe(document.getElementById('sentinel'));
+  } catch (_) {}
+  let diagOn = false;
+  const diagEl = $('#diag'), diagBoxEl = $('#diagBox');
+  function drawDiag(f) {
+    const r = stage.getBoundingClientRect(), cs = getComputedStyle(stage);
+    Object.assign(diagBoxEl.style, {
+      left: r.left + parseFloat(cs.paddingLeft) + 'px', top: r.top + parseFloat(cs.paddingTop) + 'px',
+      width: f.W + 'px', height: f.H + 'px',
+    });
+    const vv = window.visualViewport;
+    diagEl.textContent = [
+      `frame   ${innerWidth}×${innerHeight}  screen ${screen.width}×${screen.height}`,
+      `visual  ${vv ? Math.round(vv.width) + '×' + Math.round(vv.height) + ' @' + Math.round(vv.offsetTop) : 'n/a'}`,
+      `kb      ${kbEst ? 'estimated ' + kbEst : (root.classList.contains('kb') ? 'measured' : 'none')}  touch ${isTouch}`,
+      `box     ${Math.round(f.W)}×${Math.round(f.H)}  pad-top ${cs.paddingTop}`,
+      `type    ${f.s}px (max ${f.maxS})  lines ${f.lines}${f.overflow ? '  OVERFLOW' : ''}`,
+      `ink     ${Math.round(f.inkH)} / ${Math.round(f.H)}  (${Math.round(f.inkH / f.H * 100)}% of height)`,
+      `host    frame scrolled ${framePan.top}px up · ${framePan.bottom}px hidden below · guard ${panGuard}px`,
+    ].join('\n');
+  }
+
+  function contentBox() {
+    const cs = getComputedStyle(stage);
+    return {
+      W: stage.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight),
+      H: stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom),
+    };
+  }
+
+  /*
+    Size the paragraph: the largest step at which it wraps (on word boundaries)
+    inside the page, then centre it. While writing forward the size only grows
+    for a clear win, so the page settles instead of bouncing; deleting text or
+    resizing lets it grow freely.
+  */
+  function fit(animate, allowGrow) {
+    const { W, H } = contentBox();
+    if (W <= 0 || H <= 0) return;
+    const text = fta.value;
+    const grow = allowGrow || !held || text.length < heldLen;
+    /*
+      Fit the *ink*, not the line boxes. The block's visible height is
+      (lines - 1) * lineHeight + ascent of the tallest glyph + descent of the
+      deepest one. `geo(s)` gives the gap between the first line box's top and
+      the ink top (and likewise at the bottom); positive gaps are pulled in with
+      negative margins, negative gaps (ink poking out) become padding.
+    */
+    const PX = 0.03, SAFE_T = 0.03, SAFE_B = 0.05; // small margin: ink estimates are approximate
+    const innerW = s => W - 2 * PX * s;
+    const ink = inkMetrics(text);
+    const geo = s => {
+      const L = lhFor(s) * s;
+      const half = (L - (ink.A + ink.D) * s) / 2;
+      return {
+        top: half + (ink.A - ink.asc - SAFE_T) * s,
+        // Never let the last line box hang below the page: iOS draws the caret
+        // the full height of the line, and a caret near the keyboard makes iOS
+        // scroll the whole page. Only overhanging ink (deep descenders) may extend it.
+        bot: Math.min(0, half + (ink.D - ink.desc - SAFE_B) * s),
+      };
+    };
+
+    // iOS text boxes keep a few px of inner inset that can't be removed, so
+    // measure a little narrower than the box the textarea actually gets.
+    const SLACK = 10;
+    const measW = s => innerW(s) - SLACK;
+
+    meas.style.overflowWrap = 'normal';
+    meas.textContent = (text || 'M') + '​';
+    const fits = s => {
+      if ((ink.asc + ink.desc + SAFE_T + SAFE_B) * s > H) return false;
+      applyType(meas, s);
+      meas.style.maxWidth = measW(s) + 'px';
+      const g = geo(s);
+      return meas.scrollWidth <= measW(s) + 1 && meas.offsetHeight - g.top - g.bot <= H + 1;
+    };
+    let lo = 0, hi = STEPS.length - 1, best = -1;
+    while (lo <= hi) {
+      const m = (lo + hi) >> 1;
+      if (fits(STEPS[m])) { best = m; lo = m + 1; } else hi = m - 1;
+    }
+
+    const overflow = best < 0;
+    let k = overflow ? 0 : best;
+    const maxS = STEPS[k];
+    // While writing forward, only grow for a clear win (~2 steps) to avoid bounce.
+    if (!grow && held && STEPS[k] < held * 1.045) while (k > 0 && STEPS[k] > held) k--;
+
+    // FLIP: remember where the text was before the change
+    wrap.getAnimations().forEach(a => a.cancel());
+    const before = animate && held ? wrap.getBoundingClientRect() : null;
+    const oldS = held;
+
+    let s, mr, g;
+    const applyAt = i => {
+      s = STEPS[i];
+      meas.style.overflowWrap = overflow ? 'anywhere' : 'normal';
+      applyType(meas, s);
+      meas.style.maxWidth = measW(s) + 'px';
+      mr = meas.getBoundingClientRect();
+      applyType(fta, s);
+      fta.style.overflowWrap = overflow ? 'anywhere' : 'normal';
+      fta.style.overflowY = overflow ? 'auto' : 'hidden';
+      const caretRoom = Math.ceil(s * 0.06) + 2;
+      g = overflow ? { top: 0, bot: 0 } : geo(s);
+      const padT = Math.max(0, -g.top), padB = Math.max(0, -g.bot);
+      fta.style.padding = `${padT}px ${PX * s}px ${padB}px`;
+      fta.style.margin = `${-Math.max(0, g.top)}px 0 ${-Math.max(0, g.bot)}px`;
+      fta.style.width = (Math.min(innerW(s), Math.ceil(mr.width) + caretRoom + SLACK) + 2 * PX * s) + 'px';
+      fta.style.height = (overflow ? H : Math.ceil(mr.height) + 2 + padT + padB) + 'px';
+    };
+    applyAt(k);
+    // Ground truth: the real text box must hold the whole paragraph without
+    // scrolling. If the browser wrapped it differently than our measurement,
+    // step down until it truly fits.
+    if (!overflow) {
+      while (k > 0 && fta.scrollHeight > fta.clientHeight) applyAt(--k);
+      fta.scrollTop = 0;
+    }
+    fitOverflow = overflow;
+
+    // Centre what you see (ink top to last line) between the top of the
+    // screen and the keyboard. Pure layout maths (no on-screen rects), so a
+    // running page animation can't skew it. This only moves the block.
+    {
+      const cs = getComputedStyle(stage);
+      const padTop = parseFloat(cs.paddingTop);
+      const areaTop = Math.max(0, padTop - 16);       // safe area; CSS adds 16px
+      const areaBot = stage.clientHeight;             // stage ends at the keyboard
+      const blockH = wrap.offsetHeight;               // = ink block (margins pull it in)
+      const top0 = padTop + (H - blockH) / 2;         // where flex centring puts it
+      let dy = (areaTop + areaBot) / 2 - (top0 + blockH / 2);
+      dy = Math.max(dy, areaTop + 8 - top0);             // never above the top
+      dy = Math.min(dy, areaBot - 8 - (top0 + blockH));  // never under the keyboard
+      wrap.style.top = Math.round(dy) + 'px';
+    }
+
+    held = s;
+    if (diagOn) drawDiag({ W, H, s, maxS, lines: Math.round(mr.height / (lhFor(s) * s)), inkH: mr.height - g.top - g.bot, overflow });
+    heldLen = text.length;
+
+    if (before) {
+      const after = wrap.getBoundingClientRect();
+      const k = oldS / s;
+      const dx = before.left - after.left, dy = before.top - after.top;
+      if (Math.abs(k - 1) > 0.001 || Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+        wrap.animate(
+          [{ transform: `translate(${dx}px, ${dy}px) scale(${k})` }, { transform: 'none' }],
+          { duration: 170, easing: 'cubic-bezier(.2,.75,.25,1)' }
+        );
+      }
+    }
+  }
+
+  function showPara(i, off, dir, quick) {
+    idx = clamp(i, 0, paras.length - 1);
+    fta.value = paras[idx];
+    held = 0;
+    fit(false, true);
+    const len = fta.value.length;
+    const o = off === 'end' || off == null ? len : clamp(off, 0, len);
+    if (document.activeElement !== fta) fta.focus({ preventScroll: true });
+    fta.setSelectionRange(o, o);
+    renderDots();
+    updateHint();
+    if (dir) {
+      page.getAnimations().forEach(a => a.cancel());
+      page.animate(
+        [{ transform: `translateY(${dir * (quick ? 18 : 42)}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }],
+        { duration: quick ? 130 : 280, easing: 'cubic-bezier(.2,.8,.2,1)' }
+      );
+    }
+  }
+
+  function nudge(dir) {
+    page.getAnimations().forEach(a => a.cancel());
+    page.animate(
+      [{ transform: 'none' }, { transform: `translateY(${-dir * 14}px)` }, { transform: 'none' }],
+      { duration: 260, easing: 'ease-out' }
+    );
+  }
+
+  function go(i, off) {
+    if (i < 0 || i >= paras.length) { nudge(i < 0 ? -1 : 1); return; }
+    if (i === idx) return;
+    showPara(i, off == null ? 'end' : off, Math.sign(i - idx));
+  }
+
+  function updateHint() {
+    hint.classList.toggle('off', !(paras.length === 1 && !paras[0]));
+  }
+
+  const markTyping = () => root.classList.add('typing');     // dims the chrome
+  const unmarkTyping = () => root.classList.remove('typing');
+
+  // Belt and braces: a paragraph that fits must never scroll inside its box.
+  fta.addEventListener('scroll', () => { if (!fitOverflow && fta.scrollTop) fta.scrollTop = 0; });
+
+  fta.addEventListener('input', () => {
+    const v = fta.value;
+    if (v.includes('\n') || v.includes('\r')) {
+      // Return (or a multi-line paste) splits the paragraph into pages.
+      const c = fta.selectionStart;
+      const clean = v.replace(/\r\n?/g, '\n');
+      const head = clean.slice(0, c);
+      const k = (head.match(/\n/g) || []).length;
+      const off = c - (head.lastIndexOf('\n') + 1);
+      paras.splice(idx, 1, ...clean.split('\n'));
+      save();
+      showPara(idx + k, off, 1);
+      markTyping();
+      return;
+    }
+    const wasEmpty = !paras[idx].trim();
+    paras[idx] = v;
+    fit(true, false);
+    if (wasEmpty !== !v.trim()) renderDots();
+    updateHint();
+    markTyping();
+    save();
+  });
+
+  fta.addEventListener('keydown', e => {
+    const a = fta.selectionStart, b = fta.selectionEnd, len = fta.value.length;
+    const collapsed = a === b;
+    if (e.isComposing) return;
+    if (e.key === 'Backspace' && collapsed && a === 0 && idx > 0) {
+      e.preventDefault();
+      const L = paras[idx - 1].length;
+      paras[idx - 1] += paras[idx];
+      paras.splice(idx, 1);
+      save();
+      showPara(idx - 1, L, -1, true);
+    } else if (e.key === 'Delete' && collapsed && a === len && idx < paras.length - 1) {
+      e.preventDefault();
+      paras[idx] += paras[idx + 1];
+      paras.splice(idx + 1, 1);
+      fta.value = paras[idx];
+      fta.setSelectionRange(a, a);
+      fit(true, true); renderDots(); save();
+    } else if ((e.key === 'ArrowUp' && (e.altKey || (collapsed && a === 0))) || e.key === 'PageUp') {
+      if (idx > 0) { e.preventDefault(); go(idx - 1, 'end'); }
+    } else if ((e.key === 'ArrowDown' && (e.altKey || (collapsed && a === len))) || e.key === 'PageDown') {
+      if (idx < paras.length - 1) { e.preventDefault(); go(idx + 1, 0); }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      toTrad();
+    }
+  });
+
+  // Tapping the empty page puts you back in the text.
+  stage.addEventListener('pointerdown', e => {
+    if (e.target === fta) return;
+    e.preventDefault();
+    unmarkTyping();
+    fta.focus({ preventScroll: true });
+    const l = fta.value.length;
+    fta.setSelectionRange(l, l);
+  });
+  focusEl.addEventListener('pointermove', e => { if (e.pointerType === 'mouse') unmarkTyping(); });
+
+  // Vertical swipe between pages (touch).
+  let touch0 = null;
+  stage.addEventListener('touchstart', e => {
+    touch0 = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY, t: performance.now() } : null;
+  }, { passive: true });
+  stage.addEventListener('touchend', e => {
+    if (!touch0) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touch0.x, dy = t.clientY - touch0.y;
+    if (performance.now() - touch0.t < 450 && Math.abs(dy) > 56 && Math.abs(dy) > 2 * Math.abs(dx)) {
+      const c = fta.selectionStart;
+      fta.setSelectionRange(c, c);
+      go(idx + (dy < 0 ? 1 : -1));
+    }
+    touch0 = null;
+  });
+
+  // iOS ignores touch-action inside some embedded frames; block page panning
+  // directly (but leave the textarea alone so selection handles still work).
+  focusEl.addEventListener('touchmove', e => {
+    if (e.target !== fta) e.preventDefault();
+  }, { passive: false });
+
+  // Wheel / trackpad between pages.
+  let wheelAcc = 0, wheelLockUntil = 0;
+  focusEl.addEventListener('wheel', e => {
+    e.preventDefault();
+    const now = performance.now();
+    if (now < wheelLockUntil) { wheelAcc = 0; return; }
+    wheelAcc += e.deltaY;
+    if (Math.abs(wheelAcc) > 45) {
+      go(idx + Math.sign(wheelAcc));
+      wheelAcc = 0;
+      wheelLockUntil = now + 420;
+    }
+  }, { passive: false });
+
+  /* ---------- paragraph rail ---------- */
+  function renderDots() {
+    const n = paras.length;
+    rail.hidden = n < 2;
+    if (n < 2) return;
+    if (dots.children.length !== n) {
+      const frag = document.createDocumentFragment();
+      for (let i = 0; i < n; i++) { const d = document.createElement('span'); d.className = 'dot'; frag.appendChild(d); }
+      dots.replaceChildren(frag);
+    }
+    const pitch = clamp((focusEl.clientHeight * 0.64) / n, 3, 22);
+    dots.style.setProperty('--pitch', pitch + 'px');
+    const kids = dots.children;
+    for (let i = 0; i < n; i++) {
+      kids[i].classList.toggle('on', i === idx);
+      kids[i].classList.toggle('empty', !paras[i].trim());
+    }
+  }
+
+  let dragging = false;
+  function scrub(e) {
+    const r = dots.getBoundingClientRect();
+    const n = paras.length;
+    const i = clamp(Math.floor(((e.clientY - r.top) / r.height) * n), 0, n - 1);
+    if (i !== idx) showPara(i, 'end', Math.sign(i - idx), true);
+    const snippet = paras[i].trim();
+    peek.innerHTML = '';
+    const b = document.createElement('b'); b.textContent = i + 1;
+    peek.append(b, snippet ? snippet.slice(0, 60) : 'Empty page');
+    const dot = dots.children[i].getBoundingClientRect();
+    peek.style.top = (dot.top + dot.height / 2 - rail.getBoundingClientRect().top) + 'px';
+  }
+  rail.addEventListener('touchstart', e => e.preventDefault(), { passive: false }); // keep the keyboard up
+  rail.addEventListener('mousedown', e => e.preventDefault());
+  rail.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    dragging = true;
+    try { rail.setPointerCapture(e.pointerId); } catch (_) {}
+    rail.classList.add('drag');
+    scrub(e);
+  });
+  rail.addEventListener('pointermove', e => { if (dragging) scrub(e); });
+  const endDrag = () => { dragging = false; rail.classList.remove('drag'); };
+  rail.addEventListener('pointerup', endDrag);
+  rail.addEventListener('pointercancel', endDrag);
+  rail.addEventListener('lostpointercapture', endDrag);
+
+  /* ---------- viewport: keyboard, rotation, fold/unfold ----------
+     Two ways to know the keyboard is covering us:
+     1. measured — the visual viewport shrinks (Safari/Chrome, top-level page)
+     2. estimated — inside embedded frames (e.g. the Claude app) the page is
+        often never told; if an editor is focused on a touch device and the
+        viewport hasn't shrunk, assume a keyboard of typical height.
+     The estimate is dropped the moment real measurements arrive.          */
+  const isTouch = matchMedia('(pointer: coarse)').matches && !matchMedia('(hover: hover)').matches;
+  let kbEst = 0, kbTimer = 0, vvBaseline = 0;
+  const vvH = () => (window.visualViewport ? visualViewport.height : innerHeight);
+
+  function estimateKeyboard() {
+    const W = innerWidth, H = innerHeight;
+    const long = Math.max(screen.width, screen.height), short = Math.min(screen.width, screen.height);
+    let k;
+    // Err on the tall side: a small gap above the keyboard beats clipped text.
+    if (W > H * 1.15) k = short * 0.56;                      // phone landscape
+    else if (W > 600) k = long * 0.38;                       // unfolded / tablet-ish
+    else k = clamp(long * 0.46, 290, 350);                   // phone portrait (incl. suggestion bar)
+    return Math.round(Math.min(k, H * 0.62));
+  }
+  function setKbEst(px) {
+    if (px !== kbEst) { kbEst = px; root.style.setProperty('--kb', px + 'px'); }
+    updateKbClass();
+  }
+  function updateKbClass() {
+    const measured = vvBaseline && vvBaseline - vvH() > 120;
+    root.classList.toggle('kb', kbEst > 0 || !!measured);
+  }
+  function editorFocused() { return document.activeElement === fta || document.activeElement === doc; }
+
+  vvBaseline = vvH();
+  document.addEventListener('focusin', () => {
+    if (!isTouch || !editorFocused()) return;
+    if (!kbEst) vvBaseline = Math.max(vvBaseline, vvH());
+    // Assume the keyboard immediately: iOS decides whether to scroll the page
+    // while the keyboard is still animating in, so the layout must already
+    // leave room for it. Real measurements replace the guess when they arrive.
+    if (!kbEst && !(vvBaseline - vvH() > 120)) setKbEst(estimateKeyboard());
+    clearTimeout(kbTimer);
+    kbTimer = setTimeout(() => {
+      if (!editorFocused()) return;
+      if (vvBaseline - vvH() > 120) setKbEst(0); // measured: the viewport did shrink
+      if (mode === 'trad') revealTradCaret(false);
+    }, 450);
+  });
+  document.addEventListener('focusout', () => {
+    clearTimeout(kbTimer);
+    setTimeout(() => { if (!editorFocused()) { setKbEst(0); vvBaseline = vvH(); } }, 60);
+  });
+
+  function syncViewport() {
+    const vv = window.visualViewport;
+    if (vv && kbEst && vvBaseline - vv.height > 120) setKbEst(0); // real data won
+    updateKbClass();
+    if (!vv || mode !== 'focus') return;
+    focusEl.style.top = vv.offsetTop + 'px';
+    focusEl.style.height = vv.height + 'px';
+  }
+  if (window.visualViewport) {
+    visualViewport.addEventListener('resize', syncViewport);
+    visualViewport.addEventListener('scroll', syncViewport);
+  }
+  // iOS sometimes scrolls the page to "reveal" the caret; focus mode never scrolls.
+  addEventListener('scroll', () => { if (mode === 'focus' && (scrollX || scrollY)) scrollTo(0, 0); });
+  let roFrame = 0;
+  new ResizeObserver(() => {
+    if (mode !== 'focus') return;
+    cancelAnimationFrame(roFrame);
+    roFrame = requestAnimationFrame(() => { fit(true, true); renderDots(); });
+  }).observe(stage);
+
+  let lastW = innerWidth;
+  addEventListener('resize', () => {
+    if (!kbEst && !editorFocused()) vvBaseline = vvH();
+    // Fold/unfold or rotation in page view: keep the caret in sight.
+    if (mode === 'trad' && document.activeElement === doc && Math.abs(innerWidth - lastW) > 40) {
+      requestAnimationFrame(() => revealTradCaret(true));
+    }
+    lastW = innerWidth;
+  });
+
+  /* =====================================================================
+     Mode switching — caret position travels with you.
+     ===================================================================== */
+  const modeBtn = $('#modeBtn');
+  const ICON_FOCUS = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4"/></svg>';
+  const ICON_PAGE = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 3.5h10M3 6.5h10M3 9.5h10M3 12.5h6"/></svg>';
+  function paintButton() {
+    modeBtn.innerHTML = mode === 'trad' ? ICON_FOCUS + '<span>Focus</span>' : ICON_PAGE + '<span>Page</span>';
+  }
+
+  function syncCursor() {
+    if (mode === 'focus') cursor = { p: idx, o: fta.selectionStart || 0 };
+  }
+
+  function toFocus() {
+    readTrad();
+    const r = getTradRange();
+    if (r) cursor = r.start;
+    cursor.p = clamp(cursor.p | 0, 0, paras.length - 1);
+    mode = 'focus';
+    root.classList.add('in-focus');
+    focusEl.hidden = false;
+    syncViewport();
+    requestAnimationFrame(() => focusEl.classList.add('shown'));
+    paintButton();
+    showPara(cursor.p, cursor.o, 0);
+    persist();
+  }
+
+  function toTrad() {
+    syncCursor();
+    mode = 'trad';
+    unmarkTyping();
+    root.classList.remove('in-focus');
+    focusEl.classList.remove('shown');
+    focusEl.hidden = true;
+    renderTrad();
+    paintButton();
+    doc.focus({ preventScroll: true });
+    setTradCaret(cursor.p, cursor.o);
+    revealTradCaret(true);
+    persist();
+  }
+
+  // Press and hold the mode button to toggle a measurement readout.
+  let holdTimer = 0, heldPress = false;
+  modeBtn.addEventListener('pointerdown', () => {
+    heldPress = false;
+    holdTimer = setTimeout(() => {
+      heldPress = true;
+      diagOn = !diagOn;
+      diagEl.hidden = diagBoxEl.hidden = !diagOn;
+      if (mode === 'focus') fit(false, true);
+    }, 650);
+  });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => modeBtn.addEventListener(t, () => clearTimeout(holdTimer)));
+  modeBtn.addEventListener('contextmenu', e => e.preventDefault());
+  modeBtn.addEventListener('mousedown', e => { if (mode === 'focus') e.preventDefault(); }); // keep the editor focused
+  modeBtn.addEventListener('click', () => {
+    if (heldPress) { heldPress = false; return; }
+    mode === 'trad' ? toFocus() : toTrad();
+  });
+  addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === 'f' || e.key === 'F')) {
+      e.preventDefault();
+      mode === 'trad' ? toFocus() : toTrad();
+    }
+  });
+
+  /* ---------- boot ---------- */
+  renderTrad();
+  paintButton();
+  if (document.fonts) {
+    document.fonts.load('370 100px Fraunces').catch(() => {});
+    document.fonts.ready.then(() => { if (mode === 'focus') fit(false, true); });
+  }
+})();
+</script>
+</body>
+</html>

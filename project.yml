@@ -1,0 +1,70 @@
+# XcodeGen spec. The .xcodeproj is generated in CI (and locally with
+# `xcodegen generate`); it is not committed.
+name: WorldEditor
+options:
+  bundleIdPrefix: com.tecn01r
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ${APPLE_TEAM_ID}
+    CODE_SIGN_STYLE: Automatic
+packages:
+  WriterKit:
+    path: Packages/WriterKit
+targets:
+  WorldEditor:
+    type: application
+    platform: iOS
+    sources:
+      - path: App/Sources
+    resources:
+      - path: App/Resources
+        optional: true
+    dependencies:
+      - package: WriterKit
+        product: WriterCore
+      - package: WriterKit
+        product: FocusLayout
+      - package: WriterKit
+        product: Provenance
+      - package: WriterKit
+        product: Guardrails
+      - package: WriterKit
+        product: ModelCatalog
+    entitlements:
+      path: App/WorldEditor.entitlements
+      properties:
+        # Large on-device models need more than the default memory limit.
+        com.apple.developer.kernel.increased-memory-limit: true
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: World Editor
+        UILaunchScreen: {}
+        UIApplicationSupportsIndirectInputEvents: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ${BUNDLE_ID}
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: NO
+        ENABLE_PREVIEWS: YES
+schemes:
+  WorldEditor:
+    build:
+      targets:
+        WorldEditor: all
