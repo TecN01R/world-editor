@@ -32,6 +32,9 @@ struct RootView: View {
                     .keyboardShortcut("f", modifiers: [.command, .shift])
                 }
                 if !focusMode {
+                    // Items in one placement share a glass capsule; the spacer
+                    // gives the models button its own, as system apps do.
+                    ToolbarSpacer(.fixed, placement: .primaryAction)
                     ToolbarItem(placement: .primaryAction) {
                         Button { showModels = true } label: {
                             Label("On-device Models", systemImage: "cpu")

@@ -18,6 +18,7 @@ cat devices.txt
 
 while IFS='|' read -r UDID NAME; do
   [ -n "$UDID" ] || continue
+  DISPLAY_ID=""
   SLUG="$(echo "$NAME" | tr ' ' '-' | tr -cd '[:alnum:]-')"
   echo "== $NAME ($UDID)"
   xcrun simctl boot "$UDID" || true
@@ -32,12 +33,13 @@ while IFS='|' read -r UDID NAME; do
     local name="$1"; shift
     xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE" "$@" >/dev/null
     sleep 3   # launch, layout and keyboard animation
-    # Foldables expose several displays; capture each one that exists.
-    local err
-    if ! err=$(xcrun simctl io "$UDID" screenshot "$OUT/$SLUG-$name.png" 2>&1 >/dev/null); then
-      for d in $(echo "$err" | sed -nE 's/.*--display=([0-9]+).*/\1/p'); do
-        xcrun simctl io "$UDID" screenshot --display="$d" "$OUT/$SLUG-display$d-$name.png" >/dev/null
-      done
+    # Foldables expose several displays. Only the first (the outer screen)
+    # is captured: the simulator boots folded, so the inner one is black.
+    if [ -z "${DISPLAY_ID:-}" ] && ! err=$(xcrun simctl io "$UDID" screenshot "$OUT/$SLUG-$name.png" 2>&1 >/dev/null); then
+      DISPLAY_ID=$(echo "$err" | sed -nE 's/.*--display=([0-9]+).*/\1/p' | head -1)
+    fi
+    if [ -n "${DISPLAY_ID:-}" ]; then
+      xcrun simctl io "$UDID" screenshot --display="$DISPLAY_ID" "$OUT/$SLUG-display$DISPLAY_ID-$name.png" >/dev/null
     fi
     echo "   $name"
   }
@@ -58,8 +60,10 @@ ls -l "$OUT"
 # Print each screenshot into the job log as base64 JPEG between markers, so the
 # Claude session can read them from the log (it can't reach artifact storage).
 # Inner display shots are skipped while the simulator boots folded (all black).
+# Leaving the simulator running makes the runner's cleanup take ~45 s.
+pkill -9 -f CoreSimulator || true
+
 for f in "$OUT"/*.png; do
-  case "$f" in *display3*) continue;; esac
   name="$(basename "${f%.png}")"
   sips -s format jpeg -s formatOptions 72 -Z 1400 "$f" --out "/tmp/$name.jpg" >/dev/null
   echo "=====BEGIN-SCREENSHOT $name.jpg"
