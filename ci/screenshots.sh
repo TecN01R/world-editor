@@ -50,6 +50,7 @@ while IFS='|' read -r UDID NAME; do
   shoot focus-g     -screenshotText "g" -startInFocus YES
   shoot focus-short -screenshotText "Hi. This" -startInFocus YES
   shoot focus-long  -screenshotText "$LONG" -startInFocus YES
+  shoot focus-pages -screenshotText "First page.\\nSecond page.\\nThird page, where the caret is." -startInFocus YES
 
   xcrun simctl shutdown "$UDID" || true
 done < devices.txt
