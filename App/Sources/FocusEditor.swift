@@ -63,7 +63,8 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
             area.topAnchor.constraint(greaterThanOrEqualTo: safe.topAnchor, constant: 12),
             area.topAnchor.constraint(greaterThanOrEqualTo: view.topAnchor, constant: 32),
             area.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 16),
-            area.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -40),
+            // Full width: the Duo's side column isn't reserved in Focus mode.
+            area.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40),
             area.bottomAnchor.constraint(lessThanOrEqualTo: safe.bottomAnchor, constant: -16),
             area.bottomAnchor.constraint(lessThanOrEqualTo: view.keyboardLayoutGuide.topAnchor, constant: -12),
         ])
@@ -92,7 +93,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         view.addSubview(rail)
         rail.alpha = 0   // hidden with the other controls until revealed
         NSLayoutConstraint.activate([
-            rail.centerXAnchor.constraint(equalTo: safe.trailingAnchor, constant: -20),
+            rail.centerXAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
             rail.centerYAnchor.constraint(equalTo: area.centerYAnchor),
             rail.widthAnchor.constraint(equalToConstant: 32),
             rail.heightAnchor.constraint(lessThanOrEqualTo: area.heightAnchor, multiplier: 0.7),

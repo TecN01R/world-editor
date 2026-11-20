@@ -28,7 +28,8 @@ struct RootView: View {
             }
         } detail: {
             if let id = library.selection {
-                EditorView(focusMode: $focusMode, focusControls: $focusControls, chromeHidden: chromeHidden).id(id)
+                EditorView(focusMode: $focusMode, focusControls: $focusControls, chromeHidden: chromeHidden,
+                           showPages: showPages).id(id)
             } else {
                 ContentUnavailableView("No Page Open", systemImage: "doc.text",
                                        description: Text("Choose a page or start a new one."))
@@ -39,7 +40,16 @@ struct RootView: View {
         .persistentSystemOverlays(chromeHidden ? .hidden : .automatic)
         .onChange(of: focusMode) { _, focus in
             focusControls = false
-            withAnimation { columns = focus ? .detailOnly : .automatic }
+            withAnimation { columns = focus ? .detailOnly : (columns == .detailOnly ? .automatic : columns) }
+        }
+    }
+
+    /// Leaves Focus mode for the pages list: back to it when folded, beside the page when unfolded.
+    private func showPages() {
+        withAnimation(.smooth(duration: 0.3)) {
+            columns = .all
+            column = .sidebar
+            focusMode = false
         }
     }
 }
@@ -92,12 +102,14 @@ struct EditorView: View {
     @Binding var focusMode: Bool
     @Binding var focusControls: Bool
     let chromeHidden: Bool
+    let showPages: () -> Void
+    @Environment(\.horizontalSizeClass) private var width
 
     var body: some View {
         ZStack {
             if focusMode {
                 FocusEditor(showsControls: $focusControls)
-                    .ignoresSafeArea(.container, edges: .bottom)
+                    .ignoresSafeArea(.container, edges: [.bottom, .trailing])
                     .transition(.opacity)
             } else {
                 PageEditor()
@@ -106,15 +118,40 @@ struct EditorView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(chromeHidden ? .hidden : .automatic, for: .navigationBar)
+        // Focus mode never shows the bar (on the Duo, the side column), so
+        // nothing reserves space or reflows the text when controls appear.
+        .toolbar(focusMode ? .hidden : .automatic, for: .navigationBar)
+        .overlay(alignment: .topTrailing) {
+            if focusMode && !chromeHidden {
+                // Float over the writing when revealed: back to the pages, or out to Edit.
+                GlassEffectContainer {
+                    VStack(spacing: 12) {
+                        Button(action: showPages) {
+                            Label("Pages", systemImage: width == .compact ? "chevron.backward" : "sidebar.leading")
+                        }
+                        Button { withAnimation(.smooth(duration: 0.3)) { focusMode = false } } label: {
+                            Label("Edit", systemImage: "doc.plaintext")
+                        }
+                        .keyboardShortcut("f", modifiers: [.command, .shift])
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
+                    .controlSize(.extraLarge)
+                }
+                .padding(.trailing, 12)
+                .padding(.top, 64)
+                .ignoresSafeArea()
+                .transition(.opacity)
+            }
+        }
         .animation(.easeInOut(duration: 0.25), value: chromeHidden)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    withAnimation(.smooth(duration: 0.3)) { focusMode.toggle() }
+                    withAnimation(.smooth(duration: 0.3)) { focusMode = true }
                 } label: {
-                    Label(focusMode ? "Edit" : "Focus",
-                          systemImage: focusMode ? "doc.plaintext" : "text.viewfinder")
+                    Label("Focus", systemImage: "text.viewfinder")
                 }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
             }
