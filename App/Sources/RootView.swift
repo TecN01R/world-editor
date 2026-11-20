@@ -13,7 +13,6 @@ struct RootView: View {
 
     var body: some View {
         @Bindable var library = library
-        if UserDefaults.standard.bool(forKey: "iconGallery") { IconGallery() } else {
         // Focus mode takes the whole display: the pages list steps aside when unfolded.
         NavigationSplitView(columnVisibility: $columns, preferredCompactColumn: $column) {
             PageList(selection: $library.selection) {
@@ -31,28 +30,6 @@ struct RootView: View {
         .onChange(of: focusMode) { _, focus in
             withAnimation { columns = focus ? .detailOnly : .automatic }
         }
-        }
-    }
-}
-
-/// TEMPORARY: candidate symbols for the Focus button, for Kevin to choose from.
-private struct IconGallery: View {
-    static let symbols = ["text.viewfinder", "scope", "viewfinder", "eye", "text.magnifyingglass",
-                          "doc.text.viewfinder", "rectangle.and.text.magnifyingglass", "text.page",
-                          "book.pages", "smallcircle.filled.circle", "circle.circle", "rectangle.center.inset.filled"]
-
-    var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 140))], spacing: 22) {
-            ForEach(Array(Self.symbols.enumerated()), id: \.offset) { i, name in
-                VStack(spacing: 8) {
-                    Image(systemName: name).font(.system(size: 34)).frame(height: 44)
-                    Text("\(i + 1). \(name)").font(.caption).multilineTextAlignment(.center)
-                }
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 60)
-        .frame(maxHeight: .infinity, alignment: .top)
     }
 }
 
@@ -102,11 +79,18 @@ struct PageList: View {
 /// One page, in Edit mode or Focus mode.
 struct EditorView: View {
     @Binding var focusMode: Bool
+    @State private var focusControls = UserDefaults.standard.bool(forKey: "focusControls")   // CI shot
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
+
+    /// In Focus mode everything but the writing hides (bars, status, home
+    /// indicator) until a tap outside the text brings it back. VoiceOver
+    /// users keep the controls, since there's nothing to see to tap around.
+    private var chromeHidden: Bool { focusMode && !focusControls && !voiceOver }
 
     var body: some View {
         ZStack {
             if focusMode {
-                FocusEditor()
+                FocusEditor(showsControls: $focusControls)
                     .ignoresSafeArea(.container, edges: .bottom)
                     .transition(.opacity)
             } else {
@@ -116,13 +100,18 @@ struct EditorView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(chromeHidden ? .hidden : .automatic, for: .navigationBar)
+        .statusBarHidden(chromeHidden)
+        .persistentSystemOverlays(chromeHidden ? .hidden : .automatic)
+        .animation(.easeInOut(duration: 0.25), value: chromeHidden)
+        .onChange(of: focusMode) { focusControls = false }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     withAnimation(.smooth(duration: 0.3)) { focusMode.toggle() }
                 } label: {
                     Label(focusMode ? "Edit" : "Focus",
-                          systemImage: focusMode ? "doc.plaintext" : "textformat.size")
+                          systemImage: focusMode ? "doc.plaintext" : "text.viewfinder")
                 }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
             }

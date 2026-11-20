@@ -6,13 +6,21 @@ import FocusLayout
 /// Focus mode: one paragraph per page, set as large as the page allows.
 /// The available area ends at `keyboardLayoutGuide`, the system's exact
 /// keyboard position, so there is nothing to estimate and nothing scrolls.
+///
+/// Everything but the writing hides while you write: tapping outside the
+/// text brings the controls back (`showsControls`), typing hides them again.
 struct FocusEditor: UIViewControllerRepresentable {
     @Environment(Library.self) private var library
+    @Binding var showsControls: Bool
 
     func makeUIViewController(context: Context) -> FocusViewController {
-        FocusViewController(library: library)
+        let vc = FocusViewController(library: library)
+        vc.onControlsChange = { shown in showsControls = shown }
+        return vc
     }
-    func updateUIViewController(_ vc: FocusViewController, context: Context) {}
+    func updateUIViewController(_ vc: FocusViewController, context: Context) {
+        vc.setControls(visible: showsControls)
+    }
 }
 
 /// Text view that reports Backspace at the very start (to merge paragraphs).
@@ -77,12 +85,17 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         rail.translatesAutoresizingMaskIntoConstraints = false
         rail.onSelect = { [weak self] i in self?.show(i, caret: .end, direction: 0) }
         view.addSubview(rail)
+        rail.alpha = 0   // hidden with the other controls until revealed
         NSLayoutConstraint.activate([
             rail.centerXAnchor.constraint(equalTo: safe.trailingAnchor, constant: -20),
             rail.centerYAnchor.constraint(equalTo: area.centerYAnchor),
             rail.widthAnchor.constraint(equalToConstant: 32),
             rail.heightAnchor.constraint(lessThanOrEqualTo: area.heightAnchor, multiplier: 0.7),
         ])
+
+        let reveal = UITapGestureRecognizer(target: self, action: #selector(tappedOutsideText(_:)))
+        reveal.delegate = self
+        view.addGestureRecognizer(reveal)
 
         for dir in [UISwipeGestureRecognizer.Direction.up, .down] {
             let s = UISwipeGestureRecognizer(target: self, action: #selector(swiped(_:)))
@@ -134,6 +147,30 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         }
     }
 
+    // MARK: Controls
+
+    var onControlsChange: ((Bool) -> Void)?
+    private var controlsVisible = false
+    private var hideTimer: Timer?
+
+    /// The paragraph dots come and go with the rest of the controls.
+    func setControls(visible: Bool) {
+        guard visible != controlsVisible else { return }
+        controlsVisible = visible
+        UIView.animate(withDuration: 0.25) { self.rail.alpha = visible ? 1 : 0 }
+        hideTimer?.invalidate()
+        if visible {
+            // Shown for a moment, like video controls, unless you use them.
+            hideTimer = .scheduledTimer(withTimeInterval: 4, repeats: false) { [weak self] _ in
+                MainActor.assumeIsolated { self?.onControlsChange?(false) }
+            }
+        }
+    }
+
+    @objc private func tappedOutsideText(_ g: UITapGestureRecognizer) {
+        onControlsChange?(!controlsVisible)
+    }
+
     @objc private func swiped(_ g: UISwipeGestureRecognizer) {
         let direction = g.direction == .up ? 1 : -1
         let next = index + direction
@@ -168,6 +205,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
     }
 
     func textViewDidChange(_ tv: UITextView) {
+        if controlsVisible { onControlsChange?(false) }   // writing again: out of the way
         // Deleting may grow the size freely; typing forward only grows for a clear win.
         let shrank = (tv.text as NSString).length < heldLength
         library.update { $0.setText(tv.text, runs: RichText.runs(in: tv.attributedText), at: index) }
@@ -331,4 +369,12 @@ final class ParagraphRail: UIView {
 
     override func accessibilityIncrement() { if current > 0 { onSelect?(current - 1) } }
     override func accessibilityDecrement() { if current + 1 < count { onSelect?(current + 1) } }
+}
+
+extension FocusViewController: UIGestureRecognizerDelegate {
+    /// Taps on the writing place the caret as usual; only taps around it reveal the controls.
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        let p = touch.location(in: view)
+        return !textView.frame.insetBy(dx: -8, dy: -8).contains(p) && !(rail.alpha > 0 && rail.frame.contains(p))
+    }
 }

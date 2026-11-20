@@ -45,9 +45,9 @@ while IFS='|' read -r UDID NAME; do
   }
 
   shoot edit        -screenshotRich YES
-  shoot icons       -iconGallery YES   # TEMPORARY: Focus icon candidates
-  shoot pages       -screenshotPages YES
+    shoot pages       -screenshotPages YES
   shoot focus-pages -screenshotText "First page.\\nSecond page.\\nThird page, where the caret is." -startInFocus YES
+  shoot focus-controls -screenshotText "First page.\\nSecond page.\\nThird page, where the caret is." -startInFocus YES -focusControls YES
   # Fitting edge cases, only when Focus mode itself changed.
   if [ "${FULL_SHOTS:-true}" = "true" ]; then
     shoot focus-empty -screenshotText EMPTY -startInFocus YES
