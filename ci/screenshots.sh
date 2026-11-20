@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Launches the simulator build on a few iPhone simulators (including any
 # foldable "Duo" device the installed runtimes offer) and captures page view
-# and Focus mode with the software keyboard up. Output: screenshots/*.png
+# and Focus mode with the software keyboard up. Output: screenshots/jpg/*.jpg
 set -euo pipefail
 
 APP="${1:-build/Build/Products/Debug-iphonesimulator/WorldEditor.app}"
@@ -57,16 +57,12 @@ done < devices.txt
 
 ls -l "$OUT"
 
-# Print each screenshot into the job log as base64 JPEG between markers, so the
-# Claude session can read them from the log (it can't reach artifact storage).
-# Inner display shots are skipped while the simulator boots folded (all black).
 # Leaving the simulator running makes the runner's cleanup take ~45 s.
 pkill -9 -f CoreSimulator || true
 
+# JPEGs for the ci-screenshots branch (the workflow publishes $OUT/jpg).
+mkdir -p "$OUT/jpg"
 for f in "$OUT"/*.png; do
-  name="$(basename "${f%.png}")"
-  sips -s format jpeg -s formatOptions 72 -Z 1400 "$f" --out "/tmp/$name.jpg" >/dev/null
-  echo "=====BEGIN-SCREENSHOT $name.jpg"
-  base64 -b 76 -i "/tmp/$name.jpg"
-  echo "=====END-SCREENSHOT"
+  sips -s format jpeg -s formatOptions 72 -Z 1400 "$f" --out "$OUT/jpg/$(basename "${f%.png}").jpg" >/dev/null
 done
+ls "$OUT/jpg"

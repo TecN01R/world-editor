@@ -83,12 +83,12 @@ jobs:
             CODE_SIGNING_ALLOWED=NO > spm.log || { tail -40 spm.log; exit 1; }
 
   # Boots the Duo while the other Mac builds, then installs the app and
-  # prints dark-mode screenshots into the log.
+  # publishes dark-mode screenshots as the only commit on ci-screenshots.
   screenshots:
     runs-on: xcode-27
     permissions:
       actions: read
-      contents: read
+      contents: write
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -120,3 +120,15 @@ jobs:
         env:
           FULL_SHOTS: ${{ steps.ui.outputs.focus }}
         run: ci/screenshots.sh app/WorldEditor.app
+      # Force-pushed as a single orphan commit, so the branch only ever holds
+      # the latest set and main's history never contains images.
+      - name: Publish to the ci-screenshots branch
+        if: steps.ui.outputs.changed == 'true'
+        run: |
+          cd screenshots/jpg
+          git init -q -b ci-screenshots
+          echo "${{ github.sha }}" > SOURCE_COMMIT
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -qm "Screenshots for ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" ci-screenshots
