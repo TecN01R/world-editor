@@ -30,7 +30,8 @@ final class Library {
         self.document = (try? store?.all())?.first ?? WriterCore.Document()
 
         // Screenshot runs (CI): `-screenshotText "para one\npara two"` shows that
-        // text instead of saved notes. Nothing is saved unless it's edited.
+        // text instead of saved notes (`EMPTY` for a blank document). Nothing is
+        // saved unless it's edited.
         if let seeded = UserDefaults.standard.string(forKey: "screenshotText") {
             let text = seeded == "EMPTY" ? "" : seeded.replacingOccurrences(of: "\\n", with: "\n")
             let paragraphs = text.components(separatedBy: "\n").map { Paragraph(text: $0) }

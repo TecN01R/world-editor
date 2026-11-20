@@ -48,13 +48,13 @@ struct TextKitMeasurer: TextMeasurer {
 
         // A single word wider than the page would be broken mid-word: not allowed.
         let font = attrs[.font] as! UIFont
+        let wordAttrs: [NSAttributedString.Key: Any] = [.font: font, .kern: attrs[.kern] ?? 0]
         let longest = text.split(whereSeparator: \.isWhitespace)
-            .map { ($0 as Substring).description }
-            .map { ($0 as NSString).size(withAttributes: [.font: font, .kern: attrs[.kern] ?? 0]).width }
+            .map { (String($0) as NSString).size(withAttributes: wordAttrs).width }
             .max() ?? 0
 
         return TextMeasurement(width: Double(widest), height: Double(used.height),
-                           lineCount: max(lines, 1), fitsWithoutBreakingWords: longest <= CGFloat(width))
+                               lineCount: max(lines, 1), fitsWithoutBreakingWords: longest <= CGFloat(width))
     }
 
     func ink(_ text: String) -> InkMetrics {

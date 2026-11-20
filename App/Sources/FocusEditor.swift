@@ -120,7 +120,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
 
     // MARK: Paging
 
-    enum Caret { case start, end, offset(Int) }
+    enum Caret { case end, offset(Int) }
 
     private func show(_ i: Int, caret: Caret, direction: Int) {
         let paragraphs = library.document.paragraphs
@@ -131,12 +131,11 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         let len = (textView.text as NSString).length
         let loc: Int
         switch caret {
-        case .start: loc = 0
         case .end: loc = len
         case .offset(let o): loc = max(0, min(o, len))
         }
         textView.selectedRange = NSRange(location: loc, length: 0)
-        rail.update(count: paragraphs.count, current: index, empty: paragraphs.map { $0.text.isEmpty })
+        updateRail()
         library.cursor = (index, loc)
         if direction != 0 {
             textView.transform = CGAffineTransform(translationX: 0, y: CGFloat(direction) * 40)
@@ -149,9 +148,15 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
     }
 
     @objc private func swiped(_ g: UISwipeGestureRecognizer) {
-        let next = index + (g.direction == .up ? 1 : -1)
+        let direction = g.direction == .up ? 1 : -1
+        let next = index + direction
         guard library.document.paragraphs.indices.contains(next) else { return }
-        show(next, caret: .end, direction: g.direction == .up ? 1 : -1)
+        show(next, caret: .end, direction: direction)
+    }
+
+    private func updateRail() {
+        let paragraphs = library.document.paragraphs
+        rail.update(count: paragraphs.count, current: index, empty: paragraphs.map { $0.text.isEmpty })
     }
 
     private func mergeWithPrevious() {
@@ -169,9 +174,9 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         let current = (tv.text as NSString).replacingCharacters(in: range, with: text)
         let caret = range.location + (text as NSString).length
         let pieces = current.components(separatedBy: "\n")
-        let before = (current as NSString).substring(to: caret)
-        let target = index + before.components(separatedBy: "\n").count - 1
-        let offset = (before.components(separatedBy: "\n").last ?? "").count
+        let linesBeforeCaret = (current as NSString).substring(to: caret).components(separatedBy: "\n")
+        let target = index + linesBeforeCaret.count - 1
+        let offset = (linesBeforeCaret.last ?? "").count
         library.update { doc in
             doc.setText(pieces[0], at: index)
             var at = index
@@ -185,11 +190,11 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
     }
 
     func textViewDidChange(_ tv: UITextView) {
-        let grew = (tv.text as NSString).length < heldLength
+        // Deleting may grow the size freely; typing forward only grows for a clear win.
+        let shrank = (tv.text as NSString).length < heldLength
         library.update { $0.setText(tv.text, at: index) }
-        layoutText(animated: true, allowGrow: grew)
-        let paragraphs = library.document.paragraphs
-        rail.update(count: paragraphs.count, current: index, empty: paragraphs.map { $0.text.isEmpty })
+        layoutText(animated: true, allowGrow: shrank)
+        updateRail()
     }
 
     func textViewDidChangeSelection(_ tv: UITextView) {
@@ -202,8 +207,9 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         let frame = area.layoutFrame
         guard frame.width > 0, frame.height > 0 else { return }
         let text = textView.text ?? ""
-        var fit = engine.fit(text, in: (Double(frame.width), Double(frame.height)),
-                             measurer: measurer, held: heldSize, allowGrow: allowGrow || heldSize == 0)
+        let page = (width: Double(frame.width), height: Double(frame.height))
+        var fit = engine.fit(text, in: page, measurer: measurer,
+                             held: heldSize, allowGrow: allowGrow || heldSize == 0)
         var extent = apply(fit, in: frame)
 
         // Ground truth: position and verify using where TextKit actually drew
@@ -213,8 +219,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         var k = FitEngine.steps.firstIndex(of: fit.fontSize) ?? 0
         while k > 0, extent.height > frame.height + 0.5 {
             k -= 1
-            fit = engine.fit(text, in: (Double(frame.width), Double(frame.height)), measurer: measurer,
-                             held: FitEngine.steps[k], allowGrow: false)
+            fit = engine.fit(text, in: page, measurer: measurer, held: FitEngine.steps[k], allowGrow: false)
             extent = apply(fit, in: frame)
         }
 
@@ -232,7 +237,6 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
     /// (top of the tallest letter to the bottom of the last line, or of a
     /// deeper descender) is centred in `frame`. Returns that block, in the
     /// text view's own coordinates, as measured from the real layout.
-    @discardableResult
     private func apply(_ fit: FitResult, in frame: CGRect) -> (top: CGFloat, height: CGFloat) {
         let selection = textView.selectedRange
         let attrs = TextKitMeasurer.attributes(size: fit.fontSize)
