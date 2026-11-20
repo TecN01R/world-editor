@@ -18,6 +18,13 @@ UI frameworks. Fedora is only the xtool build machine.
    Download them, look at them before reporting a UI change as done, send them
    to the user in chat, then delete the local copies.
 
+## Conventions
+
+- Dark mode first: design and review UI in dark appearance (CI screenshots
+  are dark); light mode must still work.
+- Push straight to `main`. Don't create branches: this environment can't
+  delete them, so they pile up.
+
 ## Rules that are not negotiable
 
 - The AI never authors content or edits the user's writing. See

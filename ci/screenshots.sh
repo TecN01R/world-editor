@@ -13,7 +13,7 @@ mkdir -p "$OUT"
 defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false
 
 LONG="Hi. This is exactly what I wanted. Can we keep this design while vertically centering?"
-python3 ci/pick_devices.py > devices.txt
+[ -s devices.txt ] || python3 ci/pick_devices.py > devices.txt
 cat devices.txt
 
 while IFS='|' read -r UDID NAME; do
@@ -22,6 +22,7 @@ while IFS='|' read -r UDID NAME; do
   echo "== $NAME ($UDID)"
   xcrun simctl boot "$UDID" || true
   xcrun simctl bootstatus "$UDID" -b
+  xcrun simctl ui "$UDID" appearance dark   # dark mode first
   xcrun simctl status_bar "$UDID" override --time 9:41 --batteryLevel 100 --cellularBars 4 || true
   xcrun simctl install "$UDID" "$APP"
   # Skip the one-time "slide to type" keyboard tip.
