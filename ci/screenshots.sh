@@ -44,47 +44,32 @@ while IFS='|' read -r UDID NAME; do
     echo "   $name"
   }
 
-  case "$NAME" in
-  iPad*)   # stand-in for the unfolded Duo: the wide layouts only
-    shoot edit        -screenshotRich YES
-    shoot pages       -screenshotPages YES
+  shoot edit        -screenshotRich YES
+  shoot icons       -iconGallery YES   # TEMPORARY: Focus icon candidates
+  shoot pages       -screenshotPages YES
+  shoot focus-pages -screenshotText "First page.\\nSecond page.\\nThird page, where the caret is." -startInFocus YES
+  # Fitting edge cases, only when Focus mode itself changed.
+  if [ "${FULL_SHOTS:-true}" = "true" ]; then
+    shoot focus-empty -screenshotText EMPTY -startInFocus YES
+    shoot focus-g     -screenshotText "g" -startInFocus YES
+    shoot focus-short -screenshotText "Hi. This" -startInFocus YES
     shoot focus-long  -screenshotText "$LONG" -startInFocus YES
-    ;;
-  *)
-    shoot edit        -screenshotRich YES
-    shoot icons       -iconGallery YES   # TEMPORARY: Focus icon candidates
-    shoot pages       -screenshotPages YES
-    shoot focus-pages -screenshotText "First page.\\nSecond page.\\nThird page, where the caret is." -startInFocus YES
-    # Fitting edge cases, only when Focus mode itself changed.
-    if [ "${FULL_SHOTS:-true}" = "true" ]; then
-      shoot focus-empty -screenshotText EMPTY -startInFocus YES
-      shoot focus-g     -screenshotText "g" -startInFocus YES
-      shoot focus-short -screenshotText "Hi. This" -startInFocus YES
-      shoot focus-long  -screenshotText "$LONG" -startInFocus YES
-    fi
-    ;;
-  esac
-  # Unfolded (experimental): simctl has no fold command, so ask the Simulator
-  # app's own menus to open the device, then shoot the inner display. Never
-  # fails the job; it prints what it finds so the next attempt can be exact.
-  if [ -n "$DISPLAY_ID" ] && [ "${UNFOLD:-false}" = "true" ]; then (
+  fi
+  # Unfolded: simctl has no fold command, so `hinge` (installed by the
+  # workflow) sends the simulator the same hinge event as Device Hub's Open
+  # button, from inside the simulator. Never fails the job.
+  if [ -n "$DISPLAY_ID" ] && command -v hinge >/dev/null; then (
     set +e +o pipefail
-    # Xcode 27 replaced Simulator.app with Device Hub; use whichever exists.
-    HUB=$( (mdfind "kMDItemCFBundleIdentifier == 'com.apple.iphonesimulator'";
-            mdfind "kMDItemDisplayName == '*Device Hub*'";
-            find / -maxdepth 7 \( -name "Simulator.app" -o -name "Device Hub.app" \) -prune 2>/dev/null) | head -1)
-    echo "   unfold: app=${HUB:-none}"
-    [ -n "$HUB" ] || exit 0
-    open -a "$HUB" --args -CurrentDeviceUDID "$UDID"
-    sleep 8
-    osascript ci/unfold.applescript "$(basename "$HUB" .app)" 2>&1 | sed 's/^/   unfold: /'
+    hinge --help 2>&1 | head -20 | sed 's/^/   hinge: /'
+    { hinge -d "$UDID" open || hinge -d "$UDID" 180; } 2>&1 | sed 's/^/   hinge: /'
     sleep 3
     INNER=$(xcrun simctl io "$UDID" screenshot "$OUT/probe.png" 2>&1 | sed -nE 's/.*--display=([0-9]+).*/\1/p' | sort -n | tail -1)
     rm -f "$OUT/probe.png"
     if [ -n "$INNER" ] && [ "$INNER" != "$DISPLAY_ID" ]; then
       DISPLAY_ID="$INNER"
-      shoot unfolded-edit  -screenshotRich YES
-      shoot unfolded-pages -screenshotPages YES
+      shoot unfolded-edit       -screenshotRich YES
+      shoot unfolded-pages      -screenshotPages YES
+      shoot unfolded-focus-long -screenshotText "$LONG" -startInFocus YES
     fi
   ) fi
 done < devices.txt
@@ -92,8 +77,6 @@ done < devices.txt
 ls -l "$OUT"
 
 # Leaving the simulator running makes the runner's cleanup take ~45 s.
-pkill -x Simulator || true
-pkill -x 'Device Hub' || true
 pkill -9 -f CoreSimulator || true
 
 # JPEGs for the ci-screenshots branch (the workflow publishes $OUT/jpg).
