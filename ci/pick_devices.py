@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Print 'udid|name' for the simulators to screenshot: every foldable/Duo
 device on the newest iOS runtime (or, without one, the newest iPhone Pro and
-Pro Max), plus the newest iPad mini as a stand-in for the unfolded Duo, which
-the simulator can't be unfolded to from the command line."""
+Pro Max). One simulator: the Duo is the only target."""
 import json
 import subprocess
 
@@ -20,14 +19,11 @@ devices = ios[max(ios, key=version)]
 iphones = [d for d in devices if d["name"].startswith("iPhone")]
 
 picked = [d for d in iphones if any(w in d["name"] for w in ("Duo", "Fold", "Flip"))]
-if not picked:
+if not picked:   # no Duo in this Xcode: fall back so CI still shows something
     for suffix in ("Pro Max", "Pro"):
         candidates = [d for d in iphones if d["name"].endswith(suffix)]
         if candidates:
             picked.append(sorted(candidates, key=lambda d: d["name"])[-1])
-minis = [d for d in devices if d["name"].startswith("iPad mini")]
-if minis:
-    picked.append(sorted(minis, key=lambda d: d["name"])[-1])
 
 for d in picked or iphones[:1]:
     print(f'{d["udid"]}|{d["name"]}')

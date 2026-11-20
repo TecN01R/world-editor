@@ -5,11 +5,6 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
-    inputs:
-      unfold:
-        description: Try unfolded screenshots (experimental, slower)
-        type: boolean
-        default: false
 
 concurrency:
   group: ci-${{ github.ref }}-${{ github.event_name }}   # manual runs don't cancel pushes
@@ -108,26 +103,40 @@ jobs:
         run: |
           python3 ci/pick_devices.py > devices.txt
           while IFS='|' read -r UDID NAME; do xcrun simctl boot "$UDID"; done < devices.txt
+      # Unfolds the Duo for the inner-display shots (simctl can't). Installed
+      # while the app builds; if it fails, only the unfolded shots are skipped.
+      - name: Install hinge
+        if: steps.ui.outputs.changed == 'true'
+        continue-on-error: true
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        run: brew install artemnovichkov/tap/hinge
+      # The public artifact list lags minutes behind an upload, so wait on
+      # the build job's upload step instead, then fetch through the runner.
       - name: Wait for the app from the build job
         if: steps.ui.outputs.changed == 'true'
         run: |
-          run="repos/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          for i in $(seq 1 180); do
-            [ "$(gh api "$run/artifacts" -q '[.artifacts[]|select(.name=="app")]|length')" != "0" ] && break
-            state=$(gh api "$run/jobs" -q '.jobs[]|select(.name=="ios-build")|.conclusion // ""')
-            [ "$state" = "failure" ] || [ "$state" = "cancelled" ] && { echo "Build failed"; exit 1; }
+          jobs="repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs"
+          for i in $(seq 1 200); do
+            state=$(gh api "$jobs" -q '.jobs[]|select(.name=="ios-build")|((.steps[]|select(.name|startswith("Run actions/upload-artifact"))|.conclusion) // .conclusion // "")' 2>/dev/null | head -1)
+            case "$state" in
+              success) exit 0 ;;
+              failure|cancelled) echo "Build failed"; exit 1 ;;
+            esac
             sleep 3
           done
-          for attempt in 1 2 3 4; do   # the runner's network occasionally times out
-            gh run download "${{ github.run_id }}" -R "${{ github.repository }}" -n app && break
-            [ "$attempt" = 4 ] && exit 1; sleep 5
-          done
-          mkdir -p app && tar -xzf app.tar.gz -C app
+          exit 1
+      - if: steps.ui.outputs.changed == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: app
+      - if: steps.ui.outputs.changed == 'true'
+        run: mkdir -p app && tar -xzf app.tar.gz -C app
       - name: Screenshots in the simulator
         if: steps.ui.outputs.changed == 'true'
         env:
           FULL_SHOTS: ${{ steps.ui.outputs.focus }}
-          UNFOLD: ${{ inputs.unfold || 'false' }}
         run: ci/screenshots.sh app/WorldEditor.app
       # Force-pushed as a single orphan commit, so the branch only ever holds
       # the latest set and main's history never contains images.
