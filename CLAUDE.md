@@ -14,8 +14,9 @@ UI frameworks. Fedora is only the xtool build machine.
 3. Add or update tests in `Packages/WriterKit/Tests` for logic changes.
 4. Push to `main`. CI runs Linux and macOS tests, builds the app (XcodeGen and
    the xtool package layout), and screenshots it on the iPhone Duo simulator.
-   Screenshots are published to the `ci-screenshots` branch. Look at them
-   before reporting a UI change as done.
+   Screenshots are a temporary CI artifact (kept one day), never committed.
+   Download them, look at them before reporting a UI change as done, send them
+   to the user in chat, then delete the local copies.
 
 ## Rules that are not negotiable
 

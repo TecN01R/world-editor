@@ -26,8 +26,6 @@ jobs:
   ios-build:
     runs-on: xcode-27
     needs: core-tests-linux
-    permissions:
-      contents: write   # to publish screenshots to the ci-screenshots branch
     env:
       APPLE_TEAM_ID: ""
       BUNDLE_ID: com.tecn01r.worldeditor
@@ -64,18 +62,7 @@ jobs:
           name: screenshots
           path: screenshots/
           if-no-files-found: ignore
-      - name: Publish screenshots to the ci-screenshots branch
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          [ -d screenshots ] && [ -n "$(ls -A screenshots)" ] || exit 0
-          cd screenshots
-          git init -q -b ci-screenshots
-          git add -A
-          git -c user.name="ci" -c user.email="ci@users.noreply.github.com" \
-            commit -qm "Screenshots for ${GITHUB_SHA::7}"
-          git push -qf "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}" ci-screenshots
+          retention-days: 1   # temporary: reviewed in chat, never committed
       - name: Upload build log on failure
         if: failure()
         uses: actions/upload-artifact@v4
