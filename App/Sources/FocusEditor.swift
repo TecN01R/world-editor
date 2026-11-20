@@ -7,8 +7,9 @@ import FocusLayout
 /// The available area ends at `keyboardLayoutGuide`, the system's exact
 /// keyboard position, so there is nothing to estimate and nothing scrolls.
 ///
-/// Everything but the writing hides while you write: tapping outside the
-/// text brings the controls back (`showsControls`), typing hides them again.
+/// Everything but the writing hides (the paragraph dots dim) while you write:
+/// tapping outside the text brings the controls back (`showsControls`),
+/// typing hides them again.
 struct FocusEditor: UIViewControllerRepresentable {
     @Environment(Library.self) private var library
     @Binding var showsControls: Bool
@@ -37,6 +38,10 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
     private let library: Library
     private let textView = FocusTextView(usingTextLayoutManager: false) // TextKit 1, same as the measurer
     private let rail = ParagraphRail()
+    /// Active while the controls show, stepping the dots down below the side
+    /// column's buttons; otherwise they sit centred on the page.
+    private lazy var railBelowButtons = rail.topAnchor.constraint(greaterThanOrEqualTo: view.topAnchor)
+    private static let railResting: CGFloat = 0.35
     private let area = UILayoutGuide()
     private let engine = FitEngine()
     private var measurer = TextKitMeasurer()
@@ -87,11 +92,12 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         rail.translatesAutoresizingMaskIntoConstraints = false
         rail.onSelect = { [weak self] i in self?.show(i, caret: .end, direction: 0) }
         view.addSubview(rail)
-        rail.alpha = 0   // hidden with the other controls until revealed
+        rail.alpha = Self.railResting   // always there, quiet while you write
+        let railCentred = rail.centerYAnchor.constraint(equalTo: area.centerYAnchor)
+        railCentred.priority = .defaultHigh
         NSLayoutConstraint.activate([
             rail.centerXAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            // Low on the page, clear of the side column's buttons when they show.
-            rail.bottomAnchor.constraint(equalTo: area.bottomAnchor),
+            railCentred,
             rail.widthAnchor.constraint(equalToConstant: 32),
             rail.heightAnchor.constraint(lessThanOrEqualTo: area.heightAnchor, multiplier: 0.7),
         ])
@@ -117,6 +123,9 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        // The Duo's side-column buttons end a little under halfway down.
+        let below = view.bounds.height * 0.45
+        if railBelowButtons.constant != below { railBelowButtons.constant = below }
         layoutText(animated: false, allowGrow: true)
     }
 
@@ -156,11 +165,15 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
     private var controlsVisible = false
     private var hideTimer: Timer?
 
-    /// The paragraph dots come and go with the rest of the controls.
+    /// The paragraph dots brighten and step down with the rest of the controls.
     func setControls(visible: Bool) {
         guard visible != controlsVisible else { return }
         controlsVisible = visible
-        UIView.animate(withDuration: 0.25) { self.rail.alpha = visible ? 1 : 0 }
+        railBelowButtons.isActive = visible
+        UIView.animate(withDuration: 0.25) {
+            self.rail.alpha = visible ? 1 : Self.railResting
+            self.view.layoutIfNeeded()
+        }
         hideTimer?.invalidate()
         if visible {
             // Shown for a moment, like video controls, unless you use them.
@@ -378,6 +391,6 @@ extension FocusViewController: UIGestureRecognizerDelegate {
     /// Taps on the writing place the caret as usual; only taps around it reveal the controls.
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         let p = touch.location(in: view)
-        return !textView.frame.insetBy(dx: -8, dy: -8).contains(p) && !(rail.alpha > 0 && rail.frame.contains(p))
+        return !textView.frame.insetBy(dx: -8, dy: -8).contains(p) && !rail.frame.contains(p)
     }
 }

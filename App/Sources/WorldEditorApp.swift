@@ -98,6 +98,8 @@ final class Library {
 /// - `-screenshotText "para one\npara two"`: one page with that text (`EMPTY` for blank)
 /// - `-screenshotRich YES`: one page showing bold, italic and both kinds of list
 /// - `-screenshotPages YES`: several pages, showing the pages list
+/// - `-startInFocus YES`: open the page in Focus mode (read by `RootView`)
+/// - `-focusControls YES`: with Focus mode's controls showing (read by `RootView`)
 enum Screenshots {
     private static let defaults = UserDefaults.standard
     static var isActive: Bool { defaults.string(forKey: "screenshotText") != nil || isRich || opensList }

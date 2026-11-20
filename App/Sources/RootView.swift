@@ -7,16 +7,17 @@ import WriterCore
 struct RootView: View {
     @Environment(Library.self) private var library
     @State private var column: NavigationSplitViewColumn = Screenshots.opensList ? .sidebar : .detail
-    @State private var focusMode = UserDefaults.standard.bool(forKey: "startInFocus")
+    @State private var focusMode = Self.startsInFocus
     @State private var focusControls = UserDefaults.standard.bool(forKey: "focusControls")   // CI shot
+    @State private var columns: NavigationSplitViewVisibility = Self.startsInFocus ? .detailOnly : .automatic
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
+
+    private static var startsInFocus: Bool { UserDefaults.standard.bool(forKey: "startInFocus") }
 
     /// In Focus mode everything but the writing hides (bars, status, home
     /// indicator, pages list) until a tap outside the text brings it back.
     /// VoiceOver users keep the controls: hidden ones would be unreachable.
     private var chromeHidden: Bool { focusMode && !focusControls && !voiceOver }
-    @State private var columns: NavigationSplitViewVisibility =
-        UserDefaults.standard.bool(forKey: "startInFocus") ? .detailOnly : .automatic
 
     var body: some View {
         @Bindable var library = library
@@ -106,19 +107,29 @@ struct EditorView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
-        // Revealed in Focus mode, the system's own buttons (back to Pages or
-        // the sidebar button, and Edit) draw over the writing, which ignores
-        // the safe area and so never reflows.
+        // Focus is a mode you step into, so revealing its controls shows only
+        // a close button, as full-screen modes do on iOS; no back arrow or
+        // sidebar button. The bar draws over the writing, which ignores the
+        // safe area and so never reflows.
         .toolbar(chromeHidden ? .hidden : .automatic, for: .navigationBar)
+        .navigationBarBackButtonHidden(focusMode)
+        .toolbar(removing: focusMode ? .sidebarToggle : nil)
         .animation(.easeInOut(duration: 0.25), value: chromeHidden)
         .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    withAnimation(.smooth(duration: 0.3)) { focusMode.toggle() }
-                } label: {
-                    Label(focusMode ? "Edit" : "Focus", systemImage: focusMode ? "doc.plaintext" : "text.viewfinder")
+            if focusMode {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close Focus", systemImage: "xmark") {
+                        withAnimation(.smooth(duration: 0.3)) { focusMode = false }
+                    }
+                    .keyboardShortcut(.cancelAction)
                 }
-                .keyboardShortcut("f", modifiers: [.command, .shift])
+            } else {
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Focus", systemImage: "text.viewfinder") {
+                        withAnimation(.smooth(duration: 0.3)) { focusMode = true }
+                    }
+                    .keyboardShortcut("f", modifiers: [.command, .shift])
+                }
             }
         }
     }
