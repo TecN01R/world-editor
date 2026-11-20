@@ -30,5 +30,9 @@ project.yml             XcodeGen spec (the Xcode project is generated)
 
 ## Building
 
-No Mac is required: GitHub Actions builds, tests and ships to TestFlight.
-See [docs/setup.md](docs/setup.md).
+No Mac is required.
+
+- **On your phone from Fedora:** `scripts/setup-fedora.sh` once, then
+  `scripts/run-on-phone.sh`. See [docs/fedora.md](docs/fedora.md).
+- **CI and TestFlight:** GitHub Actions builds, tests, screenshots the app on
+  the iPhone Duo simulator, and ships to TestFlight. See [docs/setup.md](docs/setup.md).
