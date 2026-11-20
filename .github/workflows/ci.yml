@@ -25,7 +25,6 @@ jobs:
   # app compiles and the package tests pass on Apple platforms.
   ios-build:
     runs-on: xcode-27
-    needs: core-tests-linux
     env:
       APPLE_TEAM_ID: ""
       BUNDLE_ID: com.tecn01r.worldeditor
@@ -38,7 +37,12 @@ jobs:
           set -o pipefail
           xcodebuild build -scheme WorldEditor \
             -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath build-spm CODE_SIGNING_ALLOWED=NO | tail -5
+            -derivedDataPath build-spm ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
+            COMPILER_INDEX_STORE_ENABLE=NO CODE_SIGNING_ALLOWED=NO | tail -5
+      - name: Start booting the Duo simulator (runs while we compile)
+        run: |
+          python3 ci/pick_devices.py > devices.txt
+          while IFS='|' read -r UDID NAME; do xcrun simctl boot "$UDID" & done < devices.txt
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate project
@@ -52,6 +56,7 @@ jobs:
             -project WorldEditor.xcodeproj -scheme WorldEditor \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES COMPILER_INDEX_STORE_ENABLE=NO \
             CODE_SIGNING_ALLOWED=NO | tee build.log
       - name: Screenshots in the simulator
         run: ci/screenshots.sh
