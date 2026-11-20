@@ -12,7 +12,7 @@ UI frameworks. Fedora is only the xtool build machine.
    logic, tighten names, keep comments accurate. Never change behaviour in
    this pass.
 3. Add or update tests in `Packages/WriterKit/Tests` for logic changes.
-4. Push to `main`. CI runs Linux and macOS tests, builds the app (XcodeGen and
+4. Push to `main`. CI runs the WriterKit tests on Linux, builds the app (XcodeGen and
    the xtool package layout), and screenshots it on the iPhone Duo simulator.
    Screenshots live only on the `ci-screenshots` branch: CI force-pushes the
    latest set there as a single orphan commit (never on `main`, never as
