@@ -8,7 +8,7 @@ struct RootView: View {
     @Environment(Library.self) private var library
     @State private var column: NavigationSplitViewColumn = Screenshots.opensList ? .sidebar : .detail
     @State private var focusMode = Self.startsInFocus
-    @State private var focusControls = UserDefaults.standard.bool(forKey: "focusControls")   // CI shot
+    @State private var focusControls = false
     @State private var columns: NavigationSplitViewVisibility = Self.startsInFocus ? .detailOnly : .automatic
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
 
@@ -38,6 +38,13 @@ struct RootView: View {
         // Applied at the root: status bar visibility is decided by the top controller.
         .statusBarHidden(chromeHidden)
         .persistentSystemOverlays(chromeHidden ? .hidden : .automatic)
+        // CI shot of revealed controls: reveal after launch, the way a tap would,
+        // rather than starting revealed (a path no user ever takes).
+        .task {
+            guard UserDefaults.standard.bool(forKey: "focusControls") else { return }
+            try? await Task.sleep(for: .seconds(1.5))
+            focusControls = true
+        }
         .onChange(of: focusMode) { _, focus in
             focusControls = false
             withAnimation { columns = focus ? .detailOnly : .automatic }
