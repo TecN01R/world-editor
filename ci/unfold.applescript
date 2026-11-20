@@ -1,10 +1,14 @@
--- Finds and clicks the Simulator menu item that unfolds the device.
+-- Usage: osascript ci/unfold.applescript "Device Hub"
+-- Finds and clicks the simulator app's menu item that unfolds the device.
 -- Prints every menu item mentioning fold/posture/open so the name can be
 -- pinned once seen in a CI log.
-tell application "Simulator" to activate
+on run argv
+set appName to item 1 of argv
+tell application appName to activate
 delay 1
 tell application "System Events"
-	tell process "Simulator"
+	log "processes: " & ((name of every process whose background only is false) as text)
+	tell process appName
 		set found to {}
 		set target to missing value
 		repeat with m in menu bar items of menu bar 1
@@ -37,3 +41,4 @@ tell application "System Events"
 		end if
 	end tell
 end tell
+end run

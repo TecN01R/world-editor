@@ -58,11 +58,16 @@ while IFS='|' read -r UDID NAME; do
   # app's own menus to open the device, then shoot the inner display. Never
   # fails the job; it prints what it finds so the next attempt can be exact.
   if [ "$DISPLAY_ID" != "" ] && [ "${UNFOLD:-true}" = "true" ]; then
-    open -a Simulator --args -CurrentDeviceUDID "$UDID" || true
-    sleep 6
-    osascript ci/unfold.applescript 2>&1 | sed 's/^/   unfold: /' || true
-    sleep 3
-    INNER=$(xcrun simctl io "$UDID" screenshot "$OUT/probe.png" 2>&1 | sed -nE 's/.*--display=([0-9]+).*/\1/p' | sort -n | tail -1)
+    # Xcode 27 replaced Simulator.app with Device Hub; use whichever exists.
+    ls "$(xcode-select -p)/Applications" | sed 's/^/   app: /'
+    HUB=$(ls -d "$(xcode-select -p)"/Applications/*.app | grep -iE 'Device Hub|Simulator' | head -1 || true)
+    if [ -n "$HUB" ]; then
+      open -a "$HUB" --args -CurrentDeviceUDID "$UDID" || true
+      sleep 8
+      osascript ci/unfold.applescript "$(basename "$HUB" .app)" 2>&1 | sed 's/^/   unfold: /' || true
+      sleep 3
+    fi
+    INNER=$( (xcrun simctl io "$UDID" screenshot "$OUT/probe.png" 2>&1 || true) | sed -nE 's/.*--display=([0-9]+).*/\1/p' | sort -n | tail -1)
     rm -f "$OUT/probe.png"
     if [ -n "$INNER" ] && [ "$INNER" != "$DISPLAY_ID" ]; then
       DISPLAY_ID="$INNER"
@@ -76,6 +81,7 @@ ls -l "$OUT"
 
 # Leaving the simulator running makes the runner's cleanup take ~45 s.
 pkill -x Simulator || true
+pkill -x 'Device Hub' || true
 pkill -9 -f CoreSimulator || true
 
 # JPEGs for the ci-screenshots branch (the workflow publishes $OUT/jpg).
