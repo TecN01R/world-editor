@@ -8,6 +8,13 @@ struct RootView: View {
     @Environment(Library.self) private var library
     @State private var column: NavigationSplitViewColumn = Screenshots.opensList ? .sidebar : .detail
     @State private var focusMode = UserDefaults.standard.bool(forKey: "startInFocus")
+    @State private var focusControls = UserDefaults.standard.bool(forKey: "focusControls")   // CI shot
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
+
+    /// In Focus mode everything but the writing hides (bars, status, home
+    /// indicator, pages list) until a tap outside the text brings it back.
+    /// VoiceOver users keep the controls: hidden ones would be unreachable.
+    private var chromeHidden: Bool { focusMode && !focusControls && !voiceOver }
     @State private var columns: NavigationSplitViewVisibility =
         UserDefaults.standard.bool(forKey: "startInFocus") ? .detailOnly : .automatic
 
@@ -21,13 +28,17 @@ struct RootView: View {
             }
         } detail: {
             if let id = library.selection {
-                EditorView(focusMode: $focusMode).id(id)
+                EditorView(focusMode: $focusMode, focusControls: $focusControls, chromeHidden: chromeHidden).id(id)
             } else {
                 ContentUnavailableView("No Page Open", systemImage: "doc.text",
                                        description: Text("Choose a page or start a new one."))
             }
         }
+        // Applied at the root: status bar visibility is decided by the top controller.
+        .statusBarHidden(chromeHidden)
+        .persistentSystemOverlays(chromeHidden ? .hidden : .automatic)
         .onChange(of: focusMode) { _, focus in
+            focusControls = false
             withAnimation { columns = focus ? .detailOnly : .automatic }
         }
     }
@@ -79,13 +90,8 @@ struct PageList: View {
 /// One page, in Edit mode or Focus mode.
 struct EditorView: View {
     @Binding var focusMode: Bool
-    @State private var focusControls = UserDefaults.standard.bool(forKey: "focusControls")   // CI shot
-    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
-
-    /// In Focus mode everything but the writing hides (bars, status, home
-    /// indicator) until a tap outside the text brings it back. VoiceOver
-    /// users keep the controls, since there's nothing to see to tap around.
-    private var chromeHidden: Bool { focusMode && !focusControls && !voiceOver }
+    @Binding var focusControls: Bool
+    let chromeHidden: Bool
 
     var body: some View {
         ZStack {
@@ -101,10 +107,7 @@ struct EditorView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(chromeHidden ? .hidden : .automatic, for: .navigationBar)
-        .statusBarHidden(chromeHidden)
-        .persistentSystemOverlays(chromeHidden ? .hidden : .automatic)
         .animation(.easeInOut(duration: 0.25), value: chromeHidden)
-        .onChange(of: focusMode) { focusControls = false }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {

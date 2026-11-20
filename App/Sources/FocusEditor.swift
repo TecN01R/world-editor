@@ -59,7 +59,9 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         view.keyboardLayoutGuide.followsUndockedKeyboard = true
         let safe = view.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
-            area.topAnchor.constraint(equalTo: safe.topAnchor, constant: 12),
+            // Keep a margin at the top even when the bars are hidden (safe area ≈ 0).
+            area.topAnchor.constraint(greaterThanOrEqualTo: safe.topAnchor, constant: 12),
+            area.topAnchor.constraint(greaterThanOrEqualTo: view.topAnchor, constant: 32),
             area.leadingAnchor.constraint(equalTo: safe.leadingAnchor, constant: 16),
             area.trailingAnchor.constraint(equalTo: safe.trailingAnchor, constant: -40),
             area.bottomAnchor.constraint(lessThanOrEqualTo: safe.bottomAnchor, constant: -16),
@@ -68,6 +70,9 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         let fill = area.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor, constant: -12)
         fill.priority = .defaultHigh
         fill.isActive = true
+        let pullUp = area.topAnchor.constraint(equalTo: view.topAnchor)   // as high as the minimums allow
+        pullUp.priority = .defaultLow
+        pullUp.isActive = true
 
         textView.delegate = self
         textView.isScrollEnabled = false            // never scrolls: the text is sized to fit instead
@@ -161,7 +166,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         hideTimer?.invalidate()
         if visible {
             // Shown for a moment, like video controls, unless you use them.
-            hideTimer = .scheduledTimer(withTimeInterval: 4, repeats: false) { [weak self] _ in
+            hideTimer = .scheduledTimer(withTimeInterval: Screenshots.isActive ? 30 : 4, repeats: false) { [weak self] _ in
                 MainActor.assumeIsolated { self?.onControlsChange?(false) }
             }
         }
