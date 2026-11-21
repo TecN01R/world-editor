@@ -38,7 +38,8 @@ while IFS='|' read -r UDID NAME; do
   }
 
   # Displays: the Duo has an outer (lowest id) and inner (highest id) one.
-  DISPLAYS=$(xcrun simctl io "$UDID" screenshot "$OUT/probe.png" 2>&1 | sed -nE 's/.*--display=([0-9]+).*/\1/p' | sort -n)
+  # (asking for one screenshot of a multi-display device fails, listing them)
+  DISPLAYS=$( (xcrun simctl io "$UDID" screenshot "$OUT/probe.png" 2>&1 || true) | sed -nE 's/.*--display=([0-9]+).*/\1/p' | sort -n)
   rm -f "$OUT/probe.png"
   OUTER=$(echo "$DISPLAYS" | head -1); INNER=$(echo "$DISPLAYS" | tail -1)
 
