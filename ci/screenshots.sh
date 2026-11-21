@@ -42,7 +42,13 @@ while IFS='|' read -r UDID NAME; do
     command -v axe >/dev/null || { echo "   $name: skipped, no axe"; return; }
     xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE" "$@" >/dev/null
     sleep 3
-    axe tap --label "$label" --udid "$UDID" || { echo "   $name: tap failed"; return; }
+    # Folded, axe can first see the Duo's displays mid-change ("inconsistent
+    # screen layout. Try again."), so it retries.
+    local tries=0
+    until axe tap --label "$label" --udid "$UDID"; do
+      (( ++tries < 4 )) || { echo "   $name: tap failed"; return; }
+      sleep 2
+    done
     sleep 1   # menu animation
     xcrun simctl io "$UDID" screenshot ${DISPLAY_ID:+--display="$DISPLAY_ID"} "$OUT/$SLUG-$name.png" >/dev/null
     echo "   $name"

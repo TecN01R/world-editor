@@ -87,6 +87,7 @@ jobs:
   # Boots the Duo while the other Mac builds, then installs the app and
   # publishes dark-mode screenshots as the only commit on ci-screenshots.
   screenshots:
+    if: github.event_name == 'push'   # pull requests (Dependabot) would replace main's shots
     runs-on: xcode-27
     permissions:
       actions: read
