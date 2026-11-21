@@ -1,6 +1,6 @@
 # Focus mode behaviour
 
-Settled through the web prototype (`prototypes/focus-writer/index.html`), then
+Settled through a web prototype (since retired), then
 rebuilt native-first: TextKit measures, `FocusFit` (shared, tested) holds the
 two sizing rules, `FocusEditor` (UIKit) does the rest.
 

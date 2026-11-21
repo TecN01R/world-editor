@@ -23,7 +23,6 @@ Packages/WriterKit/     Shared, Foundation-only logic; tested on Linux and macOS
   Provenance            facts with verified sources; unknown stays unknown
   Guardrails            companion checks, creative-request handling, illustration plans
   ModelCatalog          models, licences, download/unload policy
-prototypes/             browser prototypes used to settle behaviour
 docs/                   behaviour specs, AI rules, model choices, setup
 project.yml             XcodeGen spec (the Xcode project is generated)
 ```
