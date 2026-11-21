@@ -38,7 +38,8 @@ say "Apple ID and Xcode SDK"
 cat <<'EOF'
 xtool needs Apple's iOS SDK, which only ships inside Xcode.
   1. On any device, sign in at https://developer.apple.com/download/all/
-     with your Apple ID and download the latest Xcode .xip (about 3 GB).
+     with your Apple ID and download Xcode 27.1's .xip (about 3 GB).
+     Not 27.2: only 27.1 has the iPhone Duo SDK.
   2. Put it on this machine (e.g. ~/Downloads).
 xtool will now ask you to sign in with your Apple ID and for the .xip path.
 EOF

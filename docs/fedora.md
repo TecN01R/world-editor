@@ -20,8 +20,9 @@ The script:
 2. installs the Swift toolchain with `swiftly`, if you don't have one
 3. installs the xtool AppImage to `~/.local/bin`
 4. runs `xtool setup`, which signs you in with your Apple ID and imports
-   Apple's iOS SDK from an Xcode `.xip`. Download the `.xip` first from
-   <https://developer.apple.com/download/all/> with the same Apple ID.
+   Apple's iOS SDK from an Xcode `.xip`. Download **Xcode 27.1**'s `.xip`
+   first from <https://developer.apple.com/download/all/> with the same
+   Apple ID; 27.2 lacks the iPhone Duo SDK.
 5. pairs the iPhone over USB (tap **Trust** on the phone)
 
 On the iPhone, the first install also needs **Settings → Privacy & Security →
@@ -34,7 +35,7 @@ It then sets up two things that run in the background:
    (`pymobiledevice3`) and runs `netmuxd`, which finds the iPhone on your
    network and stands in for `usbmuxd`, so the cable is only needed once.
 7. **Automatic updates.** A user service (`world-editor-autodeploy`) checks
-   GitHub every minute; when a new commit on `main` has passed CI it pulls,
+   GitHub every 90 seconds; when a new commit on `main` has passed CI it pulls,
    rebuilds only what changed and installs it on the phone. Failed CI is
    skipped. Watch it with `journalctl --user -u world-editor-autodeploy -f`.
 
