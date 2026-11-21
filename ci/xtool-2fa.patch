@@ -1,8 +1,25 @@
+diff --git a/Sources/XKit/GrandSlam/GrandSlamClient.swift b/Sources/XKit/GrandSlam/GrandSlamClient.swift
+index d3dd5fd..48ecdd1 100644
+--- a/Sources/XKit/GrandSlam/GrandSlamClient.swift
++++ b/Sources/XKit/GrandSlam/GrandSlamClient.swift
+@@ -43,6 +43,12 @@ struct GrandSlamClient: Sendable {
+         // GrandSlam doesn't seem to like reused (keep-alive) connections so create a
+         // new one for each request. cf https://github.com/rileytestut/AltSign/pull/52
+         let resp = try await httpClient.makeRequest(httpRequest, body: body, ephemeral: true)
++        // Diagnostics for 2FA sign-in (XTOOL_DEBUG_GSA=1): what Apple answered.
++        if R.self is any GrandSlamTwoFactorRequest.Type,
++           ProcessInfo.processInfo.environment["XTOOL_DEBUG_GSA"] != nil {
++            let text = String(decoding: resp.body.prefix(400), as: UTF8.self)
++            FileHandle.standardError.write(Data("[gsa] \(url.path) -> HTTP \(resp.response.status.code): \(text)\n".utf8))
++        }
+         return try R.Decoder.decode(data: resp.body)
+     }
+ 
 diff --git a/Sources/XKit/GrandSlam/Operations/GrandSlamAuthenticateOperation.swift b/Sources/XKit/GrandSlam/Operations/GrandSlamAuthenticateOperation.swift
-index 41405e5..7c8f9d8 100644
+index 41405e5..dd8b236 100644
 --- a/Sources/XKit/GrandSlam/Operations/GrandSlamAuthenticateOperation.swift
 +++ b/Sources/XKit/GrandSlam/Operations/GrandSlamAuthenticateOperation.swift
-@@ -109,7 +109,10 @@ struct GrandSlamAuthenticateOperation {
+@@ -109,7 +109,14 @@ struct GrandSlamAuthenticateOperation {
          if response.statusCode == 409 {
              // 2FA
              guard !isRetry else { throw Error.failedSecondaryAuth }
@@ -11,6 +28,10 @@ index 41405e5..7c8f9d8 100644
 +            // carried it in the decrypted response's "url".
 +            let authMode = (completeResponse.status?.authMode ?? response.url)
 +                .flatMap { GrandSlamAuthMode(rawValue: $0) }
++            if ProcessInfo.processInfo.environment["XTOOL_DEBUG_GSA"] != nil {
++                let note = "[gsa] 2FA: au=\(completeResponse.status?.authMode ?? "none") url=\(response.url ?? "none")\n"
++                FileHandle.standardError.write(Data(note.utf8))
++            }
              return try await authenticateTwoFactor(
                  mode: authMode,
                  loginData: loginData

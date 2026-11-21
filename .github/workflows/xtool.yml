@@ -1,6 +1,7 @@
 # Builds xtool with ci/xtool-2fa.patch, the fix for Apple ID sign-in codes
 # never arriving (xtool-org/xtool#407), and publishes the AppImage as the
-# "xtool-patched" release that scripts/setup-fedora.sh installs. Built with
+# "xtool-patched" release that scripts/setup-fedora.sh installs, with sign-in
+# diagnostics behind XTOOL_DEBUG_GSA=1. Built with
 # xtool's own Dockerfile, its supported Linux build. Remove once a fixed
 # xtool is released.
 name: xtool (patched)
@@ -12,7 +13,8 @@ on:
 permissions:
   contents: write
 env:
-  XTOOL_VERSION: 1.24.0
+  # xtool's main after 1.24.0: it carries later, unreleased sign-in fixes.
+  XTOOL_REF: 96df46536b6397c12c8371de8e00a00f78b01d4e
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -20,7 +22,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Fetch xtool and apply the patch
         run: |
-          git clone -q --depth 1 --branch "$XTOOL_VERSION" https://github.com/xtool-org/xtool.git xtool
+          git init -q xtool
+          git -C xtool fetch -q --depth 1 https://github.com/xtool-org/xtool.git "$XTOOL_REF"
+          git -C xtool checkout -q FETCH_HEAD
           git -C xtool apply "$PWD/ci/xtool-2fa.patch"
       - name: Build the AppImage (xtool's Dockerfile)
         run: |
@@ -32,7 +36,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          notes="xtool $XTOOL_VERSION with ci/xtool-2fa.patch (from ${GITHUB_SHA::7})."
+          notes="xtool ${XTOOL_REF::7} with ci/xtool-2fa.patch (from ${GITHUB_SHA::7})."
           gh release view xtool-patched >/dev/null 2>&1 \
             || gh release create xtool-patched --prerelease --title "xtool (patched)" --notes "$notes"
           gh release edit xtool-patched --notes "$notes"

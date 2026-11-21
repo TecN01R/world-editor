@@ -61,7 +61,8 @@ xtool needs Apple's iOS SDK, which only ships inside Xcode.
   2. Put it on this machine (e.g. ~/Downloads).
 xtool will now ask you to sign in with your Apple ID and for the .xip path.
 EOF
-xtool setup
+# Prints what Apple answers during the 2FA step ([gsa] lines), to debug sign-in.
+XTOOL_DEBUG_GSA=1 xtool setup
 
 say "Pair your iPhone"
 echo "Plug the iPhone in with a cable, unlock it, and tap Trust when asked."
