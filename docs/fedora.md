@@ -28,20 +28,34 @@ On the iPhone, the first install also needs **Settings → Privacy & Security �
 Developer Mode** turned on, and possibly trusting your developer certificate
 under **Settings → General → VPN & Device Management**.
 
-## Every change after that
+It then sets up two things that run in the background:
+
+6. **Wireless installs.** It turns on Wi-Fi connections for the pairing
+   (`pymobiledevice3`) and runs `netmuxd`, which finds the iPhone on your
+   network and stands in for `usbmuxd`, so the cable is only needed once.
+7. **Automatic updates.** A user service (`world-editor-autodeploy`) checks
+   GitHub every minute; when a new commit on `main` has passed CI it pulls,
+   rebuilds only what changed and installs it on the phone. Failed CI is
+   skipped. Watch it with `journalctl --user -u world-editor-autodeploy -f`.
+
+## Installing by hand
 
 ```bash
 scripts/run-on-phone.sh
 ```
 
-It pulls the latest commits, rebuilds only what changed, installs and
-launches the app.
+Pulls, rebuilds what changed, installs and launches. Handy if the service is
+stopped or you want it immediately.
 
 ## Limits to know about
 
-- **Free Apple ID:** apps expire after 7 days and need reinstalling (run the
-  script again). A paid Developer Program membership removes this, and also
-  enables TestFlight.
-- **Wireless install** isn't documented by xtool. USB is the supported path.
+- **Free Apple ID:** apps expire after 7 days. The service reinstalls on the
+  next commit, but with no new commits you'd run the script by hand. A paid
+  Developer Program membership removes this, and also enables TestFlight.
+- **Wireless** relies on `netmuxd` and Wi-Fi pairing, which xtool doesn't
+  officially document. The phone must be on the same network and awake
+  enough to answer; if it can't be reached the install is retried next round.
+  To re-pair over USB: `sudo systemctl stop netmuxd`, plug in, `idevicepair
+  pair`, then `sudo systemctl start netmuxd`.
 - **Untested here:** these steps were written without access to a Fedora
-  machine. If a step fails, send the error and the script gets fixed.
+  machine or a Duo. If a step fails, send the error and the script gets fixed.

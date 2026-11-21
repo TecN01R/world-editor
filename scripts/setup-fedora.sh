@@ -4,6 +4,7 @@
 # Safe to re-run; finished steps are skipped.
 set -euo pipefail
 
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 say() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 BIN="$HOME/.local/bin"
 mkdir -p "$BIN"
@@ -49,5 +50,56 @@ read -r -p "Press Return when it's plugged in and unlocked… " _
 idevicepair pair || true
 xtool devices || true
 
+say "Wireless installs"
+# iOS only offers a paired iPhone over Wi-Fi once "Wi-Fi connections" is on
+# for that pairing; pymobiledevice3 sets it (iTunes' "Show this iPhone when
+# on Wi-Fi"). netmuxd then finds the phone on the network and stands in for
+# usbmuxd, so xtool reaches it without a cable.
+sudo dnf install -y python3-pip avahi nss-mdns
+pip install --user --quiet pymobiledevice3
+pymobiledevice3 lockdown wifi-connections --state on || echo "(couldn't enable Wi-Fi connections; installs will need the cable)"
+if ! command -v netmuxd >/dev/null 2>&1; then
+  url=$(curl -fsSL https://api.github.com/repos/jkcoxson/netmuxd/releases/latest \
+        | python3 -c 'import json,sys,platform; a=platform.machine(); print(next(x["browser_download_url"] for x in json.load(sys.stdin)["assets"] if a in x["name"] and "linux" in x["name"].lower()))')
+  curl -fL "$url" -o "$BIN/netmuxd" && chmod +x "$BIN/netmuxd"
+fi
+sudo systemctl enable --now avahi-daemon
+# netmuxd takes over the usbmuxd socket; plug in the cable and stop it
+# (sudo systemctl stop netmuxd) if you ever need to pair again over USB.
+sudo tee /etc/systemd/system/netmuxd.service >/dev/null <<UNIT
+[Unit]
+Description=netmuxd (iPhone over Wi-Fi)
+After=network-online.target avahi-daemon.service
+Conflicts=usbmuxd.service
+[Service]
+ExecStart=$BIN/netmuxd
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target
+UNIT
+sudo systemctl daemon-reload
+sudo systemctl enable --now netmuxd
+xtool devices || true
+
+say "Automatic updates"
+# Installs every commit that passes CI, from the background, even when you're
+# not logged in (lingering). Logs: journalctl --user -u world-editor-autodeploy -f
+mkdir -p "$HOME/.config/systemd/user"
+cat > "$HOME/.config/systemd/user/world-editor-autodeploy.service" <<UNIT
+[Unit]
+Description=Install new World Editor builds on the iPhone
+After=network-online.target
+[Service]
+ExecStart=$REPO_DIR/scripts/autodeploy.sh
+Environment=PATH=$BIN:${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}/bin:/usr/local/bin:/usr/bin:/bin
+Restart=always
+[Install]
+WantedBy=default.target
+UNIT
+systemctl --user daemon-reload
+systemctl --user enable --now world-editor-autodeploy
+sudo loginctl enable-linger "$USER"
+
 say "Done"
-echo "From the repository folder, run:  scripts/run-on-phone.sh"
+echo "New builds now install on the iPhone by themselves once CI passes."
+echo "To install right now by hand:  scripts/run-on-phone.sh"
