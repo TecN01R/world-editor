@@ -97,7 +97,6 @@ struct PageList: View {
 
 /// One page, in Edit mode or Focus mode.
 struct EditorView: View {
-    @Environment(Library.self) private var library
     @State private var showMentions = Screenshots.showsMentions
     @Binding var focusMode: Bool
     @Binding var focusControls: Bool
@@ -189,5 +188,7 @@ struct MentionsView: View {
             }
         }
         .presentationDetents([.medium, .large])
+        // The page keeps its caret, but the keyboard steps aside for the sheet.
+        .onAppear { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
     }
 }
