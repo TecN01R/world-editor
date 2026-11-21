@@ -174,11 +174,9 @@ struct EditorView: View {
         Binding { library.fieldsRequest == .newType } set: { if !$0 { library.fieldsRequest = nil } }
     }
 
-    private struct TypeRef: Identifiable { let id: UUID }
-    private var addFieldType: Binding<TypeRef?> {
-        Binding {
-            if case .addField(let id)? = library.fieldsRequest { TypeRef(id: id) } else { nil }
-        } set: { if $0 == nil { library.fieldsRequest = nil } }
+    /// Adding or editing a field (New Type is an alert, above).
+    private var fieldSheet: Binding<Library.FieldsRequest?> {
+        Binding { library.fieldsRequest == .newType ? nil : library.fieldsRequest } set: { library.fieldsRequest = $0 }
     }
 
     var body: some View {
@@ -203,7 +201,13 @@ struct EditorView: View {
         .toolbar(removing: focusMode ? .sidebarToggle : nil)
         .animation(.easeInOut(duration: 0.25), value: chromeHidden)
         .sheet(isPresented: $showMentions) { MentionsView() }
-        .sheet(item: addFieldType) { AddFieldSheet(typeID: $0.id) }
+        .sheet(item: fieldSheet) { request in
+            switch request {
+            case .addField(let type): FieldSheet(type: type)
+            case .editField(let id): FieldSheet(editing: library.schema.fields.first { $0.id == id })
+            case .newType: EmptyView()
+            }
+        }
         .alert("New Type", isPresented: newType) {
             TextField("Name, such as Character or Place", text: $typeName)
             Button("Cancel", role: .cancel) { typeName = "" }
