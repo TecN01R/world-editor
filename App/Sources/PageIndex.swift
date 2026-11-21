@@ -55,7 +55,7 @@ enum PageIndex {
                     guard let page = parts.first.flatMap(UUID.init), !results.contains(where: { $0.page == page }) else { continue }
                     results.append(Result(page: page, paragraph: parts.dropFirst().first.flatMap(UUID.init)))
                 case .suggestion(let suggestion):
-                    suggestions.append(text(suggestion.suggestion.localizedAttributedSuggestion))
+                    suggestions.append(plain(suggestion.suggestion.localizedAttributedSuggestion))
                 @unknown default:
                     continue
                 }
@@ -64,8 +64,8 @@ enum PageIndex {
         return (results, suggestions)
     }
 
-    private static func text(_ s: AttributedString) -> String { String(s.characters) }
-    private static func text(_ s: NSAttributedString) -> String { s.string }
+    private static func plain(_ s: AttributedString) -> String { String(s.characters) }
+    private static func plain(_ s: NSAttributedString) -> String { s.string }
 
     /// The title, then each paragraph, as items of the page's domain.
     private static func items(_ page: WriterCore.Document) -> [CSSearchableItem] {
