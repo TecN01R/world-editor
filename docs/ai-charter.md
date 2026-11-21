@@ -18,7 +18,9 @@ behaviour that only lives in a prompt isn't guaranteed.
 ## Search and curation
 
 Semantic search finds and groups the author's own passages by meaning. It
-returns existing text with its location and never writes new text.
+returns existing text with its location and never writes new text. Today it is
+Core Spotlight's on-device semantic search over the author's pages
+(`PageIndex`): it returns pages, ranked, and nothing else.
 
 ## Writing companion
 

@@ -1,3 +1,4 @@
+import CoreSpotlight
 import SwiftUI
 import WriterCore
 
@@ -37,6 +38,13 @@ struct RootView: View {
         }
         // Applied at the root: status bar visibility is decided by the top controller.
         .statusBarHidden(chromeHidden)
+        // A page chosen in the system's Spotlight search opens here.
+        .onContinueUserActivity(CSSearchableItemActionType) { activity in
+            if let id = (activity.userInfo?[CSSearchableItemActivityIdentifier] as? String).flatMap(UUID.init) {
+                library.selection = id
+                column = .detail
+            }
+        }
         .persistentSystemOverlays(chromeHidden ? .hidden : .automatic)
         // CI shot of revealed controls: reveal after launch, the way a tap would,
         // rather than starting revealed (a path no user ever takes).
@@ -58,39 +66,30 @@ struct PageList: View {
     let newPage: () -> Void
     @State private var showModels = false
     @State private var query = Screenshots.searchQuery ?? ""
+    @State private var related: [UUID] = []
 
     var body: some View {
-        let pages = query.isEmpty ? library.pages : library.pages.filter { $0.matches(query) }
+        // Pages with the words first (instant), then those Spotlight finds by meaning.
+        let words = query.isEmpty ? library.pages : library.pages.filter { $0.matches(query) }
+        let byMeaning = related.compactMap { id in
+            words.contains { $0.id == id } ? nil : library.pages.first { $0.id == id }
+        }
         List(selection: $selection) {
-            ForEach(pages) { page in
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(highlighted(page.heading.isEmpty ? "New Page" : page.heading))
-                        .font(.headline)
-                        .lineLimit(1)
-                    if let snippet = page.snippet(matching: query) {
-                        // Searching: the line that matched, in place of date and preview.
-                        Text(highlighted(snippet)).lineLimit(1)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    } else {
-                        HStack(spacing: 6) {
-                            Text(page.modified, format: .relative(presentation: .named))
-                            if !page.preview.isEmpty { Text(page.preview).lineLimit(1) }
-                        }
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.vertical, 2)
-                .accessibilityElement(children: .combine)
-                .swipeActions {
-                    Button("Delete", systemImage: "trash", role: .destructive) { library.delete(page.id) }
-                }
+            ForEach(words, content: row)
+            if !byMeaning.isEmpty {
+                Section("Related") { ForEach(byMeaning, content: row) }
             }
         }
         .searchable(text: $query, prompt: "Search Pages")
         .overlay {
-            if !query.isEmpty, pages.isEmpty { ContentUnavailableView.search(text: query) }
+            if !query.isEmpty, words.isEmpty, byMeaning.isEmpty { ContentUnavailableView.search(text: query) }
+        }
+        .task(id: query) {
+            related = []
+            guard query.count >= 3 else { return }
+            try? await Task.sleep(for: .milliseconds(300))   // let typing settle
+            guard !Task.isCancelled else { return }
+            related = await PageIndex.search(query)
         }
         .navigationTitle("Pages")
         .toolbar {
@@ -105,6 +104,32 @@ struct PageList: View {
             }
         }
         .sheet(isPresented: $showModels) { ModelsView() }
+    }
+
+    private func row(_ page: WriterCore.Document) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(highlighted(page.heading.isEmpty ? "New Page" : page.heading))
+                .font(.headline)
+                .lineLimit(1)
+            if let snippet = page.snippet(matching: query) {
+                // Searching: the line that matched, in place of date and preview.
+                Text(highlighted(snippet)).lineLimit(1)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
+                HStack(spacing: 6) {
+                    Text(page.modified, format: .relative(presentation: .named))
+                    if !page.preview.isEmpty { Text(page.preview).lineLimit(1) }
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+        .swipeActions {
+            Button("Delete", systemImage: "trash", role: .destructive) { library.delete(page.id) }
+        }
     }
 
     /// `text` with the search match in bold.
