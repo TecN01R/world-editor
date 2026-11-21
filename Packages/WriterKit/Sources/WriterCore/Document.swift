@@ -32,8 +32,8 @@ public struct StyleRun: Codable, Hashable, Sendable {
     }
 }
 
-/// A paragraph is the unit both editors share: page view shows them together,
-/// focus mode shows one per page. Identity is stable across edits so that
+/// A paragraph is the unit both editors share: Edit mode shows them together,
+/// Focus mode shows one per page. Identity is stable across edits so that
 /// extracted facts can point back at the paragraph they came from.
 public struct Paragraph: Identifiable, Hashable, Sendable {
     public var id: UUID
@@ -120,7 +120,7 @@ public struct Paragraph: Identifiable, Hashable, Sendable {
 extension Paragraph: Codable {
     private enum CodingKeys: String, CodingKey { case id, text, kind, runs }
 
-    // Older notes have only id and text; plain paragraphs are written that way too.
+    // Older pages have only id and text; plain paragraphs are written that way too.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.init(id: try c.decode(UUID.self, forKey: .id),
@@ -143,7 +143,7 @@ extension Paragraph: Codable {
 ///
 /// Offsets are UTF-16 units. A position in the whole document counts each
 /// paragraph's text plus one for the line break between paragraphs, matching
-/// the text page view shows.
+/// the text Edit mode shows.
 public struct Document: Identifiable, Codable, Hashable, Sendable {
     public var id: UUID
     /// Separate from the writing, shown above it in Edit mode.
@@ -157,9 +157,6 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
         self.paragraphs = paragraphs.isEmpty ? [Paragraph()] : paragraphs
         self.modified = modified
     }
-
-    /// Plain text with one paragraph per line; what page view shows.
-    public var plainText: String { paragraphs.map(\.text).joined(separator: "\n") }
 
     public var isEmpty: Bool {
         title.allSatisfy(\.isWhitespace) && paragraphs.allSatisfy { $0.text.allSatisfy(\.isWhitespace) }
@@ -183,12 +180,7 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
         paragraphs.map { $0.text.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
     }
 
-    public var wordCount: Int {
-        paragraphs.reduce(0) { $0 + $1.text.split(whereSeparator: \.isWhitespace).count }
-    }
-
     public func paragraph(_ id: UUID) -> Paragraph? { paragraphs.first { $0.id == id } }
-    public func index(of id: UUID) -> Int? { paragraphs.firstIndex { $0.id == id } }
 
     /// Position of each paragraph's first character in the whole document.
     public var paragraphStarts: [Int] {
@@ -219,7 +211,7 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
         modified = Date()
     }
 
-    /// Replaces the whole content (page view). Paragraph identities are kept for
+    /// Replaces the whole content (Edit mode). Paragraph identities are kept for
     /// paragraphs whose text is unchanged or edited in place, so provenance
     /// survives ordinary editing.
     public mutating func setParagraphs(_ new: [Paragraph]) {
@@ -333,7 +325,7 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-/// Keeps paragraph IDs stable when page view replaces the whole content.
+/// Keeps paragraph IDs stable when Edit mode replaces the whole content.
 enum ParagraphDiff {
     static func reconcile(old: [Paragraph], new: [Paragraph]) -> [Paragraph] {
         // Match unchanged paragraphs first (in order), then reuse the remaining

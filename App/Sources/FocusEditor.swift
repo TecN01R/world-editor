@@ -225,12 +225,16 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
 
     // MARK: Fitting
 
-    /// New York at `size`, natural line spacing: TextKit's line boxes hold
-    /// every glyph, so nothing clips and the measurement is the layout.
-    static func attributes(_ size: CGFloat) -> [NSAttributedString.Key: Any] {
+    /// New York at `size`.
+    static func font(_ size: CGFloat) -> UIFont {
         let base = UIFont.systemFont(ofSize: size)
-        let font = UIFont(descriptor: base.fontDescriptor.withDesign(.serif) ?? base.fontDescriptor, size: size)
-        return [.font: font, .foregroundColor: UIColor.label]
+        return UIFont(descriptor: base.fontDescriptor.withDesign(.serif) ?? base.fontDescriptor, size: size)
+    }
+
+    /// Natural line spacing: TextKit's line boxes hold every glyph, so
+    /// nothing clips and the measurement is the layout.
+    static func attributes(_ size: CGFloat) -> [NSAttributedString.Key: Any] {
+        [.font: font(size), .foregroundColor: UIColor.label]
     }
 
     private func styled(_ size: Double) -> NSAttributedString {
@@ -293,8 +297,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         }
         // One line is centred across the page too; once it wraps it's left-aligned
         // (the switch comes with the size change that wrapping brings).
-        let lineHeight = (Self.attributes(CGFloat(size))[.font] as? UIFont)?.lineHeight ?? h
-        alignment = h < lineHeight * 1.5 ? .center : .natural
+        alignment = h < Self.font(CGFloat(size)).lineHeight * 1.5 ? .center : .natural
         textView.textAlignment = alignment
         updateTypingAttributes()
         // Centre the letters, keeping the last line box above the keyboard
@@ -314,14 +317,13 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
     private func apply(_ newSize: Double) {
         size = newSize
         let selection = textView.selectedRange
-        let attrs = Self.attributes(CGFloat(size))
         if textView.text.isEmpty {
             // An empty text view sizes its caret from `font`; assigning even
             // an empty attributed string would reset it.
-            textView.font = attrs[.font] as? UIFont
+            textView.font = Self.font(CGFloat(size))
         } else {
             textView.attributedText = RichText.attributed(textView.text, runs: RichText.runs(in: textView.attributedText),
-                                                          attributes: attrs)
+                                                          attributes: Self.attributes(CGFloat(size)))
             textView.selectedRange = selection
         }
         updateTypingAttributes()
@@ -333,7 +335,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
 
     private func measuredHeight(width: CGFloat) -> CGFloat {
         // Empty, the caret is one line of the current font tall.
-        if textView.text.isEmpty { return ceil((Self.attributes(CGFloat(size))[.font] as? UIFont)?.lineHeight ?? 0) }
+        if textView.text.isEmpty { return ceil(Self.font(CGFloat(size)).lineHeight) }
         return textView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
     }
 

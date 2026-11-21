@@ -1,8 +1,7 @@
 # Focus mode behaviour
 
-Settled through a web prototype (since retired), then
-rebuilt native-first: TextKit measures, `FocusFit` (shared, tested) holds the
-two sizing rules, `FocusEditor` (UIKit) does the rest.
+TextKit measures, `FocusFit` (shared, tested) holds the two sizing rules,
+`FocusEditor` (UIKit) does the rest.
 
 ## Layout
 

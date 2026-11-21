@@ -5,10 +5,7 @@ import Provenance
 import FoundationModels
 #endif
 
-/// Extracts what the author has *stated* from their notes, using Apple's
-/// on-device model. Output is only a candidate list; `KnowledgeBase.ingest`
-/// keeps a fact only if its quote really appears in the paragraph and its
-/// value is the author's own words.
+/// Whether Apple's on-device model can run here, for the models list.
 enum FoundationModelStatus {
     static var description: String {
         #if canImport(FoundationModels)
@@ -43,6 +40,10 @@ struct ExtractionResult {
     var statements: [ExtractedStatement]
 }
 
+/// Extracts what the author has *stated* from their pages, using Apple's
+/// on-device model. Output is only a candidate list; `KnowledgeBase.ingest`
+/// keeps a fact only if its quote really appears in the paragraph and its
+/// value is the author's own words.
 struct FactExtractor {
     static let instructions = """
     You record what an author has written about their own fictional world. \

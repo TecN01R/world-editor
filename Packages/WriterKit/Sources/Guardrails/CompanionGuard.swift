@@ -170,13 +170,6 @@ public struct CompanionGuard: Sendable {
         return out
     }
 
-    static func quotedSpans(_ s: String) -> [String] {
-        let pattern = "[\"\u{201C}]([^\"\u{201D}]+)[\"\u{201D}]"
-        guard let re = try? NSRegularExpression(pattern: pattern) else { return [] }
-        let ns = s as NSString
-        return re.matches(in: s, range: NSRange(location: 0, length: ns.length)).map { ns.substring(with: $0.range(at: 1)) }
-    }
-
     static func removingQuotes(_ s: String) -> String {
         guard let re = try? NSRegularExpression(pattern: "[\"\u{201C}][^\"\u{201D}]*[\"\u{201D}]") else { return s }
         let ns = s as NSString

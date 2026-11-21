@@ -42,7 +42,6 @@ final class DocumentTests: XCTestCase {
         let store = try DocumentStore(directory: dir)
         let d = Document(title: "T", paragraphs: [Paragraph(text: "x")])
         try store.save(d)
-        XCTAssertEqual(try store.load(d.id), d)
-        XCTAssertEqual(try store.all().count, 1)
+        XCTAssertEqual(try store.all(), [d])
     }
 }
