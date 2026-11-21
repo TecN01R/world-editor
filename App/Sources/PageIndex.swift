@@ -16,18 +16,20 @@ enum PageIndex {
         let paragraph: UUID?
     }
 
-    private static let index = CSSearchableIndex(name: "pages")
+    private static let index = CSSearchableIndex.default()
     /// Each step, so CI's log shows whether indexing or searching stalls.
     private static let log = Logger(subsystem: "world-editor", category: "search")
     private static var ready: Task<Void, Never>?
 
-    /// Once at launch: readies Spotlight and indexes every page afresh.
+    /// Once at launch: readies Spotlight and indexes every page (items with
+    /// the same identifier replace the old ones; deleted pages are removed as
+    /// they're deleted).
     static func start(with pages: [WriterCore.Document]) {
         CSUserQuery.prepare()
+        log.notice("prepared")
         ready = Task {
             log.notice("indexing \(pages.count) pages")
             do {
-                try await index.deleteAllSearchableItems()
                 try await index.indexSearchableItems(pages.flatMap(items))
                 log.notice("indexed")
             } catch {
