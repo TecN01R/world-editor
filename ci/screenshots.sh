@@ -42,24 +42,23 @@ while IFS='|' read -r UDID NAME; do
   rm -f "$OUT/probe.png"
   OUTER=$(echo "$DISPLAYS" | head -1); INNER=$(echo "$DISPLAYS" | tail -1)
 
-  # The same four screens folded and open: the pages list, Edit, and Focus
-  # while writing and with its controls revealed.
+  # Only the screens this change touches ($SHOTS), folded and open.
   screens() {
-    local p="$1"
-    shoot "$p-pages"          -screenshotPages YES
-    shoot "$p-edit"           -screenshotRich YES
-    shoot "$p-focus"          -screenshotText "$PAGES" -startInFocus YES
-    shoot "$p-focus-controls" -screenshotText "$PAGES" -startInFocus YES -focusControls YES
+    for screen in ${SHOTS:-edit}; do
+      case "$screen" in
+        pages)          shoot "$1-pages"          -screenshotPages YES ;;
+        edit)           shoot "$1-edit"           -screenshotRich YES ;;
+        focus)          shoot "$1-focus"          -screenshotText "$PAGES" -startInFocus YES ;;
+        focus-controls) shoot "$1-focus-controls" -screenshotText "$PAGES" -startInFocus YES -focusControls YES ;;
+        focus-edges)    shoot "$1-focus-empty"    -screenshotText EMPTY -startInFocus YES
+                        shoot "$1-focus-g"        -screenshotText "g" -startInFocus YES
+                        shoot "$1-focus-long"     -screenshotText "$LONG" -startInFocus YES ;;
+      esac
+    done
   }
 
   DISPLAY_ID="$OUTER"
   screens folded
-  # Fitting edge cases, only when Focus mode itself changed.
-  if [ "${FULL_SHOTS:-true}" = "true" ]; then
-    shoot focus-empty -screenshotText EMPTY -startInFocus YES
-    shoot focus-g     -screenshotText "g" -startInFocus YES
-    shoot focus-long  -screenshotText "$LONG" -startInFocus YES
-  fi
   # Open: `hinge` (installed by the workflow) sends the simulator the same
   # hinge event as Device Hub's Open button; simctl has no fold command.
   if command -v hinge >/dev/null && [ "$INNER" != "$OUTER" ]; then
