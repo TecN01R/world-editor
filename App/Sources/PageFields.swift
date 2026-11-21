@@ -18,7 +18,7 @@ struct PageFields: View {
         VStack(alignment: .leading, spacing: 10) {
             typeMenu(Label(type?.name ?? "Add Type", systemImage: "square.text.square"))
             if let type {
-                Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 16, verticalSpacing: 10) {
+                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {   // each row centred on its control
                     ForEach(fields) { field in
                         GridRow {
                             Text(field.name).foregroundStyle(.secondary).gridColumnAlignment(.leading)
