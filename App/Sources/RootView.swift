@@ -139,16 +139,19 @@ struct EditorView: View {
                     }
                     .keyboardShortcut("f", modifiers: [.command, .shift])
                 }
-                // Like Notes: the key action stands alone, everything else in "•••".
-                ToolbarOverflowMenu {
-                    Section("Mentioned In") {
-                        let mentions = library.mentions(of: library.document.id)
-                        ForEach(mentions) { page in
-                            Button(page.heading.isEmpty ? "New Page" : page.heading) { library.selection = page.id }
+                // Shown when there's room; first into "•••" when folded.
+                ToolbarItem(placement: .primaryAction) {
+                    let mentions = library.mentions(of: library.document.id)
+                    Menu("Mentions", systemImage: "at") {
+                        Section("Mentioned In") {
+                            ForEach(mentions) { page in
+                                Button(page.heading.isEmpty ? "New Page" : page.heading) { library.selection = page.id }
+                            }
+                            if mentions.isEmpty { Text("No pages link here yet") }
                         }
-                        if mentions.isEmpty { Text("No pages link here yet") }
                     }
                 }
+                .visibilityPriority(.low)
             }
         }
     }
