@@ -6,7 +6,7 @@ import PackageDescription
 
 let package = Package(
     name: "WorldEditor",
-    platforms: [.iOS(.v26)],
+    platforms: [.iOS("27.1")],   // the Duo ships on iOS 27.1
     products: [
         .library(name: "WorldEditor", targets: ["WorldEditor"]),
     ],

@@ -4,7 +4,7 @@ name: WorldEditor
 options:
   bundleIdPrefix: com.tecn01r
   deploymentTarget:
-    iOS: "26.0"
+    iOS: "27.1"
   createIntermediateGroups: true
 settings:
   base:
