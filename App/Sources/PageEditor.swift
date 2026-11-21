@@ -17,7 +17,7 @@ struct PageEditor: UIViewRepresentable {
         tv.alwaysBounceVertical = true
         tv.keyboardDismissMode = .interactive
         tv.allowsEditingTextAttributes = true      // ⌘B, ⌘I and the Format menu
-        tv.inputAccessoryView = context.coordinator.formatBar
+        tv.formatBar = context.coordinator.formatBar
         tv.titleField = context.coordinator.titleField
         context.coordinator.textView = tv
         context.coordinator.render(selection: nil)
@@ -202,9 +202,10 @@ struct PageEditor: UIViewRepresentable {
     }
 }
 
-/// Bold, italic, bulleted and numbered list above the keyboard: the stock
-/// system toolbar, laid out by iOS, with a small gap above the keyboard as in
-/// Notes. Buttons show the state of the selection. (When more tools arrive,
+/// Bold, italic, bulleted and numbered list. On the narrow (folded) keyboard
+/// they sit above it in the stock system toolbar, with a small gap as in
+/// Notes; on the wide (unfolded) keyboard they go in its own shortcut row, as
+/// iPad apps do (see `PageTextView.placeFormatting`). Buttons show the state of the selection. (When more tools arrive,
 /// this may become a scrolling bar like Notes'.)
 final class FormatBar: UIView {
     enum Action { case style(InlineStyle), list(ParagraphKind) }
@@ -212,26 +213,11 @@ final class FormatBar: UIView {
     private static let gap: CGFloat = 8
     private static let height: CGFloat = 44 + gap
     private let toolbar = UIToolbar()
-    private var buttons: [UIBarButtonItem] = []
-    private lazy var leading = toolbar.leadingAnchor.constraint(equalTo: leadingAnchor)
-    private lazy var trailing = toolbar.trailingAnchor.constraint(equalTo: trailingAnchor)
+    private(set) var buttons: [UIBarButtonItem] = []
 
-    /// The writing column, in screen coordinates. The keyboard (and so this
-    /// bar) spans the whole display; the buttons centre over the page they
-    /// act on rather than over the pages list beside it.
-    var column: (minX: CGFloat, maxX: CGFloat)? {
-        didSet { setNeedsLayout() }
-    }
-
-    override func layoutSubviews() {
-        if let column, let screen = window?.screen {
-            let local = convert(CGRect(x: column.minX, y: 0, width: column.maxX - column.minX, height: 1),
-                                from: screen.coordinateSpace)
-            leading.constant = max(0, local.minX)
-            trailing.constant = min(0, local.maxX - bounds.width)
-        }
-        super.layoutSubviews()
-    }
+    /// The buttons live either in this bar or in the keyboard's own shortcut
+    /// row (wide keyboards); an item can only be in one place at a time.
+    func holdsButtons(_ holds: Bool) { toolbar.items = holds ? buttons : [] }
 
     init(onAction: @escaping (Action) -> Void) {
         super.init(frame: CGRect(x: 0, y: 0, width: 320, height: Self.height))
@@ -249,7 +235,8 @@ final class FormatBar: UIView {
         toolbar.translatesAutoresizingMaskIntoConstraints = false
         addSubview(toolbar)
         NSLayoutConstraint.activate([
-            leading, trailing,
+            toolbar.leadingAnchor.constraint(equalTo: leadingAnchor),
+            toolbar.trailingAnchor.constraint(equalTo: trailingAnchor),
             toolbar.topAnchor.constraint(equalTo: topAnchor),
             toolbar.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -Self.gap),
         ])
@@ -269,6 +256,22 @@ final class PageTextView: PlainPasteTextView {
     override init(frame: CGRect, textContainer: NSTextContainer?) {
         super.init(frame: frame, textContainer: textContainer)
         keyboardLayoutGuide.followsUndockedKeyboard = true
+        registerForTraitChanges([UITraitHorizontalSizeClass.self]) { (view: PageTextView, _) in view.placeFormatting() }
+    }
+
+    var formatBar: FormatBar? { didSet { placeFormatting() } }
+
+    /// Unfolded, the keyboard is wide and has a shortcut row: the formatting
+    /// buttons go there (after the system's own, like undo). Folded, they sit
+    /// in the bar above the keyboard.
+    func placeFormatting() {
+        guard let bar = formatBar else { return }
+        let wide = traitCollection.horizontalSizeClass == .regular
+        bar.holdsButtons(!wide)
+        inputAccessoryView = wide ? nil : bar
+        inputAssistantItem.trailingBarButtonGroups =
+            wide ? [UIBarButtonItemGroup(barButtonItems: bar.buttons, representativeItem: nil)] : []
+        if isFirstResponder { reloadInputViews() }
     }
     required init?(coder: NSCoder) { fatalError() }
 
@@ -284,10 +287,7 @@ final class PageTextView: PlainPasteTextView {
         let side = max(22, (width - column) / 2)
         let titleHeight = ceil(title.font?.lineHeight ?? 34) + 8
         title.frame = CGRect(x: side, y: 8, width: max(0, width - 2 * side), height: titleHeight)
-        if let bar = inputAccessoryView as? FormatBar, let screen = window?.screen {
-            let column = convert(CGRect(x: side, y: 0, width: max(0, width - 2 * side), height: 1), to: screen.coordinateSpace)
-            if bar.column?.minX != column.minX || bar.column?.maxX != column.maxX { bar.column = (column.minX, column.maxX) }
-        }
+
         let inset = UIEdgeInsets(top: title.frame.maxY + 14, left: side, bottom: 40, right: side)
         if textContainerInset != inset { textContainerInset = inset }
 
