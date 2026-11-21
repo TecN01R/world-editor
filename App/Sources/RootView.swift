@@ -100,8 +100,6 @@ struct EditorView: View {
     @Binding var focusMode: Bool
     @Binding var focusControls: Bool
     let chromeHidden: Bool
-    @State private var format = FormatState()
-    @Environment(\.horizontalSizeClass) private var width
 
     var body: some View {
         ZStack {
@@ -110,7 +108,7 @@ struct EditorView: View {
                     .ignoresSafeArea()   // the whole display; bars appear over it
                     .transition(.opacity)
             } else {
-                PageEditor(format: format)
+                PageEditor()
                     .ignoresSafeArea(.keyboard)   // text scrolls behind the glass format bar, as in Notes
                     .transition(.opacity)
             }
@@ -133,16 +131,6 @@ struct EditorView: View {
                     .keyboardShortcut(.cancelAction)
                 }
             } else {
-                if width == .regular {
-                    // Unfolded: formatting lives in the Duo's side column.
-                    ToolbarItemGroup(placement: .primaryAction) {
-                        formatToggle("Bold", "bold", format.bold, .style(.bold))
-                        formatToggle("Italic", "italic", format.italic, .style(.italic))
-                        formatToggle("Bulleted List", "list.bullet", format.kind == .bullet, .list(.bullet))
-                        formatToggle("Numbered List", "list.number", format.kind == .numbered, .list(.numbered))
-                    }
-                    ToolbarSpacer(.fixed, placement: .primaryAction)
-                }
                 ToolbarItem(placement: .primaryAction) {
                     Button("Focus", systemImage: "text.viewfinder") {
                         withAnimation(.smooth(duration: 0.3)) { focusMode = true }
@@ -151,12 +139,5 @@ struct EditorView: View {
                 }
             }
         }
-    }
-
-    private func formatToggle(_ title: String, _ symbol: String, _ on: Bool, _ action: FormatBar.Action) -> some View {
-        Toggle(isOn: Binding(get: { on }, set: { _ in format.perform(action) })) {
-            Label(title, systemImage: symbol)
-        }
-        .toggleStyle(.button)
     }
 }
