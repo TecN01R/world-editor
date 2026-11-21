@@ -165,6 +165,8 @@ enum Screenshots {
     static var isRich: Bool { defaults.bool(forKey: "screenshotRich") }
     static var showsMentions: Bool { defaults.bool(forKey: "screenshotMentions") }
     static var searchQuery: String? { defaults.string(forKey: "screenshotSearch") }
+    /// CI diagnostic: search with Spotlight alone, no word-matching fallback.
+    static var spotlightOnly: Bool { defaults.bool(forKey: "screenshotSpotlightOnly") }
 
     static func pages() -> [WriterCore.Document] {
         let day: TimeInterval = 86_400
