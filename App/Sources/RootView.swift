@@ -132,13 +132,13 @@ struct EditorView: View {
                     .keyboardShortcut(.cancelAction)
                 }
             } else {
-                ToolbarItem(placement: .primaryAction) {
+                // Pinned: stays put as the bar narrows (the folded side column).
+                ToolbarItem(placement: .topBarPinnedTrailing) {
                     Button("Focus", systemImage: "text.viewfinder") {
                         withAnimation(.smooth(duration: 0.3)) { focusMode = true }
                     }
                     .keyboardShortcut("f", modifiers: [.command, .shift])
                 }
-                .visibilityPriority(.high)   // Focus is the keystone: last to overflow
                 // Like Notes: the key action stands alone, everything else in "•••".
                 ToolbarOverflowMenu {
                     Section("Mentioned In") {
