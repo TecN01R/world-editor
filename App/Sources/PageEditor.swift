@@ -5,21 +5,10 @@ import WriterCore
 /// Edit mode: the whole page, with real paragraph spacing, lists and a
 /// formatting bar above the keyboard. Typing is native UITextView (undo,
 /// autocorrect, dictation, selection all behave as iOS users expect).
-/// The selection's formatting and a way to change it, shared with the
-/// page's toolbar: unfolded, the format buttons are toolbar items in the
-/// Duo's side column instead of a bar above the keyboard.
-@MainActor @Observable
-final class FormatState {
-    var bold = false, italic = false, kind = ParagraphKind.body
-    @ObservationIgnored var perform: (FormatBar.Action) -> Void = { _ in }
-}
-
 struct PageEditor: UIViewRepresentable {
     @Environment(Library.self) private var library
-    @Environment(\.horizontalSizeClass) private var width
-    let format: FormatState
 
-    func makeCoordinator() -> Coordinator { Coordinator(library: library, format: format) }
+    func makeCoordinator() -> Coordinator { Coordinator(library: library) }
 
     func makeUIView(context: Context) -> PageTextView {
         let tv = PageTextView(usingTextLayoutManager: true)
@@ -28,6 +17,7 @@ struct PageEditor: UIViewRepresentable {
         tv.alwaysBounceVertical = true
         tv.keyboardDismissMode = .interactive
         tv.allowsEditingTextAttributes = true      // ⌘B, ⌘I and the Format menu
+        tv.inputAccessoryView = context.coordinator.formatBar
         tv.titleField = context.coordinator.titleField
         context.coordinator.textView = tv
         context.coordinator.render(selection: nil)
@@ -35,14 +25,7 @@ struct PageEditor: UIViewRepresentable {
         return tv
     }
 
-    /// Folded, the format buttons are a bar above the keyboard; unfolded they
-    /// live in the side column (see `EditorView`).
-    func updateUIView(_ tv: PageTextView, context: Context) {
-        let bar: UIView? = width == .regular ? nil : context.coordinator.formatBar
-        guard tv.inputAccessoryView !== bar else { return }
-        tv.inputAccessoryView = bar
-        if tv.isFirstResponder { tv.reloadInputViews() }
-    }
+    func updateUIView(_ tv: PageTextView, context: Context) {}
 
     /// Bold New York, scaled with Dynamic Type.
     static var titleFont: UIFont { newYork(30, weight: .bold, scaledAs: .title1) }
@@ -67,7 +50,6 @@ struct PageEditor: UIViewRepresentable {
     @MainActor
     final class Coordinator: NSObject, UITextViewDelegate, UITextFieldDelegate {
         let library: Library
-        let format: FormatState
         weak var textView: UITextView?
         /// Replacing the text moves the selection; that isn't the user moving the caret.
         private var isRendering = false
@@ -96,11 +78,9 @@ struct PageEditor: UIViewRepresentable {
             return false
         }
 
-        init(library: Library, format: FormatState) {
+        init(library: Library) {
             self.library = library
-            self.format = format
             super.init()
-            format.perform = { [weak self] action in self?.perform(action) }
             // Text size changed in Settings: show the page at the new size.
             NotificationCenter.default.addObserver(forName: UIContentSizeCategory.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
@@ -202,7 +182,6 @@ struct PageEditor: UIViewRepresentable {
             }
             let kind = doc.paragraphs[doc.locate(range.lowerBound).index].kind
             formatBar.update(bold: active(.bold), italic: active(.italic), kind: kind)
-            format.bold = active(.bold); format.italic = active(.italic); format.kind = kind
         }
 
         func restoreCaret() {
