@@ -132,7 +132,9 @@ struct EditorView: View {
                     .keyboardShortcut(.cancelAction)
                 }
             } else {
-                ToolbarItem(placement: .primaryAction) {
+                // Secondary: it gives way to the "•••" menu before Focus, the
+                // keystone, ever does.
+                ToolbarItem(placement: .secondaryAction) {
                     let mentions = library.mentions(of: library.document.id)
                     Menu("Mentions", systemImage: "at") {
                         Section("Mentioned In") {
