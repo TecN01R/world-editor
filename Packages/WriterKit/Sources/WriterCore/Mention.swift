@@ -20,7 +20,7 @@ public enum Mention {
 
     /// Whether `title` contains `query`, ignoring case and accents. Everything matches a bare `@`.
     public static func matches(_ query: String, _ title: String) -> Bool {
-        query.isEmpty || title.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+        query.isEmpty || Search.range(of: query, in: title) != nil
     }
 
     private static func isSpace(_ unit: UInt16) -> Bool {

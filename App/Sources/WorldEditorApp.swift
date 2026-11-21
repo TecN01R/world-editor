@@ -129,6 +129,7 @@ final class Library {
 /// - `-screenshotRich YES`: one page showing bold, italic and both kinds of list
 /// - `-screenshotMentions YES`: with `-screenshotRich`, Mara's page with its Mentions sheet open
 /// - `-screenshotPages YES`: showing the pages list
+/// - `-screenshotSearch light`: with `-screenshotPages`, searching the list
 /// Each seeds two more pages, so `@` has something to find.
 /// - `-startInFocus YES`: open the page in Focus mode (read by `RootView`)
 /// - `-focusControls YES`: with Focus mode's controls showing (read by `RootView`)
@@ -138,6 +139,7 @@ enum Screenshots {
     static var opensList: Bool { defaults.bool(forKey: "screenshotPages") }
     static var isRich: Bool { defaults.bool(forKey: "screenshotRich") }
     static var showsMentions: Bool { defaults.bool(forKey: "screenshotMentions") }
+    static var searchQuery: String? { defaults.string(forKey: "screenshotSearch") }
 
     static func pages() -> [WriterCore.Document] {
         let day: TimeInterval = 86_400

@@ -44,4 +44,18 @@ final class DocumentTests: XCTestCase {
         try store.save(d)
         XCTAssertEqual(try store.all(), [d])
     }
+
+    func testSearchFindsTitlesAndTextIgnoringCaseAndAccents() {
+        let page = Document(title: "Mara", paragraphs: [
+            Paragraph(text: "Keeps the lighthouse."),
+            Paragraph(text: "Once sailed the long route past the Café de la Côte at dawn."),
+        ])
+        XCTAssertTrue(page.matches("mara"))
+        XCTAssertTrue(page.matches("cote"))
+        XCTAssertFalse(page.matches("harbour"))
+        XCTAssertFalse(page.matches(""))
+        XCTAssertEqual(page.snippet(matching: "LIGHT"), "Keeps the lighthouse.")              // near the start: whole line
+        XCTAssertEqual(page.snippet(matching: "cote"), "…ute past the Café de la Côte at dawn.") // later: lead-in trimmed
+        XCTAssertNil(page.snippet(matching: "mara"))                                          // title only
+    }
 }
