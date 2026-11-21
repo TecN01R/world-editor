@@ -46,10 +46,10 @@ fi
 swift --version
 
 say "xtool"
-if ! command -v xtool >/dev/null 2>&1; then
-  curl -fL --retry 5 "https://github.com/xtool-org/xtool/releases/latest/download/xtool-$(uname -m).AppImage" -o "$BIN/xtool"
-  chmod +x "$BIN/xtool"
-fi
+# Our build of xtool, with the fix for Apple ID sign-in codes never arriving
+# (ci/xtool-2fa.patch); replaces any other xtool. Refetched each run.
+curl -fL --retry 5 "https://github.com/TecN01R/world-editor/releases/download/xtool-patched/xtool-$(uname -m).AppImage" -o "$BIN/xtool.new"
+chmod +x "$BIN/xtool.new" && mv -f "$BIN/xtool.new" "$BIN/xtool"
 xtool --help >/dev/null && echo "xtool installed"
 
 say "Apple ID and Xcode SDK"

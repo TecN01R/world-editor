@@ -1,0 +1,59 @@
+diff --git a/Sources/XKit/GrandSlam/Operations/GrandSlamAuthenticateOperation.swift b/Sources/XKit/GrandSlam/Operations/GrandSlamAuthenticateOperation.swift
+index 41405e5..7c8f9d8 100644
+--- a/Sources/XKit/GrandSlam/Operations/GrandSlamAuthenticateOperation.swift
++++ b/Sources/XKit/GrandSlam/Operations/GrandSlamAuthenticateOperation.swift
+@@ -109,7 +109,10 @@ struct GrandSlamAuthenticateOperation {
+         if response.statusCode == 409 {
+             // 2FA
+             guard !isRetry else { throw Error.failedSecondaryAuth }
+-            let authMode = response.url.flatMap { GrandSlamAuthMode(rawValue: $0) }
++            // Apple names the mode in the login status ("au"); older replies
++            // carried it in the decrypted response's "url".
++            let authMode = (completeResponse.status?.authMode ?? response.url)
++                .flatMap { GrandSlamAuthMode(rawValue: $0) }
+             return try await authenticateTwoFactor(
+                 mode: authMode,
+                 loginData: loginData
+diff --git a/Sources/XKit/GrandSlam/Operations/GrandSlamTwoFactorAuthenticateOperation.swift b/Sources/XKit/GrandSlam/Operations/GrandSlamTwoFactorAuthenticateOperation.swift
+index 5a41e02..687e578 100644
+--- a/Sources/XKit/GrandSlam/Operations/GrandSlamTwoFactorAuthenticateOperation.swift
++++ b/Sources/XKit/GrandSlam/Operations/GrandSlamTwoFactorAuthenticateOperation.swift
+@@ -77,8 +77,11 @@ struct GrandSlamTwoFactorAuthenticateOperation {
+             try await self.performSMSAuth()
+         case .trustedDeviceSecondaryAuth:
+             try await self.performTrustedDeviceAuth()
+-        case nil: // means 2FA was automatically requested
+-            try await validateCode()
++        case nil:
++            // Apple may already have sent a code, but when it hasn't, nothing
++            // arrives and the prompt waits forever. Asking for one is harmless:
++            // at worst a second code arrives; enter the newest.
++            try await self.performTrustedDeviceAuth()
+         }
+     }
+ 
+diff --git a/Sources/XKit/GrandSlam/Requests/Concrete/GrandSlamAuthCompleteRequest.swift b/Sources/XKit/GrandSlam/Requests/Concrete/GrandSlamAuthCompleteRequest.swift
+index 1dcd2b1..8067262 100644
+--- a/Sources/XKit/GrandSlam/Requests/Concrete/GrandSlamAuthCompleteRequest.swift
++++ b/Sources/XKit/GrandSlam/Requests/Concrete/GrandSlamAuthCompleteRequest.swift
+@@ -16,12 +16,20 @@ struct GrandSlamAuthCompleteRequest: GrandSlamOperationRequest {
+         let encryptedResponse: Data
+         let negProto: Data
+         let sc: Data?
++        /// Which second factor Apple wants ("au"), as iloader reads it.
++        let status: Status?
++
++        struct Status: Decodable {
++            let authMode: String?
++            private enum CodingKeys: String, CodingKey { case authMode = "au" }
++        }
+ 
+         private enum CodingKeys: String, CodingKey {
+             case hamk = "M2"
+             case encryptedResponse = "spd"
+             case negProto = "np"
+             case sc
++            case status = "Status"
+         }
+     }
+ 
