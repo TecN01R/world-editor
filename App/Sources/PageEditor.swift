@@ -17,7 +17,7 @@ struct PageEditor: UIViewRepresentable {
         tv.alwaysBounceVertical = true
         tv.keyboardDismissMode = .interactive
         tv.allowsEditingTextAttributes = true      // ⌘B, ⌘I and the Format menu
-        tv.formatBar = context.coordinator.formatBar
+        tv.inputAccessoryView = context.coordinator.formatBar
         tv.titleField = context.coordinator.titleField
         context.coordinator.textView = tv
         context.coordinator.render(selection: nil)
@@ -202,10 +202,10 @@ struct PageEditor: UIViewRepresentable {
     }
 }
 
-/// Bold, italic, bulleted and numbered list. On the narrow (folded) keyboard
-/// they sit above it in the stock system toolbar, with a small gap as in
-/// Notes; on the wide (unfolded) keyboard they go in its own shortcut row, as
-/// iPad apps do (see `PageTextView.placeFormatting`). Buttons show the state of the selection. (When more tools arrive,
+/// Bold, italic, bulleted and numbered list above the keyboard: the stock
+/// system toolbar, laid out by iOS across the keyboard's width, with a small
+/// gap above it as in Notes. (The keyboard's own shortcut row was tried for
+/// the wide unfolded keyboard; on the Duo it folds app buttons into "•••".) Buttons show the state of the selection. (When more tools arrive,
 /// this may become a scrolling bar like Notes'.)
 final class FormatBar: UIView {
     enum Action { case style(InlineStyle), list(ParagraphKind) }
@@ -213,11 +213,7 @@ final class FormatBar: UIView {
     private static let gap: CGFloat = 8
     private static let height: CGFloat = 44 + gap
     private let toolbar = UIToolbar()
-    private(set) var buttons: [UIBarButtonItem] = []
-
-    /// The buttons live either in this bar or in the keyboard's own shortcut
-    /// row (wide keyboards); an item can only be in one place at a time.
-    func holdsButtons(_ holds: Bool) { toolbar.items = holds ? buttons : [] }
+    private var buttons: [UIBarButtonItem] = []
 
     init(onAction: @escaping (Action) -> Void) {
         super.init(frame: CGRect(x: 0, y: 0, width: 320, height: Self.height))
@@ -256,22 +252,6 @@ final class PageTextView: PlainPasteTextView {
     override init(frame: CGRect, textContainer: NSTextContainer?) {
         super.init(frame: frame, textContainer: textContainer)
         keyboardLayoutGuide.followsUndockedKeyboard = true
-        registerForTraitChanges([UITraitHorizontalSizeClass.self]) { (view: PageTextView, _) in view.placeFormatting() }
-    }
-
-    var formatBar: FormatBar? { didSet { placeFormatting() } }
-
-    /// Unfolded, the keyboard is wide and has a shortcut row: the formatting
-    /// buttons go there (after the system's own, like undo). Folded, they sit
-    /// in the bar above the keyboard.
-    func placeFormatting() {
-        guard let bar = formatBar else { return }
-        let wide = traitCollection.horizontalSizeClass == .regular
-        bar.holdsButtons(!wide)
-        inputAccessoryView = wide ? nil : bar
-        inputAssistantItem.trailingBarButtonGroups =
-            wide ? [UIBarButtonItemGroup(barButtonItems: bar.buttons, representativeItem: nil)] : []
-        if isFirstResponder { reloadInputViews() }
     }
     required init?(coder: NSCoder) { fatalError() }
 
