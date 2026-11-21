@@ -4,8 +4,9 @@ import WriterCore
 /// The open page's type and its fields, under the title in Edit mode. The
 /// type is a small line under the title, as Contacts puts a company under a
 /// name ("Add Type" on a plain page). Fields float on the page, without a
-/// card: a quiet name, then its value; the values you tap (choices, dates,
-/// page links) sit in Liquid Glass capsules like the app's other controls.
+/// card: a quiet name, then its value. Stock controls throughout: choices,
+/// dates and page links in Apple's glass button style, text and numbers as
+/// plain text fields (iOS has no glass text field), as in Contacts.
 struct PageFields: View {
     @Environment(Library.self) private var library
     /// Its height, so the writing below starts after it.
@@ -80,14 +81,12 @@ private struct FieldValueView: View {
     var body: some View {
         switch field.kind {
         case .text:
-            TextField(field.name, text: text, prompt: Text("Add")).glassField()
+            TextField(field.name, text: text, prompt: Text("Add"))
         case .longText:
-            TextField(field.name, text: text, prompt: Text("Add"), axis: .vertical).glassField(in: .rect(cornerRadius: 16))
+            TextField(field.name, text: text, prompt: Text("Add"), axis: .vertical)
         case .number:
             TextField(field.name, value: number, format: .number, prompt: Text("Add"))
                 .keyboardType(.decimalPad)
-                .fixedSize()
-                .glassField()
         case .date:
             if case .date(let date)? = value {
                 DatePicker(field.name, selection: Binding { date } set: { value = .date($0) }, displayedComponents: .date)
@@ -261,15 +260,5 @@ extension FieldDefinition.Kind {
         case .toggle: "Yes or No"
         case .page: "Page"
         }
-    }
-}
-
-extension View {
-    /// A text or number value in glass, like the glass buttons beside it, so
-    /// every value you can change looks changeable. (iOS has a glass button
-    /// style but no glass text field style; the padding matches the buttons.)
-    func glassField(in shape: some Shape = .capsule) -> some View {
-        padding(.horizontal, 12).padding(.vertical, 7)
-            .glassEffect(.regular.interactive(), in: shape)
     }
 }
