@@ -19,10 +19,13 @@ The script:
    (the phone connection, plus what AppImages need)
 2. installs the Swift toolchain with `swiftly`, if you don't have one
 3. installs the xtool AppImage to `~/.local/bin`
-4. runs `xtool setup`, which signs you in with your Apple ID and imports
-   Apple's iOS SDK from an Xcode `.xip`. Download **Xcode 27.1**'s `.xip`
-   first from <https://developer.apple.com/download/all/> with the same
-   Apple ID; 27.2 lacks the iPhone Duo SDK.
+4. imports Apple's iOS SDK from **Xcode 27.1**'s `.xip` (27.2 lacks the
+   iPhone Duo SDK), found automatically anywhere up to three folders deep in
+   your home folder. Download it first from
+   <https://developer.apple.com/download/all/>.
+   Then `xtool setup` signs you in. Use an Apple ID **without Advanced Data
+   Protection**: Apple refuses ADP accounts on the older Mac that xtool
+   emulates, so no 2FA code ever arrives. A free second Apple ID works.
 5. pairs the iPhone over USB (tap **Trust** on the phone)
 
 On the iPhone, the first install also needs **Settings → Privacy & Security →

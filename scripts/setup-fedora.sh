@@ -52,16 +52,26 @@ curl -fL --retry 5 "https://github.com/TecN01R/world-editor/releases/download/xt
 chmod +x "$BIN/xtool.new" && mv -f "$BIN/xtool.new" "$BIN/xtool"
 xtool --help >/dev/null && echo "xtool installed"
 
-say "Apple ID and Xcode SDK"
-cat <<'EOF'
-xtool needs Apple's iOS SDK, which only ships inside Xcode.
-  1. On any device, sign in at https://developer.apple.com/download/all/
-     with your Apple ID and download Xcode 27.1's .xip (about 3 GB).
-     Not 27.2: only 27.1 has the iPhone Duo SDK.
-  2. Put it on this machine (e.g. ~/Downloads).
-xtool will now ask you to sign in with your Apple ID and for the .xip path.
-EOF
-# Prints what Apple answers during the 2FA step ([gsa] lines), to debug sign-in.
+say "Xcode SDK"
+# Apple's iOS SDK only ships inside Xcode's .xip. The script finds it under
+# your home folder; only if there's none does it ask (with Tab completion).
+if xtool sdk status | grep -q "is installed"; then
+  echo "Already installed."
+else
+  xip=$(find "$HOME" -maxdepth 3 -iname 'Xcode*27.1*.xip' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)
+  if [ -z "$xip" ]; then
+    echo "Download Xcode 27.1's .xip (about 3 GB) from https://developer.apple.com/download/all/"
+    echo "(sign in with your Apple ID). Not 27.2: only 27.1 has the iPhone Duo SDK."
+    read -e -r -p "Path to the .xip (Tab completes): " xip
+    xip="${xip/#\~/$HOME}"
+  fi
+  echo "Using $xip"
+  xtool sdk install "$xip"
+fi
+
+say "Apple ID"
+echo "Sign in with the Apple ID that signs the app (one without Advanced Data Protection)."
+# XTOOL_DEBUG_GSA prints Apple's answers during the 2FA step ([gsa] lines).
 XTOOL_DEBUG_GSA=1 xtool setup
 
 say "Pair your iPhone"
