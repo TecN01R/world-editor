@@ -354,6 +354,7 @@ final class FormatBar: UIView {
         let b = UIButton(configuration: config, primaryAction: UIAction { _ in action() })
         b.accessibilityLabel = label
         b.widthAnchor.constraint(greaterThanOrEqualToConstant: 56).isActive = true   // even slots, as in Notes
+        b.setContentCompressionResistancePriority(.required, for: .horizontal)   // scroll, never squeeze
         b.configurationUpdateHandler = { b in
             b.configuration?.background.backgroundColor = b.isSelected ? .tertiarySystemFill : .clear
         }
