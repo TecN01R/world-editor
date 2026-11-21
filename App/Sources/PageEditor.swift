@@ -327,6 +327,7 @@ final class FormatBar: UIView {
         config.title = title
         config.baseForegroundColor = .label
         config.cornerStyle = .capsule
+        config.titleLineBreakMode = .byTruncatingTail   // one line; the bar scrolls instead
         config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14)
         let b = UIButton(configuration: config, primaryAction: UIAction { _ in action() })
         b.accessibilityLabel = label

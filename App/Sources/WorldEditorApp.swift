@@ -76,11 +76,6 @@ final class Library {
         return page.id
     }
 
-    /// Pages with an `@` link to `id`, most recent first.
-    func mentions(of id: UUID) -> [WriterCore.Document] {
-        pages.filter { $0.id != id && $0.mentions(id) }
-    }
-
     func delete(_ id: UUID) {
         pendingSaves.removeValue(forKey: id)?.cancel()
         if selection == id { selection = nil }
