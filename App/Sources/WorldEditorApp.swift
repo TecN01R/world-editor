@@ -60,6 +60,7 @@ final class Library {
         let dir = URL.applicationSupportDirectory.appendingPathComponent("Documents", isDirectory: true)
         store = try? DocumentStore(directory: dir)
         pages = (try? store?.all()) ?? []
+        PageIndex.start(with: pages)
         if pages.isEmpty { newPage() } else { selection = pages.first?.id }
     }
 
@@ -87,6 +88,7 @@ final class Library {
         if selection == id { selection = nil }
         pages.removeAll { $0.id == id }
         try? store?.delete(id)
+        if store != nil { PageIndex.remove(id) }
     }
 
     /// Applies a user edit to the open page.
@@ -115,8 +117,9 @@ final class Library {
         pendingSaves[page.id]?.cancel()
         pendingSaves[page.id] = Task { [store] in
             try? await Task.sleep(for: .milliseconds(400))
-            guard !Task.isCancelled else { return }
-            try? store?.save(page)
+            guard !Task.isCancelled, let store else { return }
+            try? store.save(page)
+            PageIndex.update(page)
         }
     }
 
@@ -124,7 +127,10 @@ final class Library {
     func flush(_ id: UUID) {
         guard let task = pendingSaves.removeValue(forKey: id) else { return }
         task.cancel()
-        if let page = pages.first(where: { $0.id == id }), !page.isEmpty { try? store?.save(page) }
+        if let store, let page = pages.first(where: { $0.id == id }), !page.isEmpty {
+            try? store.save(page)
+            PageIndex.update(page)
+        }
     }
 
     func flushAll() { for id in Array(pendingSaves.keys) { flush(id) } }
