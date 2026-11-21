@@ -298,6 +298,7 @@ struct PageEditor: UIViewRepresentable {
             updateTypingAttributes()
             // A new page starts in its title; otherwise carry on writing.
             let startInTitle = doc.isEmpty && !Screenshots.isActive
+            guard !Screenshots.opensMara || Screenshots.showsMentions else { return }   // CI: the page at rest
             DispatchQueue.main.async { [titleField] in
                 if startInTitle { titleField.becomeFirstResponder(); return }
                 tv.becomeFirstResponder()
