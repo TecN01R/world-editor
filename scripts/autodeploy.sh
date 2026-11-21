@@ -8,13 +8,15 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 REPO=TecN01R/world-editor
-INTERVAL=${INTERVAL:-60}
+INTERVAL=${INTERVAL:-90}   # GitHub allows 60 unauthenticated API calls an hour
+AUTH=()
+[ -n "${GITHUB_TOKEN:-}" ] && AUTH=(-H "Authorization: Bearer $GITHUB_TOKEN")
 
 log() { printf '%s  %s\n' "$(date '+%H:%M:%S')" "$*"; }
 
 # "success", "failure" or "pending" for a commit's CI (public API, no login).
 ci_state() {
-  curl -fsS "https://api.github.com/repos/$REPO/commits/$1/check-runs" 2>/dev/null | python3 -c '
+  curl -fsS "${AUTH[@]}" "https://api.github.com/repos/$REPO/commits/$1/check-runs" 2>/dev/null | python3 -c '
 import json, sys
 runs = json.load(sys.stdin).get("check_runs", [])
 if not runs or any(r["status"] != "completed" for r in runs): print("pending")
@@ -30,8 +32,9 @@ while true; do
       case "$(ci_state "$head")" in
         success)
           log "Installing ${head:0:7}: $(git log -1 --format=%s "$head")"
-          git merge --ff-only --quiet origin/main
-          if timeout 900 xtool dev; then deployed="$head"; log "Installed."
+          if ! git merge --ff-only --quiet origin/main; then
+            log "Can't fast-forward (local changes or commits here?); not installing."
+          elif timeout 900 xtool dev; then deployed="$head"; log "Installed."
           else log "Install failed (is the phone awake and on the same Wi-Fi?); retrying next round."; fi ;;
         failure) log "Skipping ${head:0:7}: CI failed."; deployed="$head" ;;
         pending) ;;   # wait for CI

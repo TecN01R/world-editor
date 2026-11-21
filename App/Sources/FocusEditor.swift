@@ -26,7 +26,7 @@ struct FocusEditor: UIViewControllerRepresentable {
 }
 
 /// Text view that reports Backspace at the very start (to merge paragraphs).
-final class FocusTextView: UITextView {
+final class FocusTextView: PlainPasteTextView {
     var onBackspaceAtStart: (() -> Void)?
     override func deleteBackward() {
         if selectedRange == NSRange(location: 0, length: 0) { onBackspaceAtStart?(); return }
@@ -104,6 +104,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         for dir in [UISwipeGestureRecognizer.Direction.up, .down] {
             let s = UISwipeGestureRecognizer(target: self, action: #selector(swiped(_:)))
             s.direction = dir
+            s.delegate = self   // not on the writing: drags there move the caret
             view.addGestureRecognizer(s)
         }
 
@@ -322,8 +323,14 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
             // an empty attributed string would reset it.
             textView.font = Self.font(CGFloat(size))
         } else {
-            textView.attributedText = RichText.attributed(textView.text, runs: RichText.runs(in: textView.attributedText),
-                                                          attributes: Self.attributes(CGFloat(size)))
+            // Resize in place: replacing the text would drop undo, autocorrect
+            // and text still being composed (dictation, other keyboards).
+            let storage = textView.textStorage
+            storage.beginEditing()
+            storage.enumerateAttribute(.font, in: NSRange(location: 0, length: storage.length)) { value, range, _ in
+                storage.addAttribute(.font, value: RichText.font(Self.font(CGFloat(size)), RichText.style(of: value as? UIFont)), range: range)
+            }
+            storage.endEditing()
             textView.selectedRange = selection
         }
         updateTypingAttributes()
@@ -405,12 +412,13 @@ final class ParagraphRail: UIView {
         }
     }
 
-    override func accessibilityIncrement() { if current > 0 { onSelect?(current - 1) } }
-    override func accessibilityDecrement() { if current + 1 < count { onSelect?(current + 1) } }
+    override func accessibilityIncrement() { if current + 1 < count { onSelect?(current + 1) } }
+    override func accessibilityDecrement() { if current > 0 { onSelect?(current - 1) } }
 }
 
 extension FocusViewController: UIGestureRecognizerDelegate {
-    /// Taps on the writing place the caret as usual; only taps around it reveal the controls.
+    /// Taps and swipes on the writing edit it as usual; only those around it
+    /// reveal the controls or change pages.
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         let p = touch.location(in: view)
         return !textView.frame.insetBy(dx: -8, dy: -8).contains(p) && !rail.frame.contains(p)

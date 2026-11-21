@@ -56,6 +56,9 @@ stopped or you want it immediately.
   officially document. The phone must be on the same network and awake
   enough to answer; if it can't be reached the install is retried next round.
   To re-pair over USB: `sudo systemctl stop netmuxd`, plug in, `idevicepair
-  pair`, then `sudo systemctl start netmuxd`.
+  pair`, then `sudo systemctl start netmuxd`. Charging from this PC over USB
+  pauses wireless installs until the cable is out.
+- The service checks GitHub every 90 s, within its 60-an-hour limit for
+  anonymous use. Set `GITHUB_TOKEN` in the service to check more often.
 - **Untested here:** these steps were written without access to a Fedora
   machine or a Duo. If a step fails, send the error and the script gets fixed.

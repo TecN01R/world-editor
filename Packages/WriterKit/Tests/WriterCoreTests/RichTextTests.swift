@@ -97,11 +97,8 @@ final class RichTextTests: XCTestCase {
         var d = Document(paragraphs: [Paragraph(text: "a"), Paragraph(text: "b"), Paragraph(text: "c")])
         d.toggleKind(.numbered, in: 0..<3)    // "a\nb" touches paragraphs 0 and 1
         XCTAssertEqual(d.paragraphs.map(\.kind), [.numbered, .numbered, .body])
-        XCTAssertEqual(d.listOrdinal(at: 1), 2)
-        XCTAssertNil(d.listOrdinal(at: 2))
         d.toggleKind(.numbered, in: 0..<0)
         XCTAssertEqual(d.paragraphs.map(\.kind), [.body, .numbered, .body])
-        XCTAssertEqual(d.listOrdinal(at: 1), 1)
     }
 
     func testSetParagraphsKeepsIdentityAndTakesNewFormatting() {

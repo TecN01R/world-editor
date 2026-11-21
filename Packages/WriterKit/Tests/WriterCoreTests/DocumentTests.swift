@@ -17,18 +17,18 @@ final class DocumentTests: XCTestCase {
         XCTAssertNil(d.mergeWithPrevious(0))
     }
 
-    func testSetPlainTextKeepsIdentityOfUnchangedAndEditedParagraphs() {
+    func testSetParagraphsKeepsIdentityOfUnchangedAndEditedParagraphs() {
         var d = Document(paragraphs: [Paragraph(text: "one"), Paragraph(text: "two"), Paragraph(text: "three")])
         let ids = d.paragraphs.map(\.id)
-        d.setPlainText("one\ntwo edited\nthree")
+        d.setParagraphs(["one", "two edited", "three"].map { Paragraph(text: $0) })
         XCTAssertEqual(d.paragraphs.map(\.text), ["one", "two edited", "three"])
         XCTAssertEqual(d.paragraphs.map(\.id), ids)
     }
 
-    func testSetPlainTextNewParagraphGetsNewID() {
+    func testSetParagraphsNewParagraphGetsNewID() {
         var d = Document(paragraphs: [Paragraph(text: "one")])
         let first = d.paragraphs[0].id
-        d.setPlainText("one\nnew")
+        d.setParagraphs(["one", "new"].map { Paragraph(text: $0) })
         XCTAssertEqual(d.paragraphs[0].id, first)
         XCTAssertNotEqual(d.paragraphs[1].id, first)
     }
