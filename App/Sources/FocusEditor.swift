@@ -306,12 +306,16 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
     private func apply(_ newSize: Double) {
         size = newSize
         let selection = textView.selectedRange
-        // An empty text view sizes its caret from `font`, not the typing
-        // attributes; set it first (setting it later would restyle the runs).
-        textView.font = Self.attributes(CGFloat(size))[.font] as? UIFont
-        textView.attributedText = RichText.attributed(textView.text ?? "", runs: RichText.runs(in: textView.attributedText),
-                                                      attributes: Self.attributes(CGFloat(size)))
-        textView.selectedRange = selection
+        let attrs = Self.attributes(CGFloat(size))
+        if textView.text.isEmpty {
+            // An empty text view sizes its caret from `font`; assigning even
+            // an empty attributed string would reset it.
+            textView.font = attrs[.font] as? UIFont
+        } else {
+            textView.attributedText = RichText.attributed(textView.text, runs: RichText.runs(in: textView.attributedText),
+                                                          attributes: attrs)
+            textView.selectedRange = selection
+        }
         updateTypingAttributes()
     }
 
