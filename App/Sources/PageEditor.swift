@@ -228,8 +228,9 @@ struct PageEditor: UIViewRepresentable {
                     self?.link(to: page.id, title: page.heading, replacing: mention.range, in: caret.index)
                 }
             }
-            let pages = library.pages.filter { !$0.heading.isEmpty && Mention.matches(mention.query, $0.heading) }
-            var others = pages.filter { $0.id != doc.id }.map(item)
+            var others = library.pages
+                .filter { $0.id != doc.id && !$0.heading.isEmpty && Mention.matches(mention.query, $0.heading) }
+                .map(item)
             let title = mention.query.trimmingCharacters(in: .whitespaces)
             if !title.isEmpty, !library.pages.contains(where: { $0.heading.localizedCaseInsensitiveCompare(title) == .orderedSame }) {
                 others.append(MentionMenu.Item(title: "Create page “\(title)”", creates: true) { [weak self] in
@@ -237,7 +238,9 @@ struct PageEditor: UIViewRepresentable {
                     link(to: library.addPage(titled: title), title: title, replacing: mention.range, in: caret.index)
                 })
             }
-            let current = pages.first { $0.id == doc.id }.map { [item($0)] } ?? []
+            // This page by its title: an untitled page's heading is its own first line, @query and all.
+            let current = !doc.heading.isEmpty && (mention.query.isEmpty || Search.range(of: mention.query, in: doc.title) != nil)
+                ? [item(doc)] : []
             return [current, others].filter { !$0.isEmpty }
         }
 
@@ -361,6 +364,7 @@ final class FormatBar: UIView {
             stack.heightAnchor.constraint(equalTo: scroll.frameLayoutGuide.heightAnchor),
         ])
         show(buttons)
+        tintAdjustmentMode = .normal   // stays bright while the @ menu is up, as in Notes
         addInteraction(UILargeContentViewerInteraction())   // press and hold at large text sizes
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (bar: FormatBar, _: UITraitCollection) in
             bar.heightConstraint.constant = bar.barHeight

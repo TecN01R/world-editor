@@ -55,6 +55,7 @@ final class MentionMenu: UITableViewController, UIPopoverPresentationControllerD
         content.text = item.title
         content.secondaryText = item.date.map(Self.format)
         content.image = item.creates ? UIImage(systemName: "plus.circle") : nil
+        content.imageProperties.tintColor = .label
         cell.contentConfiguration = content
         cell.backgroundColor = .clear
         cell.accessibilityLabel = item.creates ? item.title : "Link to \(item.title)"
@@ -80,6 +81,6 @@ final class MentionMenu: UITableViewController, UIPopoverPresentationControllerD
     private static func format(_ date: Date) -> String {
         Calendar.current.isDateInToday(date)
             ? date.formatted(date: .omitted, time: .shortened)
-            : date.formatted(date: .numeric, time: .omitted)
+            : date.formatted(.dateTime.month(.defaultDigits).day().year(.twoDigits))   // 9/18/26
     }
 }
