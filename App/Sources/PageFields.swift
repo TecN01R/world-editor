@@ -39,8 +39,8 @@ struct PageFields: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .animation(.spring(duration: 0.35), value: type?.id)
-        .animation(.spring(duration: 0.35), value: fields.map(\.id))
+        .animation(.default, value: type?.id)
+        .animation(.default, value: fields.map(\.id))
         .fixedSize(horizontal: false, vertical: true)   // its own height, whatever the frame
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onHeight($0) }
     }
@@ -77,7 +77,7 @@ struct PageFields: View {
     }
 }
 
-/// A field row's menu (edit, remove) and its entrance.
+/// A field row's menu: edit, or remove from the type.
 private struct FieldRow: ViewModifier {
     @Environment(Library.self) private var library
     let field: FieldDefinition
@@ -91,7 +91,6 @@ private struct FieldRow: ViewModifier {
                     library.remove(field.id, from: type.id)
                 }
             }
-            .transition(.opacity.combined(with: .move(edge: .top)))
     }
 }
 
