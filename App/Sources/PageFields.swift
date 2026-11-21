@@ -80,19 +80,21 @@ private struct FieldValueView: View {
     var body: some View {
         switch field.kind {
         case .text:
-            TextField(field.name, text: text, prompt: Text("Add"))
+            TextField(field.name, text: text, prompt: Text("Add")).glassField()
         case .longText:
-            TextField(field.name, text: text, prompt: Text("Add"), axis: .vertical)
+            TextField(field.name, text: text, prompt: Text("Add"), axis: .vertical).glassField(in: .rect(cornerRadius: 16))
         case .number:
             TextField(field.name, value: number, format: .number, prompt: Text("Add"))
                 .keyboardType(.decimalPad)
+                .fixedSize()
+                .glassField()
         case .date:
             if case .date(let date)? = value {
                 DatePicker(field.name, selection: Binding { date } set: { value = .date($0) }, displayedComponents: .date)
                     .labelsHidden()
                     .sensoryFeedback(.selection, trigger: date)
             } else {
-                Button("Add Date") { value = .date(Date()) }.glassCapsule()
+                Button("Add Date") { value = .date(Date()) }.buttonStyle(.glass)
             }
         case .choice:
             dropdown(text, current: text.wrappedValue.isEmpty ? "Choose" : text.wrappedValue) {
@@ -113,7 +115,7 @@ private struct FieldValueView: View {
                 if let id = page.wrappedValue {
                     Button("Open", systemImage: "arrow.up.right") { library.selection = id }
                         .labelStyle(.iconOnly)
-                        .glassCapsule()
+                        .buttonStyle(.glass)
                 }
             }
         }
@@ -132,7 +134,7 @@ private struct FieldValueView: View {
             }
         }
         .tint(.primary)
-        .glassCapsule()
+        .buttonStyle(.glass)
         .sensoryFeedback(.selection, trigger: selection.wrappedValue)
         .accessibilityLabel(field.name)
         .accessibilityValue(current)
@@ -263,9 +265,11 @@ extension FieldDefinition.Kind {
 }
 
 extension View {
-    /// A tappable value in a small Liquid Glass capsule.
-    func glassCapsule() -> some View {
-        padding(.horizontal, 12).padding(.vertical, 6)
-            .glassEffect(.regular.interactive(), in: .capsule)
+    /// A text or number value in glass, like the glass buttons beside it, so
+    /// every value you can change looks changeable. (iOS has a glass button
+    /// style but no glass text field style; the padding matches the buttons.)
+    func glassField(in shape: some Shape = .capsule) -> some View {
+        padding(.horizontal, 12).padding(.vertical, 7)
+            .glassEffect(.regular.interactive(), in: shape)
     }
 }
