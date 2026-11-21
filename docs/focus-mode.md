@@ -8,7 +8,11 @@ two sizing rules, `FocusEditor` (UIKit) does the rest.
 
 - One paragraph per page. Return splits at the caret onto a new page;
   Backspace at the very start joins with the previous page.
-- The paragraph is set as large as the page allows, to half a point. The page
+- The paragraph is set as large as the page allows, to half a point. What
+  must fit is from the top of the tallest letter to the bottom of the last
+  line box: the caret spans the box and must stay clear of the keyboard, but
+  the empty space above lowercase letters may run into the top margin, so a
+  lone "g" fills the page. The page
   runs from near the top of the screen to just above the keyboard
   (`keyboardLayoutGuide`), so there's nothing to estimate.
 - Natural line spacing: TextKit's line boxes hold every glyph, so nothing is
