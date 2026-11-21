@@ -166,6 +166,7 @@ struct EditorView: View {
     @Environment(Library.self) private var library
     @State private var showMentions = false
     @State private var typeName = ""
+    @State private var pageName = ""
     @Binding var focusMode: Bool
     @Binding var focusControls: Bool
     let chromeHidden: Bool
@@ -174,9 +175,28 @@ struct EditorView: View {
         Binding { library.fieldsRequest == .newType } set: { if !$0 { library.fieldsRequest = nil } }
     }
 
-    /// Adding or editing a field (New Type is an alert, above).
+    /// A page field's "New Place…": the field it fills.
+    private var newPageField: FieldDefinition? {
+        guard case .newPage(let id)? = library.fieldsRequest else { return nil }
+        return library.schema.fields.first { $0.id == id }
+    }
+    private var newPage: Binding<Bool> {
+        Binding { newPageField != nil } set: { if !$0 { library.fieldsRequest = nil } }
+    }
+
+    /// Adding or editing a field (New Type and New Page are alerts).
     private var fieldSheet: Binding<Library.FieldsRequest?> {
-        Binding { library.fieldsRequest == .newType ? nil : library.fieldsRequest } set: { library.fieldsRequest = $0 }
+        Binding {
+            switch library.fieldsRequest {
+            case .addField?, .editField?: library.fieldsRequest
+            default: nil
+            }
+        } set: { library.fieldsRequest = $0 }
+    }
+
+    /// "New Place", or "New Page" for a field that takes any page.
+    private var newPageTitle: String {
+        "New \(library.schema.type(newPageField?.pageType)?.name ?? "Page")"
     }
 
     var body: some View {
@@ -205,7 +225,7 @@ struct EditorView: View {
             switch request {
             case .addField(let type): FieldSheet(type: type)
             case .editField(let id): FieldSheet(editing: library.schema.fields.first { $0.id == id })
-            case .newType: EmptyView()
+            case .newType, .newPage: EmptyView()
             }
         }
         .alert("New Type", isPresented: newType) {
@@ -218,6 +238,20 @@ struct EditorView: View {
             }
         } message: {
             Text("Pages of a type share its fields.")
+        }
+        .alert(newPageTitle, isPresented: newPage, presenting: newPageField) { field in
+            TextField("Title", text: $pageName)
+            Button("Cancel", role: .cancel) { pageName = "" }
+            Button("Create") {
+                let title = pageName.trimmingCharacters(in: .whitespaces)
+                if !title.isEmpty {
+                    let page = library.addPage(titled: title, type: field.pageType)
+                    library.update { $0.values[field.id] = .page(page) }
+                }
+                pageName = ""
+            }
+        } message: { field in
+            Text("It becomes this page’s \(field.name).")
         }
         .task {
             // CI: open Mentions once the page is up and writing, as a tap would.

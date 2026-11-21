@@ -133,6 +133,10 @@ private struct FieldValueView: View {
                 dropdown(page, current: name ?? "Choose") {
                     Text("None").tag(UUID?.none)
                     ForEach(candidates) { Text($0.heading).tag(Optional($0.id)) }
+                } more: {
+                    Button("New \(library.schema.type(field.pageType)?.name ?? "Page")…", systemImage: "plus") {
+                        library.fieldsRequest = .newPage(field: field.id)
+                    }
                 }
                 if let id = page.wrappedValue {
                     Button("Open", systemImage: "arrow.up.right") { library.selection = id }
@@ -145,10 +149,12 @@ private struct FieldValueView: View {
     /// A pull-down like a menu-style Picker (value in the accent colour, per
     /// the HIG), but its value stays on one line (truncated), so a long page
     /// name never wraps the row.
-    private func dropdown<Value: Hashable>(_ selection: Binding<Value>, current: String,
-                                           @ViewBuilder options: () -> some View) -> some View {
+    private func dropdown<Value: Hashable, More: View>(_ selection: Binding<Value>, current: String,
+                                                      @ViewBuilder options: () -> some View,
+                                                      @ViewBuilder more: () -> More = { EmptyView() }) -> some View {
         Menu {
             Picker(field.name, selection: selection, content: options).pickerStyle(.inline)
+            more()
         } label: {
             HStack(spacing: 4) {
                 Text(current).lineLimit(1)

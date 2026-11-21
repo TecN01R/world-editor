@@ -49,7 +49,7 @@ final class Library {
 
     /// A sheet or alert the page's fields asked for, shown by the editor.
     enum FieldsRequest: Identifiable, Hashable {
-        case newType, addField(type: UUID), editField(UUID)
+        case newType, addField(type: UUID), editField(UUID), newPage(field: UUID)
         var id: Self { self }
     }
     var fieldsRequest: FieldsRequest?
@@ -140,8 +140,9 @@ final class Library {
     }
 
     /// A titled page for an `@` mention, saved but not opened.
-    func addPage(titled title: String) -> UUID {
-        let page = WriterCore.Document(title: title)
+    func addPage(titled title: String, type: UUID? = nil) -> UUID {
+        var page = WriterCore.Document(title: title)
+        page.type = type
         pages.insert(page, at: min(1, pages.count))   // just behind the open page
         scheduleSave(page)
         return page.id
