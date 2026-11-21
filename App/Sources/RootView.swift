@@ -132,8 +132,9 @@ struct EditorView: View {
                     .keyboardShortcut(.cancelAction)
                 }
             } else {
-                // Pinned: stays put as the bar narrows (the folded side column).
-                ToolbarItem(placement: .topBarPinnedTrailing) {
+                // Focus takes the role of Notes' Done (✓): the one action iOS keeps
+                // out of "•••" in the folded side column.
+                ToolbarItem(placement: .confirmationAction) {
                     Button("Focus", systemImage: "text.viewfinder") {
                         withAnimation(.smooth(duration: 0.3)) { focusMode = true }
                     }
