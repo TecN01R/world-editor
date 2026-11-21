@@ -149,7 +149,7 @@ jobs:
       - name: Screenshots in the simulator
         if: steps.ui.outputs.changed == 'true'
         env:
-          FULL_SHOTS: ${{ steps.ui.outputs.focus }}
+          SHOTS: ${{ steps.ui.outputs.shots }}
         run: ci/screenshots.sh app/WorldEditor.app
       # Force-pushed as a single orphan commit, so the branch only ever holds
       # the latest set and main's history never contains images.
