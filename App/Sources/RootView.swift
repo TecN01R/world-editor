@@ -98,7 +98,11 @@ struct PageList: View {
             guard !query.isEmpty else { library.searchResults = []; library.searchSuggestions = []; return }
             try? await Task.sleep(for: .milliseconds(150))   // let typing settle
             guard !Task.isCancelled else { return }
-            (library.searchResults, library.searchSuggestions) = await PageIndex.search(query)
+            library.searchResults = []
+            await PageIndex.search(query) { results, suggestions in
+                library.searchResults = results
+                library.searchSuggestions = suggestions
+            }
             searching = false
         }
         .navigationTitle("Pages")
