@@ -21,7 +21,11 @@ if ! command -v swift >/dev/null 2>&1; then
   tmp=$(mktemp -d)
   curl -fsSL "https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz" -o "$tmp/swiftly.tar.gz"
   tar -xzf "$tmp/swiftly.tar.gz" -C "$tmp"
-  "$tmp/swiftly" init --assume-yes --quiet-shell-followup
+  # swiftly only recognises the Fedora it has builds for (39) and calls any
+  # newer one unsupported; swift.org's Fedora 39 builds run on later Fedora.
+  platform=()
+  [ "$(. /etc/os-release && echo "$ID")" = fedora ] && platform=(--platform fedora39)
+  "$tmp/swiftly" init --assume-yes --quiet-shell-followup "${platform[@]}"
   # shellcheck disable=SC1091
   . "${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}/env.sh"
 fi
