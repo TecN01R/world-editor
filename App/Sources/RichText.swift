@@ -49,6 +49,34 @@ enum RichText {
         url.scheme == "world-editor" && url.host == "page" ? UUID(uuidString: url.lastPathComponent) : nil
     }
 
+    /// Editing inside an `@` link, rather than typing beside it, turns the
+    /// link back into plain `@text` so `@` can suggest again. Then makes the
+    /// edit itself (undoably, through the text view) and returns true; returns
+    /// false when no link was touched and the edit should go ahead as usual.
+    static func unlinkIfEditing(_ tv: UITextView, range: NSRange, replacement text: String) -> Bool {
+        let s = tv.textStorage
+        guard s.length > 0 else { return false }
+        let probe = min(max(0, range.location - (range.length == 0 ? 1 : 0)), s.length - 1)
+        var link = NSRange()
+        guard s.attribute(.link, at: probe, longestEffectiveRange: &link,
+                          in: NSRange(location: 0, length: s.length)) != nil else { return false }
+        let touches = range.length == 0
+            ? range.location > link.location && range.location < NSMaxRange(link)             // typing inside
+            : NSIntersectionRange(range, link).length > 0                                     // deleting part of it
+                && !(range.location <= link.location && NSMaxRange(range) >= NSMaxRange(link))
+        guard touches else { return false }
+        var plain = s.attributes(at: link.location, effectiveRange: nil)
+        plain[.link] = nil
+        s.beginEditing()
+        s.removeAttribute(.link, range: link)
+        s.insert(NSAttributedString(string: "@", attributes: plain), at: link.location)
+        s.endEditing()
+        tv.selectedRange = NSRange(location: range.location + 1, length: range.length)
+        tv.typingAttributes = plain
+        if text.isEmpty { tv.deleteBackward() } else { tv.insertText(text) }
+        return true
+    }
+
     /// `@` links in `range`, relative to its start.
     static func links(in s: NSAttributedString, range: NSRange? = nil) -> [PageLink] {
         let range = range ?? NSRange(location: 0, length: s.length)
