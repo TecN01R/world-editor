@@ -255,11 +255,11 @@ struct PageEditor: UIViewRepresentable {
     }
 }
 
-/// Bold, italic, bulleted and numbered list above the keyboard: the stock
-/// system toolbar, laid out by iOS across the keyboard's width, with a small
-/// gap above it as in Notes. (The keyboard's own shortcut row was tried for
-/// the wide unfolded keyboard; on the Duo it folds app buttons into "•••".) Buttons show the state of the selection. (When more tools arrive,
-/// this may become a scrolling bar like Notes'.)
+/// Bold, italic, bulleted and numbered list above the keyboard, or pages to
+/// link while typing `@`. One glass capsule centred on the keyboard, with a
+/// small gap above it as in Notes. It scrolls sideways when its buttons don't
+/// fit, as Notes' does: customised at Kevin's request, since the stock toolbar
+/// folds extra items into "•••" and centres on the app rather than the keyboard.
 final class FormatBar: UIView {
     enum Action { case style(InlineStyle), list(ParagraphKind) }
 
@@ -271,35 +271,76 @@ final class FormatBar: UIView {
     }
 
     private static let gap: CGFloat = 8
-    private static let height: CGFloat = 44 + gap
-    private let toolbar = UIToolbar()
-    private var buttons: [UIBarButtonItem] = []
+    private static let barHeight: CGFloat = 44
+    private let capsule = UIVisualEffectView(effect: UIGlassEffect())
+    private let scroll = UIScrollView()
+    private let stack = UIStackView()
+    private var buttons: [UIButton] = []
 
     init(onAction: @escaping (Action) -> Void) {
-        super.init(frame: CGRect(x: 0, y: 0, width: 320, height: Self.height))
+        super.init(frame: CGRect(x: 0, y: 0, width: 320, height: Self.barHeight + Self.gap))
         autoresizingMask = .flexibleHeight
-        func item(_ symbol: String, _ title: String, _ action: Action) -> UIBarButtonItem {
-            let item = UIBarButtonItem(title: title, image: UIImage(systemName: symbol),
-                                       primaryAction: UIAction(title: title) { _ in onAction(action) })
-            item.accessibilityLabel = title
-            return item
-        }
-        buttons = [item("bold", "Bold", .style(.bold)), item("italic", "Italic", .style(.italic)),
-                   item("list.bullet", "Bulleted List", .list(.bullet)),
-                   item("list.number", "Numbered List", .list(.numbered))]
-        toolbar.items = buttons
-        toolbar.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(toolbar)
+        buttons = [Self.button(symbol: "bold", label: "Bold") { onAction(.style(.bold)) },
+                   Self.button(symbol: "italic", label: "Italic") { onAction(.style(.italic)) },
+                   Self.button(symbol: "list.bullet", label: "Bulleted List") { onAction(.list(.bullet)) },
+                   Self.button(symbol: "list.number", label: "Numbered List") { onAction(.list(.numbered)) }]
+
+        capsule.cornerConfiguration = .capsule()
+        capsule.clipsToBounds = true
+        scroll.showsHorizontalScrollIndicator = false
+        scroll.alwaysBounceHorizontal = false
+        stack.axis = .horizontal
+        for v in [capsule, scroll, stack] as [UIView] { v.translatesAutoresizingMaskIntoConstraints = false }
+        scroll.addSubview(stack)
+        capsule.contentView.addSubview(scroll)
+        addSubview(capsule)
+
+        let pad: CGFloat = 6
+        let fit = capsule.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: 2 * pad)
+        fit.priority = .defaultHigh   // as wide as its buttons, until the keyboard's width runs out
         NSLayoutConstraint.activate([
-            toolbar.leadingAnchor.constraint(equalTo: leadingAnchor),
-            toolbar.trailingAnchor.constraint(equalTo: trailingAnchor),
-            toolbar.topAnchor.constraint(equalTo: topAnchor),
-            toolbar.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -Self.gap),
+            capsule.centerXAnchor.constraint(equalTo: centerXAnchor),   // the keyboard's centre
+            capsule.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 12),
+            capsule.topAnchor.constraint(equalTo: topAnchor),
+            capsule.heightAnchor.constraint(equalToConstant: Self.barHeight),
+            fit,
+            scroll.leadingAnchor.constraint(equalTo: capsule.contentView.leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: capsule.contentView.trailingAnchor),
+            scroll.topAnchor.constraint(equalTo: capsule.contentView.topAnchor),
+            scroll.bottomAnchor.constraint(equalTo: capsule.contentView.bottomAnchor),
+            stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: pad),
+            stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -pad),
+            stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
+            stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
+            stack.heightAnchor.constraint(equalTo: scroll.frameLayoutGuide.heightAnchor),
         ])
+        show(buttons)
     }
     required init?(coder: NSCoder) { fatalError() }
 
-    override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: Self.height) }
+    override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: Self.barHeight + Self.gap) }
+
+    private static func button(symbol: String? = nil, title: String? = nil, label: String,
+                               action: @escaping () -> Void) -> UIButton {
+        var config = UIButton.Configuration.plain()
+        config.image = symbol.flatMap { UIImage(systemName: $0) }
+        config.title = title
+        config.baseForegroundColor = .label
+        config.cornerStyle = .capsule
+        config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14)
+        let b = UIButton(configuration: config, primaryAction: UIAction { _ in action() })
+        b.accessibilityLabel = label
+        b.configurationUpdateHandler = { b in
+            b.configuration?.background.backgroundColor = b.isSelected ? .tertiarySystemFill : .clear
+        }
+        return b
+    }
+
+    private func show(_ views: [UIView]) {
+        for v in stack.arrangedSubviews { v.removeFromSuperview() }
+        for v in views { stack.addArrangedSubview(v) }
+        scroll.contentOffset = .zero
+    }
 
     /// The formatting items shown, so they're only rebuilt when they change.
     /// (Suggestions are rebuilt on every keystroke: their actions hold the query.)
@@ -309,21 +350,13 @@ final class FormatBar: UIView {
     /// keyboard's own suggestions. Otherwise it shows formatting, plus a button
     /// to open the link at the caret.
     func update(bold: Bool, italic: Bool, kind: ParagraphKind, open: Suggestion?, suggestions: [Suggestion]) {
-        for (item, on) in zip(buttons, [bold, italic, kind == .bullet, kind == .numbered]) { item.isSelected = on }
+        for (b, on) in zip(buttons, [bold, italic, kind == .bullet, kind == .numbered]) { b.isSelected = on }
         let extra = suggestions.isEmpty ? open.map { [$0] } ?? [] : suggestions
         let key = suggestions.isEmpty ? ["format"] + extra.map(\.label) : nil
         if key != nil, key == shown { return }
         shown = key
-        let items = extra.map { s in
-            let item = UIBarButtonItem(primaryAction: UIAction(title: s.title) { _ in s.action() })
-            item.accessibilityLabel = s.label
-            return item
-        }
-        if suggestions.isEmpty {
-            toolbar.setItems(buttons + (items.isEmpty ? [] : [.flexibleSpace()] + items), animated: false)
-        } else {
-            toolbar.setItems(items, animated: false)
-        }
+        let items = extra.map { s in Self.button(title: s.title, label: s.label, action: s.action) }
+        show(suggestions.isEmpty ? buttons + items : items)
     }
 }
 
