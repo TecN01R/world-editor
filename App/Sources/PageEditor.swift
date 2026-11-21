@@ -274,13 +274,14 @@ final class FormatBar: UIView {
 
     private static let gap: CGFloat = 8
     private static let barHeight: CGFloat = 44
+    private static let height = barHeight + gap
     private let capsule = UIVisualEffectView(effect: UIGlassEffect())
     private let scroll = UIScrollView()
     private let stack = UIStackView()
     private var buttons: [UIButton] = []
 
     init(onAction: @escaping (Action) -> Void) {
-        super.init(frame: CGRect(x: 0, y: 0, width: 320, height: Self.barHeight + Self.gap))
+        super.init(frame: CGRect(x: 0, y: 0, width: 320, height: Self.height))
         buttons = [Self.button(symbol: "bold", label: "Bold") { onAction(.style(.bold)) },
                    Self.button(symbol: "italic", label: "Italic") { onAction(.style(.italic)) },
                    Self.button(symbol: "list.bullet", label: "Bulleted List") { onAction(.list(.bullet)) },
@@ -289,7 +290,6 @@ final class FormatBar: UIView {
         capsule.cornerConfiguration = .capsule()
         capsule.clipsToBounds = true
         scroll.showsHorizontalScrollIndicator = false
-        scroll.alwaysBounceHorizontal = false
         stack.axis = .horizontal
         for v in [capsule, scroll, stack] as [UIView] { v.translatesAutoresizingMaskIntoConstraints = false }
         scroll.addSubview(stack)
@@ -319,7 +319,7 @@ final class FormatBar: UIView {
     }
     required init?(coder: NSCoder) { fatalError() }
 
-    override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: Self.barHeight + Self.gap) }
+    override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: Self.height) }
 
     private static func button(symbol: String? = nil, title: String? = nil, label: String,
                                action: @escaping () -> Void) -> UIButton {
@@ -347,21 +347,30 @@ final class FormatBar: UIView {
         scroll.contentOffset = .zero
     }
 
-    /// The formatting items shown, so they're only rebuilt when they change.
-    /// (Suggestions are rebuilt on every keystroke: their actions hold the query.)
-    private var shown: [String]? = ["format"]
+    /// While formatting shows, the labels of the buttons beside it, so it's only
+    /// rebuilt when they change; nil while suggestions show (rebuilt on every
+    /// keystroke: their actions hold the query).
+    private var shownExtras: [String]? = []
 
     /// While typing `@`, the bar offers pages instead of formatting, like the
     /// keyboard's own suggestions. Otherwise it shows formatting, plus a button
     /// to open the link at the caret.
     func update(bold: Bool, italic: Bool, kind: ParagraphKind, open: Suggestion?, suggestions: [Suggestion]) {
         for (b, on) in zip(buttons, [bold, italic, kind == .bullet, kind == .numbered]) { b.isSelected = on }
-        let extra = suggestions.isEmpty ? open.map { [$0] } ?? [] : suggestions
-        let key = suggestions.isEmpty ? ["format"] + extra.map(\.label) : nil
-        if key != nil, key == shown { return }
-        shown = key
-        let items = extra.map { s in Self.button(title: s.title, label: s.label, action: s.action) }
-        show(suggestions.isEmpty ? buttons + items : items)
+        if suggestions.isEmpty {
+            let extras = open.map { [$0] } ?? []
+            let labels = extras.map(\.label)
+            guard labels != shownExtras else { return }
+            shownExtras = labels
+            show(buttons + extras.map(Self.button(for:)))
+        } else {
+            shownExtras = nil
+            show(suggestions.map(Self.button(for:)))
+        }
+    }
+
+    private static func button(for s: Suggestion) -> UIButton {
+        button(title: s.title, label: s.label, action: s.action)
     }
 }
 
