@@ -65,31 +65,37 @@ struct PageList: View {
     @Binding var selection: UUID?
     let newPage: () -> Void
     @State private var showModels = false
-    @State private var query = Screenshots.searchQuery ?? ""
-    @State private var related: [UUID] = []
 
     var body: some View {
-        // Pages with the words first (instant), then those Spotlight finds by meaning.
-        let words = query.isEmpty ? library.pages : library.pages.filter { $0.matches(query) }
-        let byMeaning = related.compactMap { id in
-            words.contains { $0.id == id } ? nil : library.pages.first { $0.id == id }
+        @Bindable var library = library
+        let query = library.searchQuery
+        // Pages with all the words first, ranked and instant; then passages
+        // Spotlight finds by meaning, on other pages.
+        let words = query.isEmpty ? library.pages : Search.rank(library.pages, query)
+        let byMeaning: [(page: WriterCore.Document, paragraph: Int)] = library.searchPassages.compactMap { found in
+            guard !words.contains(where: { $0.id == found.page }),
+                  let page = library.pages.first(where: { $0.id == found.page }),
+                  let i = page.paragraphs.firstIndex(where: { $0.id == found.paragraph }) else { return nil }
+            return (page, i)
         }
         List(selection: $selection) {
-            ForEach(words, content: row)
+            ForEach(words) { row($0, snippet: $0.snippet(matching: query)) }
             if !byMeaning.isEmpty {
-                Section("Related") { ForEach(byMeaning, content: row) }
+                Section("Related") {
+                    ForEach(byMeaning, id: \.page.id) { row($0.page, snippet: $0.page.excerpt(paragraph: $0.paragraph)) }
+                }
             }
         }
-        .searchable(text: $query, prompt: "Search Pages")
+        .searchable(text: $library.searchQuery, prompt: "Search Pages")
         .overlay {
             if !query.isEmpty, words.isEmpty, byMeaning.isEmpty { ContentUnavailableView.search(text: query) }
         }
         .task(id: query) {
-            related = []
+            library.searchPassages = []
             guard query.count >= 3 else { return }
             try? await Task.sleep(for: .milliseconds(300))   // let typing settle
             guard !Task.isCancelled else { return }
-            related = await PageIndex.search(query)
+            library.searchPassages = await PageIndex.search(query)
         }
         .navigationTitle("Pages")
         .toolbar {
@@ -106,12 +112,12 @@ struct PageList: View {
         .sheet(isPresented: $showModels) { ModelsView() }
     }
 
-    private func row(_ page: WriterCore.Document) -> some View {
+    private func row(_ page: WriterCore.Document, snippet: String?) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(highlighted(page.heading.isEmpty ? "New Page" : page.heading))
                 .font(.headline)
                 .lineLimit(1)
-            if let snippet = page.snippet(matching: query) {
+            if let snippet {
                 // Searching: the line that matched, in place of date and preview.
                 Text(highlighted(snippet)).lineLimit(1)
                     .font(.subheadline)
@@ -132,12 +138,16 @@ struct PageList: View {
         }
     }
 
-    /// `text` with the search match in bold.
+    /// `text` with every search term in bold.
     private func highlighted(_ text: String) -> AttributedString {
         var s = AttributedString(text)
-        if !query.isEmpty, let r = s.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) {
-            s[r].inlinePresentationIntent = .stronglyEmphasized
-            s[r].foregroundColor = .primary
+        for term in Search.terms(library.searchQuery) {
+            var from = s.startIndex
+            while let r = s[from...].range(of: term, options: [.caseInsensitive, .diacriticInsensitive]) {
+                s[r].inlinePresentationIntent = .stronglyEmphasized
+                s[r].foregroundColor = .primary
+                from = r.upperBound
+            }
         }
         return s
     }

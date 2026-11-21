@@ -27,13 +27,24 @@ final class Library {
     var selection: UUID? {
         didSet {
             guard oldValue != selection else { return }
-            cursor = (0, 0)
+            cursor = selection.flatMap(searchCursor) ?? (0, 0)
             if let old = oldValue { flush(old); discardIfEmpty(old) }
         }
     }
 
     /// Caret position shared by both editors so switching modes keeps your place.
     var cursor = (paragraph: 0, offset: 0)
+    /// The pages list's search, so a result opens at its match, not the top.
+    var searchQuery = Screenshots.searchQuery ?? ""
+    /// Passages Spotlight found by meaning, best first.
+    var searchPassages: [(page: UUID, paragraph: UUID)] = []
+
+    private func searchCursor(_ id: UUID) -> (paragraph: Int, offset: Int)? {
+        guard !searchQuery.isEmpty, let page = pages.first(where: { $0.id == id }) else { return nil }
+        if let hit = page.hit(searchQuery) { return (hit.paragraph, hit.range.lowerBound) }
+        let passage = searchPassages.first { $0.page == id }?.paragraph
+        return passage.flatMap { p in page.paragraphs.firstIndex { $0.id == p } }.map { ($0, 0) }
+    }
 
     private let store: DocumentStore?
     /// Pending debounced saves, one per page, so editing one page never drops another's.
@@ -141,7 +152,7 @@ final class Library {
 /// - `-screenshotRich YES`: one page showing bold, italic and both kinds of list
 /// - `-screenshotMentions YES`: with `-screenshotRich`, Mara's page with its Mentions sheet open
 /// - `-screenshotPages YES`: showing the pages list
-/// - `-screenshotSearch light`: with `-screenshotPages`, searching the list
+/// - `-screenshotSearch mara`: with `-screenshotPages`, searching the list
 /// Each seeds two more pages, so `@` has something to find.
 /// - `-startInFocus YES`: open the page in Focus mode (read by `RootView`)
 /// - `-focusControls YES`: with Focus mode's controls showing (read by `RootView`)
