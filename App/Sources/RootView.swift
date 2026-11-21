@@ -57,20 +57,29 @@ struct PageList: View {
     @Binding var selection: UUID?
     let newPage: () -> Void
     @State private var showModels = false
+    @State private var query = Screenshots.searchQuery ?? ""
 
     var body: some View {
+        let pages = query.isEmpty ? library.pages : library.pages.filter { $0.matches(query) }
         List(selection: $selection) {
-            ForEach(library.pages) { page in
+            ForEach(pages) { page in
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(page.heading.isEmpty ? "New Page" : page.heading)
+                    Text(highlighted(page.heading.isEmpty ? "New Page" : page.heading))
                         .font(.headline)
                         .lineLimit(1)
-                    HStack(spacing: 6) {
-                        Text(page.modified, format: .relative(presentation: .named))
-                        if !page.preview.isEmpty { Text(page.preview).lineLimit(1) }
+                    if let snippet = page.snippet(matching: query) {
+                        // Searching: the line that matched, in place of date and preview.
+                        Text(highlighted(snippet)).lineLimit(1)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        HStack(spacing: 6) {
+                            Text(page.modified, format: .relative(presentation: .named))
+                            if !page.preview.isEmpty { Text(page.preview).lineLimit(1) }
+                        }
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                     }
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 2)
                 .accessibilityElement(children: .combine)
@@ -78,6 +87,10 @@ struct PageList: View {
                     Button("Delete", systemImage: "trash", role: .destructive) { library.delete(page.id) }
                 }
             }
+        }
+        .searchable(text: $query, prompt: "Search Pages")
+        .overlay {
+            if !query.isEmpty, pages.isEmpty { ContentUnavailableView.search(text: query) }
         }
         .navigationTitle("Pages")
         .toolbar {
@@ -92,6 +105,16 @@ struct PageList: View {
             }
         }
         .sheet(isPresented: $showModels) { ModelsView() }
+    }
+
+    /// `text` with the search match in bold.
+    private func highlighted(_ text: String) -> AttributedString {
+        var s = AttributedString(text)
+        if !query.isEmpty, let r = s.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) {
+            s[r].inlinePresentationIntent = .stronglyEmphasized
+            s[r].foregroundColor = .primary
+        }
+        return s
     }
 }
 
