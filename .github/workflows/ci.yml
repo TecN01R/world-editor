@@ -127,6 +127,24 @@ jobs:
         run: brew install artemnovichkov/tap/hinge
       - if: steps.ui.outputs.changed == 'true'
         run: ls -d /opt/homebrew/Cellar/hinge/*/bin 2>/dev/null | head -1 >> "$GITHUB_PATH" || true
+      # Taps a control by its VoiceOver label (simctl can't tap), for shots of
+      # open menus. Cached like hinge; if it fails, only those shots are skipped.
+      - name: Restore axe
+        id: axe
+        if: steps.ui.outputs.changed == 'true'
+        uses: actions/cache@v4
+        with:
+          path: /opt/homebrew/Cellar/axe
+          key: axe-xcode27.1
+      - name: Install axe (cache miss only)
+        if: steps.ui.outputs.changed == 'true' && steps.axe.outputs.cache-hit != 'true'
+        continue-on-error: true
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        run: brew install cameroncooke/axe/axe
+      - if: steps.ui.outputs.changed == 'true'
+        run: ls -d /opt/homebrew/Cellar/axe/*/bin 2>/dev/null | head -1 >> "$GITHUB_PATH" || true
       # The public artifact list lags minutes behind an upload, so wait on
       # the build job's upload step instead, then fetch through the runner.
       - name: Wait for the app from the build job

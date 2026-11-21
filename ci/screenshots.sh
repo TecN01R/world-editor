@@ -36,6 +36,17 @@ while IFS='|' read -r UDID NAME; do
     xcrun simctl io "$UDID" screenshot ${DISPLAY_ID:+--display="$DISPLAY_ID"} "$OUT/$SLUG-$name.png" >/dev/null
     echo "   $name"
   }
+  # Like shoot, after tapping the control labelled $2 (axe; skipped without it).
+  shoot_tapped() {
+    local name="$1" label="$2"; shift 2
+    command -v axe >/dev/null || { echo "   $name: skipped, no axe"; return; }
+    xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE" "$@" >/dev/null
+    sleep 3
+    axe tap --label "$label" --udid "$UDID" || { echo "   $name: tap failed"; return; }
+    sleep 1   # menu animation
+    xcrun simctl io "$UDID" screenshot ${DISPLAY_ID:+--display="$DISPLAY_ID"} "$OUT/$SLUG-$name.png" >/dev/null
+    echo "   $name"
+  }
 
   # Displays: the Duo has an outer (lowest id) and inner (highest id) one.
   # (asking for one screenshot of a multi-display device fails, listing them)
@@ -52,6 +63,7 @@ while IFS='|' read -r UDID NAME; do
         mention)        shoot "$1-mention"        -screenshotText "Ask @Map of the" ;;
         mentions)       shoot "$1-mentions"       -screenshotRich YES -screenshotMentions YES ;;
         fields)         shoot "$1-fields"         -screenshotRich YES -screenshotMara YES
+                        shoot_tapped "$1-fields-home" Home -screenshotRich YES -screenshotMara YES
                         xcrun simctl ui "$UDID" content_size accessibility-large
                         shoot "$1-fields-large"   -screenshotRich YES -screenshotMara YES
                         xcrun simctl ui "$UDID" content_size large ;;
