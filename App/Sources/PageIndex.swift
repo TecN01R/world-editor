@@ -1,5 +1,4 @@
 import CoreSpotlight
-import OSLog
 import WriterCore
 
 /// Search is Spotlight's: pages live in the phone's private, on-device index,
@@ -17,8 +16,6 @@ enum PageIndex {
     }
 
     private static let index = CSSearchableIndex.default()
-    /// Each step, so CI's log shows whether indexing or searching stalls.
-    private static let log = Logger(subsystem: "world-editor", category: "search")
     private static var ready: Task<Void, Never>?
 
     /// Once at launch: readies Spotlight and indexes every page (items with
@@ -26,16 +23,7 @@ enum PageIndex {
     /// they're deleted).
     static func start(with pages: [WriterCore.Document]) {
         CSUserQuery.prepare()
-        log.notice("prepared")
-        ready = Task {
-            log.notice("indexing \(pages.count) pages")
-            do {
-                try await index.indexSearchableItems(pages.flatMap(items))
-                log.notice("indexed")
-            } catch {
-                log.error("indexing failed: \(error.localizedDescription, privacy: .public)")
-            }
-        }
+        ready = Task { try? await index.indexSearchableItems(pages.flatMap(items)) }
     }
 
     static func update(_ page: WriterCore.Document) {
@@ -53,7 +41,6 @@ enum PageIndex {
     @MainActor
     static func search(_ text: String, update: ([Result], [String]) -> Void) async {
         await ready?.value
-        log.notice("searching")
         let context = CSUserQueryContext()
         context.fetchAttributes = ["title"]
         context.enableRankedResults = true
@@ -64,22 +51,17 @@ enum PageIndex {
             for try await response in CSUserQuery(userQueryString: text, userQueryContext: context).responses {
                 switch response {
                 case .item(let found):
-                    log.notice("result: \(found.item.uniqueIdentifier, privacy: .public)")
                     let parts = found.item.uniqueIdentifier.split(separator: "/").map(String.init)
                     guard let page = parts.first.flatMap(UUID.init), !results.contains(where: { $0.page == page }) else { continue }
                     results.append(Result(page: page, paragraph: parts.dropFirst().first.flatMap(UUID.init)))
                 case .suggestion(let suggestion):
-                    log.notice("suggestion")
                     suggestions.append(plain(suggestion.suggestion.localizedAttributedSuggestion))
                 @unknown default:
                     continue
                 }
                 update(results, suggestions)
             }
-            log.notice("search finished: \(results.count) results")
-        } catch {
-            log.error("search failed: \(error.localizedDescription, privacy: .public)")
-        }
+        } catch {}   // no results is the honest answer when Spotlight can't search
     }
 
     private static func plain(_ s: AttributedString) -> String { String(s.characters) }
