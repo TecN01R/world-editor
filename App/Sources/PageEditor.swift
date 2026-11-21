@@ -10,23 +10,21 @@ struct PageEditor: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(library: library) }
 
-    func makeUIView(context: Context) -> PageTextView {
+    func makeUIView(context: Context) -> PageView {
         let tv = PageTextView(usingTextLayoutManager: true)
         tv.delegate = context.coordinator
         tv.backgroundColor = .systemBackground
         tv.alwaysBounceVertical = true
         tv.keyboardDismissMode = .interactive
         tv.allowsEditingTextAttributes = true      // ⌘B, ⌘I and the Format menu
-        tv.inputAccessoryView = context.coordinator.formatBar
-        context.coordinator.formatBar.column = tv
         tv.titleField = context.coordinator.titleField
         context.coordinator.textView = tv
         context.coordinator.render(selection: nil)
         context.coordinator.restoreCaret()
-        return tv
+        return PageView(textView: tv, bar: context.coordinator.formatBar)
     }
 
-    func updateUIView(_ tv: PageTextView, context: Context) {}
+    func updateUIView(_ view: PageView, context: Context) {}
 
     /// Bold New York, scaled with Dynamic Type.
     static var titleFont: UIFont { newYork(30, weight: .bold, scaledAs: .title1) }
@@ -146,6 +144,9 @@ struct PageEditor: UIViewRepresentable {
             updateFormatBar()
         }
 
+        func textViewDidBeginEditing(_ tv: UITextView) { (tv.superview as? PageView)?.showBar(true) }
+        func textViewDidEndEditing(_ tv: UITextView) { (tv.superview as? PageView)?.showBar(false) }
+
         func textViewDidChangeSelection(_ tv: UITextView) {
             tv.typingAttributes[.link] = nil   // typing beside a link never extends it
             guard !isRendering else { return }
@@ -257,9 +258,8 @@ struct PageEditor: UIViewRepresentable {
 }
 
 /// Bold, italic, bulleted and numbered list above the keyboard, or pages to
-/// link while typing `@`. One glass capsule with a small gap above it, kept
-/// inside the page's column (clear of the pages list and the Duo's side
-/// column) and scrolling sideways when its buttons don't fit, as in Notes.
+/// link while typing `@`. One glass capsule with a small gap below it, in
+/// the page's column, scrolling sideways when its buttons don't fit, as in Notes.
 /// Customised at Kevin's request: the stock toolbar folds extra items into
 /// "•••" and spans the whole keyboard.
 final class FormatBar: UIView {
@@ -278,18 +278,9 @@ final class FormatBar: UIView {
     private let scroll = UIScrollView()
     private let stack = UIStackView()
     private var buttons: [UIButton] = []
-    /// Where the bar may sit: the page's column, in this view's coordinates.
-    private let area = UILayoutGuide()
-    private lazy var areaLeading = area.leadingAnchor.constraint(equalTo: leadingAnchor)
-    private lazy var areaTrailing = area.trailingAnchor.constraint(equalTo: trailingAnchor)
-
-    /// The page's text view. The bar lives in the keyboard's window, so it
-    /// follows the column's safe area through screen coordinates.
-    weak var column: UIView? { didSet { setNeedsLayout() } }
 
     init(onAction: @escaping (Action) -> Void) {
         super.init(frame: CGRect(x: 0, y: 0, width: 320, height: Self.barHeight + Self.gap))
-        autoresizingMask = .flexibleHeight
         buttons = [Self.button(symbol: "bold", label: "Bold") { onAction(.style(.bold)) },
                    Self.button(symbol: "italic", label: "Italic") { onAction(.style(.italic)) },
                    Self.button(symbol: "list.bullet", label: "Bulleted List") { onAction(.list(.bullet)) },
@@ -305,14 +296,12 @@ final class FormatBar: UIView {
         capsule.contentView.addSubview(scroll)
         addSubview(capsule)
 
-        addLayoutGuide(area)
         let pad: CGFloat = 8
         let fit = capsule.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: 2 * pad)
-        fit.priority = .defaultHigh   // as wide as its buttons, until the keyboard's width runs out
+        fit.priority = .defaultHigh   // as wide as its buttons, until the column's width runs out
         NSLayoutConstraint.activate([
-            areaLeading, areaTrailing,
-            capsule.centerXAnchor.constraint(equalTo: area.centerXAnchor),
-            capsule.leadingAnchor.constraint(greaterThanOrEqualTo: area.leadingAnchor, constant: 12),
+            capsule.centerXAnchor.constraint(equalTo: centerXAnchor),
+            capsule.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 12),
             capsule.topAnchor.constraint(equalTo: topAnchor),
             capsule.heightAnchor.constraint(equalToConstant: Self.barHeight),
             fit,
@@ -331,15 +320,6 @@ final class FormatBar: UIView {
     required init?(coder: NSCoder) { fatalError() }
 
     override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: Self.barHeight + Self.gap) }
-
-    override func layoutSubviews() {
-        if let column, let space = column.window?.windowScene?.screen.coordinateSpace {
-            let frame = convert(column.convert(column.safeAreaLayoutGuide.layoutFrame, to: space), from: space)
-            areaLeading.constant = max(0, frame.minX)
-            areaTrailing.constant = min(0, frame.maxX - bounds.width)
-        }
-        super.layoutSubviews()
-    }
 
     private static func button(symbol: String? = nil, title: String? = nil, label: String,
                                action: @escaping () -> Void) -> UIButton {
@@ -385,6 +365,40 @@ final class FormatBar: UIView {
     }
 }
 
+/// The page: its text view, with the format bar floating just above the
+/// keyboard while writing. The bar is part of the page, not the keyboard's
+/// accessory view: an accessory counts as keyboard, which shortens the Duo's
+/// side column and pushes toolbar items into "•••" (Notes does the same).
+final class PageView: UIView {
+    let textView: PageTextView
+    private let bar: FormatBar
+
+    init(textView: PageTextView, bar: FormatBar) {
+        self.textView = textView
+        self.bar = bar
+        super.init(frame: .zero)
+        keyboardLayoutGuide.followsUndockedKeyboard = true
+        for v in [textView, bar] as [UIView] { v.translatesAutoresizingMaskIntoConstraints = false; addSubview(v) }
+        NSLayoutConstraint.activate([
+            textView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            textView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            textView.topAnchor.constraint(equalTo: topAnchor),
+            textView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            bar.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor),
+            bar.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor),
+            bar.bottomAnchor.constraint(equalTo: keyboardLayoutGuide.topAnchor),
+        ])
+        showBar(textView.isFirstResponder)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+
+    /// The bar shows only while writing, like the keyboard it sits on.
+    func showBar(_ shown: Bool) {
+        bar.isHidden = !shown
+        textView.barHeight = shown ? bar.intrinsicContentSize.height : 0
+    }
+}
+
 /// The page's text view. Lays out the title above the writing whenever its
 /// width changes (rotation, fold), in a readable column of ~36em.
 final class PageTextView: PlainPasteTextView {
@@ -398,9 +412,11 @@ final class PageTextView: PlainPasteTextView {
         didSet { oldValue?.removeFromSuperview(); titleField.map(addSubview) }   // scrolls with the page
     }
 
+    /// The format bar's height while it floats over the bottom of the page.
+    var barHeight: CGFloat = 0 { didSet { setNeedsLayout() } }
+
     override func layoutSubviews() {
         super.layoutSubviews()
-        inputAccessoryView?.setNeedsLayout()   // the bar follows this column
         guard let title = titleField else { return }
         let width = bounds.width
         let column = min(width - 44, 36 * PageEditor.font.pointSize)
@@ -411,8 +427,8 @@ final class PageTextView: PlainPasteTextView {
         let inset = UIEdgeInsets(top: title.frame.maxY + 14, left: side, bottom: 40, right: side)
         if textContainerInset != inset { textContainerInset = inset }
 
-        // The view runs under the keyboard; keep everything scrollable above it.
-        let covered = max(0, bounds.maxY - keyboardLayoutGuide.layoutFrame.minY)
+        // The view runs under the keyboard and bar; keep everything scrollable above them.
+        let covered = max(0, bounds.maxY - keyboardLayoutGuide.layoutFrame.minY) + barHeight
         if contentInset.bottom != covered {
             contentInset.bottom = covered
             verticalScrollIndicatorInsets.bottom = covered
