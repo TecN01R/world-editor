@@ -38,7 +38,7 @@ jobs:
         run: ci/changes.sh "${{ github.event.before }}" "${{ github.sha }}" "${{ github.event_name }}"
       - name: Restore XcodeGen
         id: xcodegen
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /tmp/xcodegen
           key: xcodegen-1
@@ -112,7 +112,7 @@ jobs:
       - name: Restore hinge
         id: hinge
         if: steps.ui.outputs.changed == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             /opt/homebrew/Cellar/hinge
