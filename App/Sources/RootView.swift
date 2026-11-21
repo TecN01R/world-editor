@@ -97,6 +97,7 @@ struct PageList: View {
 
 /// One page, in Edit mode or Focus mode.
 struct EditorView: View {
+    @Environment(Library.self) private var library
     @Binding var focusMode: Bool
     @Binding var focusControls: Bool
     let chromeHidden: Bool
@@ -131,6 +132,17 @@ struct EditorView: View {
                     .keyboardShortcut(.cancelAction)
                 }
             } else {
+                ToolbarItem(placement: .primaryAction) {
+                    let mentions = library.mentions(of: library.document.id)
+                    Menu("Mentions", systemImage: "at") {
+                        Section("Mentioned In") {
+                            ForEach(mentions) { page in
+                                Button(page.heading.isEmpty ? "New Page" : page.heading) { library.selection = page.id }
+                            }
+                        }
+                    }
+                    .disabled(mentions.isEmpty)
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button("Focus", systemImage: "text.viewfinder") {
                         withAnimation(.smooth(duration: 0.3)) { focusMode = true }

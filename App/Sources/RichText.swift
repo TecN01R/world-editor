@@ -21,14 +21,44 @@ enum RichText {
         return style
     }
 
-    /// `text` with `attributes`, its fonts adjusted for each run.
-    static func attributed(_ text: String, runs: [StyleRun], attributes: [NSAttributedString.Key: Any]) -> NSMutableAttributedString {
+    /// `text` with `attributes`, its fonts adjusted for each run and its `@` links marked.
+    static func attributed(_ text: String, runs: [StyleRun], links: [PageLink] = [],
+                           attributes: [NSAttributedString.Key: Any]) -> NSMutableAttributedString {
         let s = NSMutableAttributedString(string: text, attributes: attributes)
-        guard let base = attributes[.font] as? UIFont else { return s }
-        for run in runs where run.location + run.length <= s.length {
-            s.addAttribute(.font, value: font(base, run.style), range: NSRange(location: run.location, length: run.length))
+        if let base = attributes[.font] as? UIFont {
+            for run in runs where run.location + run.length <= s.length {
+                s.addAttribute(.font, value: font(base, run.style), range: NSRange(location: run.location, length: run.length))
+            }
+        }
+        for link in links where link.location + link.length <= s.length {
+            s.addAttribute(.link, value: url(link.page), range: NSRange(location: link.location, length: link.length))
         }
         return s
+    }
+
+    /// The paragraph as the text views show it.
+    static func attributed(_ p: Paragraph, attributes: [NSAttributedString.Key: Any]) -> NSMutableAttributedString {
+        attributed(p.text, runs: p.runs, links: p.links, attributes: attributes)
+    }
+
+    // MARK: @ links
+
+    static func url(_ page: UUID) -> URL { URL(string: "world-editor://page/\(page.uuidString)")! }
+
+    static func page(_ url: URL) -> UUID? {
+        url.scheme == "world-editor" && url.host == "page" ? UUID(uuidString: url.lastPathComponent) : nil
+    }
+
+    /// `@` links in `range`, relative to its start.
+    static func links(in s: NSAttributedString, range: NSRange? = nil) -> [PageLink] {
+        let range = range ?? NSRange(location: 0, length: s.length)
+        var links: [PageLink] = []
+        s.enumerateAttribute(.link, in: range) { value, r, _ in
+            if let url = value as? URL, let page = page(url) {
+                links.append(PageLink(location: r.location - range.location, length: r.length, page: page))
+            }
+        }
+        return links
     }
 
     /// Style runs of `range`, relative to its start.
@@ -79,7 +109,8 @@ enum RichText {
             } else {
                 kind = trailingKind   // empty final line
             }
-            result.append(Paragraph(text: ns.substring(with: range), kind: kind, runs: runs(in: s, range: range)))
+            result.append(Paragraph(text: ns.substring(with: range), kind: kind,
+                                    runs: runs(in: s, range: range), links: links(in: s, range: range)))
             guard end != NSNotFound else { return result }
             location = end + 1
         }

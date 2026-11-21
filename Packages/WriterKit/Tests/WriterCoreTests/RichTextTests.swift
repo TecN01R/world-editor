@@ -143,7 +143,51 @@ final class RichTextTests: XCTestCase {
         let json = String(decoding: try JSONEncoder().encode(p), as: UTF8.self)
         XCTAssertFalse(json.contains("kind"))
         XCTAssertFalse(json.contains("runs"))
-        let rich = Paragraph(text: "hi", kind: .bullet, runs: [StyleRun(location: 0, length: 1, style: .bold)])
+        XCTAssertFalse(json.contains("links"))
+        let rich = Paragraph(text: "hi", kind: .bullet, runs: [StyleRun(location: 0, length: 1, style: .bold)],
+                             links: [PageLink(location: 0, length: 2, page: UUID())])
         XCTAssertEqual(try JSONDecoder().decode(Paragraph.self, from: JSONEncoder().encode(rich)), rich)
+    }
+
+    // MARK: @ links
+
+    private let harbour = UUID()
+
+    func testTypingNextToALinkNeverExtendsIt() {
+        var p = Paragraph(text: "see Harbour", links: [PageLink(location: 4, length: 7, page: harbour)])
+        p.replace(11..<11, with: " now", style: [])
+        p.replace(4..<4, with: "the ", style: [])
+        XCTAssertEqual(p.links, [PageLink(location: 8, length: 7, page: harbour)])
+        XCTAssertEqual(p.link(at: 15)?.page, harbour)   // caret just after the link
+        XCTAssertNil(p.link(at: 8))                      // caret just before it
+    }
+
+    func testSplitAndMergeCarryLinks() {
+        var d = Document(paragraphs: [Paragraph(text: "ab Harbour", links: [PageLink(location: 3, length: 7, page: harbour)])])
+        d.split(at: 0, offset: 3)
+        XCTAssertEqual(d.paragraphs[1].links, [PageLink(location: 0, length: 7, page: harbour)])
+        d.mergeWithPrevious(1)
+        XCTAssertEqual(d.paragraphs[0].links, [PageLink(location: 3, length: 7, page: harbour)])
+        XCTAssertTrue(d.mentions(harbour))
+        XCTAssertFalse(d.mentions(UUID()))
+    }
+
+    func testInsertLinkReplacesTheQueryAndEndsWithAPlainSpace() {
+        var d = Document(paragraphs: [Paragraph(text: "see @harb")])
+        let caret = d.insertLink(to: harbour, title: "Harbour Notes", replacing: 4..<9, in: 0)
+        XCTAssertEqual(d.paragraphs[0].text, "see Harbour Notes ")
+        XCTAssertEqual(d.paragraphs[0].links, [PageLink(location: 4, length: 13, page: harbour)])
+        XCTAssertEqual(caret, 18)
+    }
+
+    func testMentionQuery() {
+        let titles = ["Harbour Notes"]
+        XCTAssertEqual(Mention.query(in: "see @harb", caret: 9, titles: titles)?.range, 4..<9)
+        XCTAssertEqual(Mention.query(in: "@Harbour N", caret: 10, titles: titles)?.query, "Harbour N")
+        XCTAssertNil(Mention.query(in: "@Harbour Nx", caret: 11, titles: titles))   // no match, so spaces end it
+        XCTAssertEqual(Mention.query(in: "@Bell", caret: 5, titles: titles)?.query, "Bell")   // new page
+        XCTAssertNil(Mention.query(in: "me@mail", caret: 7, titles: titles))         // not after a space
+        XCTAssertNil(Mention.query(in: "@ 5pm", caret: 5, titles: titles))
+        XCTAssertEqual(Mention.query(in: "@", caret: 1, titles: titles)?.query, "")   // bare @: recent pages
     }
 }

@@ -132,7 +132,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         index = max(0, min(i, paragraphs.count - 1))
         size = 0
         let p = paragraphs[index]
-        textView.attributedText = RichText.attributed(p.text, runs: p.runs, attributes: Self.attributes(17))
+        textView.attributedText = RichText.attributed(p, attributes: Self.attributes(17))
         fit(mayGrow: true)
         let len = (textView.text as NSString).length
         let loc: Int
@@ -199,12 +199,16 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
 
     // MARK: UITextViewDelegate
 
+    /// Focus is for the words: links show, but tapping one just places the caret.
+    func textView(_ tv: UITextView, primaryActionFor textItem: UITextItem, defaultAction: UIAction) -> UIAction? { nil }
+
     func textView(_ tv: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
         guard text.contains("\n") else { return true }
         // Return (or a multi-line paste) splits the paragraph into pages.
         var caret = (index: index, offset: 0)
         library.update { doc in
-            doc.setText(tv.text, runs: RichText.runs(in: tv.attributedText), at: index)
+            doc.setText(tv.text, runs: RichText.runs(in: tv.attributedText),
+                        links: RichText.links(in: tv.attributedText), at: index)
             caret = doc.replace(range.location..<(range.location + range.length), in: index, with: text)
         }
         show(caret.index, caret: .offset(caret.offset), direction: 1)
@@ -214,7 +218,8 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
     func textViewDidChange(_ tv: UITextView) {
         if controlsVisible { onControlsChange?(false) }   // writing again: out of the way
         let before = library.document.paragraphs[index].length
-        library.update { $0.setText(tv.text, runs: RichText.runs(in: tv.attributedText), at: index) }
+        library.update { $0.setText(tv.text, runs: RichText.runs(in: tv.attributedText),
+                                                 links: RichText.links(in: tv.attributedText), at: index) }
         // Deleting may grow the size freely; typing forward only for a clear win.
         fit(mayGrow: (tv.text as NSString).length < before, animated: true)
         updateRail()

@@ -32,6 +32,20 @@ public struct StyleRun: Codable, Hashable, Sendable {
     }
 }
 
+/// An `@` link: a stretch of a paragraph that points at another page.
+/// Offsets are UTF-16 units, like `StyleRun`.
+public struct PageLink: Codable, Hashable, Sendable {
+    public var location: Int
+    public var length: Int
+    public var page: UUID
+
+    public init(location: Int, length: Int, page: UUID) {
+        self.location = location
+        self.length = length
+        self.page = page
+    }
+}
+
 /// A paragraph is the unit both editors share: Edit mode shows them together,
 /// Focus mode shows one per page. Identity is stable across edits so that
 /// extracted facts can point back at the paragraph they came from.
@@ -41,26 +55,49 @@ public struct Paragraph: Identifiable, Hashable, Sendable {
     public var kind: ParagraphKind
     /// Sorted, non-overlapping, non-empty runs; unstyled text has no run.
     public private(set) var runs: [StyleRun]
+    /// Sorted, non-overlapping `@` links.
+    public private(set) var links: [PageLink]
 
-    public init(id: UUID = UUID(), text: String = "", kind: ParagraphKind = .body, runs: [StyleRun] = []) {
+    public init(id: UUID = UUID(), text: String = "", kind: ParagraphKind = .body,
+                runs: [StyleRun] = [], links: [PageLink] = []) {
         self.id = id
         self.text = text
         self.kind = kind
         self.runs = []
-        setText(text, runs: runs)
+        self.links = []
+        setText(text, runs: runs, links: links)
     }
 
     public var length: Int { text.utf16.count }
 
-    /// Replaces the text and its styling together; runs are clamped and merged.
-    public mutating func setText(_ text: String, runs: [StyleRun] = []) {
+    /// Replaces the text with its styling and links; both are clamped and merged.
+    public mutating func setText(_ text: String, runs: [StyleRun] = [], links: [PageLink] = []) {
         self.text = text
-        var styles = [InlineStyle](repeating: [], count: text.utf16.count)
+        let count = text.utf16.count
+        var styles = [InlineStyle](repeating: [], count: count)
         for run in runs {
-            let lo = max(0, run.location), hi = min(styles.count, run.location + run.length)
+            let lo = max(0, run.location), hi = min(count, run.location + run.length)
             if lo < hi { for i in lo..<hi { styles[i].formUnion(run.style) } }
         }
+        var targets = [UUID?](repeating: nil, count: count)
+        for link in links {
+            let lo = max(0, link.location), hi = min(count, link.location + link.length)
+            if lo < hi { for i in lo..<hi { targets[i] = link.page } }
+        }
         self.runs = Self.runs(from: styles)
+        self.links = Self.links(from: targets)
+    }
+
+    /// The page linked at each UTF-16 unit.
+    var targets: [UUID?] {
+        var targets = [UUID?](repeating: nil, count: length)
+        for link in links { for i in link.location..<(link.location + link.length) { targets[i] = link.page } }
+        return targets
+    }
+
+    /// The link around `offset`, if the caret is inside one or just after it.
+    public func link(at offset: Int) -> PageLink? {
+        links.first { $0.location < offset && offset <= $0.location + $0.length }
     }
 
     /// One style per UTF-16 unit.
@@ -76,15 +113,18 @@ public struct Paragraph: Identifiable, Hashable, Sendable {
         return offset > 0 && offset <= s.count ? s[offset - 1] : (s.first ?? [])
     }
 
-    /// Replaces a UTF-16 range with `string`, which takes on `style`.
+    /// Replaces a UTF-16 range with `string`, which takes on `style`. Typed
+    /// text never extends a link.
     public mutating func replace(_ range: Range<Int>, with string: String, style: InlineStyle) {
-        var units = Array(text.utf16), styles = self.styles
+        var units = Array(text.utf16), styles = self.styles, targets = self.targets
         let lo = max(0, min(range.lowerBound, units.count)), hi = max(lo, min(range.upperBound, units.count))
         let inserted = Array(string.utf16)
         units.replaceSubrange(lo..<hi, with: inserted)
         styles.replaceSubrange(lo..<hi, with: Array(repeating: style, count: inserted.count))
+        targets.replaceSubrange(lo..<hi, with: Array(repeating: nil, count: inserted.count))
         text = String(decoding: units, as: UTF16.self)
         runs = Self.runs(from: styles)
+        links = Self.links(from: targets)
     }
 
     /// Sets or clears `style` over a UTF-16 range.
@@ -96,12 +136,25 @@ public struct Paragraph: Identifiable, Hashable, Sendable {
         runs = Self.runs(from: styles)
     }
 
-    /// The text and styling from `range`, as a new paragraph of the same kind.
+    /// The text, styling and links from `range`, as a new paragraph of the same kind.
     func slice(_ range: Range<Int>, id: UUID = UUID()) -> Paragraph {
-        let units = Array(text.utf16), styles = self.styles
+        let units = Array(text.utf16), styles = self.styles, targets = self.targets
         let r = range.clamped(to: 0..<units.count)
         return Paragraph(id: id, text: String(decoding: units[r], as: UTF16.self), kind: kind,
-                         runs: Self.runs(from: Array(styles[r])))
+                         runs: Self.runs(from: Array(styles[r])), links: Self.links(from: Array(targets[r])))
+    }
+
+    static func links(from targets: [UUID?]) -> [PageLink] {
+        var links: [PageLink] = []
+        for (i, target) in targets.enumerated() {
+            guard let target else { continue }
+            if let last = links.last, last.page == target, last.location + last.length == i {
+                links[links.count - 1].length += 1
+            } else {
+                links.append(PageLink(location: i, length: 1, page: target))
+            }
+        }
+        return links
     }
 
     static func runs(from styles: [InlineStyle]) -> [StyleRun] {
@@ -118,7 +171,7 @@ public struct Paragraph: Identifiable, Hashable, Sendable {
 }
 
 extension Paragraph: Codable {
-    private enum CodingKeys: String, CodingKey { case id, text, kind, runs }
+    private enum CodingKeys: String, CodingKey { case id, text, kind, runs, links }
 
     // Older pages have only id and text; plain paragraphs are written that way too.
     public init(from decoder: Decoder) throws {
@@ -126,7 +179,8 @@ extension Paragraph: Codable {
         self.init(id: try c.decode(UUID.self, forKey: .id),
                   text: try c.decode(String.self, forKey: .text),
                   kind: try c.decodeIfPresent(ParagraphKind.self, forKey: .kind) ?? .body,
-                  runs: try c.decodeIfPresent([StyleRun].self, forKey: .runs) ?? [])
+                  runs: try c.decodeIfPresent([StyleRun].self, forKey: .runs) ?? [],
+                  links: try c.decodeIfPresent([PageLink].self, forKey: .links) ?? [])
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -135,6 +189,7 @@ extension Paragraph: Codable {
         try c.encode(text, forKey: .text)
         if kind != .body { try c.encode(kind, forKey: .kind) }
         if !runs.isEmpty { try c.encode(runs, forKey: .runs) }
+        if !links.isEmpty { try c.encode(links, forKey: .links) }
     }
 }
 
@@ -182,6 +237,11 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
 
     public func paragraph(_ id: UUID) -> Paragraph? { paragraphs.first { $0.id == id } }
 
+    /// Whether any `@` link on this page points at `page` (backlinks).
+    public func mentions(_ page: UUID) -> Bool {
+        paragraphs.contains { $0.links.contains { $0.page == page } }
+    }
+
     /// Position of each paragraph's first character in the whole document.
     public var paragraphStarts: [Int] {
         var starts: [Int] = [], at = 0
@@ -211,10 +271,10 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
         modified = Date()
     }
 
-    /// Replaces one paragraph's text and styling, keeping its identity and kind.
-    public mutating func setText(_ text: String, runs: [StyleRun] = [], at index: Int) {
+    /// Replaces one paragraph's text, styling and links, keeping its identity and kind.
+    public mutating func setText(_ text: String, runs: [StyleRun] = [], links: [PageLink] = [], at index: Int) {
         guard paragraphs.indices.contains(index) else { return }
-        paragraphs[index].setText(text, runs: runs)
+        paragraphs[index].setText(text, runs: runs, links: links)
         modified = Date()
     }
 
@@ -239,8 +299,9 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
         guard index > 0, paragraphs.indices.contains(index) else { return nil }
         let first = paragraphs[index - 1], second = paragraphs[index]
         let joinAt = first.length
-        let moved = second.runs.map { StyleRun(location: $0.location + joinAt, length: $0.length, style: $0.style) }
-        paragraphs[index - 1].setText(first.text + second.text, runs: first.runs + moved)
+        let runs = second.runs.map { StyleRun(location: $0.location + joinAt, length: $0.length, style: $0.style) }
+        let links = second.links.map { PageLink(location: $0.location + joinAt, length: $0.length, page: $0.page) }
+        paragraphs[index - 1].setText(first.text + second.text, runs: first.runs + runs, links: first.links + links)
         paragraphs.remove(at: index)
         modified = Date()
         return joinAt
@@ -264,6 +325,20 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
         let offset = (lines.count == 1 ? range.lowerBound : 0) + lines.last!.utf16.count
         modified = Date()
         return (at, offset)
+    }
+
+    /// Replaces `range` of paragraph `index` (the typed `@query`) with a link
+    /// to `page` reading `title`, then a plain space. Returns the caret offset.
+    @discardableResult
+    public mutating func insertLink(to page: UUID, title: String, replacing range: Range<Int>, in index: Int) -> Int {
+        guard paragraphs.indices.contains(index) else { return 0 }
+        var p = paragraphs[index]
+        p.replace(range, with: title + " ", style: p.style(at: range.lowerBound))
+        let start = min(range.lowerBound, p.length), length = title.utf16.count
+        p.setText(p.text, runs: p.runs, links: p.links + [PageLink(location: start, length: length, page: page)])
+        paragraphs[index] = p
+        modified = Date()
+        return start + length + 1
     }
 
     // MARK: Formatting a selection (document positions)

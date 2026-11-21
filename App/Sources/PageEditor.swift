@@ -107,7 +107,7 @@ struct PageEditor: UIViewRepresentable {
             let s = NSMutableAttributedString()
             for (i, p) in doc.paragraphs.enumerated() {
                 let attrs = PageEditor.attributes(p.kind)
-                s.append(RichText.attributed(p.text, runs: p.runs, attributes: attrs))
+                s.append(RichText.attributed(p, attributes: attrs))
                 if i < doc.paragraphs.count - 1 { s.append(NSAttributedString(string: "\n", attributes: attrs)) }
             }
             tv.attributedText = s
@@ -146,10 +146,54 @@ struct PageEditor: UIViewRepresentable {
         }
 
         func textViewDidChangeSelection(_ tv: UITextView) {
+            tv.typingAttributes[.link] = nil   // typing beside a link never extends it
             guard !isRendering else { return }
             let (i, offset) = library.document.locate(tv.selectedRange.location)
             library.cursor = (i, offset)
             updateFormatBar()
+        }
+
+        /// Tapping a link opens its page.
+        func textView(_ tv: UITextView, primaryActionFor textItem: UITextItem, defaultAction: UIAction) -> UIAction? {
+            guard case .link(let url) = textItem.content, let page = RichText.page(url) else { return defaultAction }
+            return UIAction { [weak self] _ in self?.open(page) }
+        }
+
+        // MARK: @ links
+
+        private func open(_ page: UUID) {
+            guard library.pages.contains(where: { $0.id == page }) else { return }
+            DispatchQueue.main.async { [library] in library.selection = page }   // this editor goes away
+        }
+
+        /// Turns the typed `@query` into a link to `page`.
+        private func link(to page: UUID, title: String, replacing range: Range<Int>, in index: Int) {
+            var caret = 0
+            library.update { caret = $0.insertLink(to: page, title: title, replacing: range, in: index) }
+            render(selection: NSRange(location: library.document.paragraphStarts[index] + caret, length: 0))
+            UISelectionFeedbackGenerator().selectionChanged()
+        }
+
+        /// Pages matching the `@query` at the caret, then a new page by that name.
+        private func suggestions(at caret: (index: Int, offset: Int)) -> [FormatBar.Suggestion] {
+            let doc = library.document, p = doc.paragraphs[caret.index]
+            let others = library.pages.filter { $0.id != doc.id && !$0.heading.isEmpty }
+            guard selection.isEmpty, p.link(at: caret.offset) == nil,
+                  let mention = Mention.query(in: p.text, caret: caret.offset, titles: others.map(\.heading))
+            else { return [] }
+            var items = others.filter { Mention.matches(mention.query, $0.heading) }.prefix(3).map { page in
+                FormatBar.Suggestion(title: page.heading, label: "Link to \(page.heading)") { [weak self] in
+                    self?.link(to: page.id, title: page.heading, replacing: mention.range, in: caret.index)
+                }
+            }
+            let title = mention.query.trimmingCharacters(in: .whitespaces)
+            if !title.isEmpty, !others.contains(where: { $0.heading.localizedCaseInsensitiveCompare(title) == .orderedSame }) {
+                items.append(FormatBar.Suggestion(title: "New Page “\(title)”", label: "Link to a new page, \(title)") { [weak self] in
+                    guard let self else { return }
+                    link(to: library.addPage(titled: title), title: title, replacing: mention.range, in: caret.index)
+                })
+            }
+            return items
         }
 
         // MARK: Formatting
@@ -180,8 +224,17 @@ struct PageEditor: UIViewRepresentable {
                 range.isEmpty ? RichText.style(of: tv.typingAttributes[.font] as? UIFont).contains(style)
                               : doc.has(style, in: range)
             }
-            let kind = doc.paragraphs[doc.locate(range.lowerBound).index].kind
-            formatBar.update(bold: active(.bold), italic: active(.italic), kind: kind)
+            let caret = doc.locate(range.lowerBound)
+            let p = doc.paragraphs[caret.index]
+            // Caret in a link: a button to open its page (tapping the link itself may just place the caret).
+            let linked = range.isEmpty ? p.link(at: caret.offset).flatMap { link in library.pages.first { $0.id == link.page } } : nil
+            let open = linked.map { page in
+                FormatBar.Suggestion(title: "Open \(page.heading)", label: "Open \(page.heading)") { [weak self] in
+                    self?.open(page.id)
+                }
+            }
+            formatBar.update(bold: active(.bold), italic: active(.italic), kind: p.kind,
+                             open: open, suggestions: suggestions(at: caret))
         }
 
         func restoreCaret() {
@@ -209,6 +262,13 @@ struct PageEditor: UIViewRepresentable {
 /// this may become a scrolling bar like Notes'.)
 final class FormatBar: UIView {
     enum Action { case style(InlineStyle), list(ParagraphKind) }
+
+    /// A page to link to while typing `@`, or to open from a link.
+    struct Suggestion {
+        let title: String
+        let label: String
+        let action: () -> Void
+    }
 
     private static let gap: CGFloat = 8
     private static let height: CGFloat = 44 + gap
@@ -241,8 +301,29 @@ final class FormatBar: UIView {
 
     override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: Self.height) }
 
-    func update(bold: Bool, italic: Bool, kind: ParagraphKind) {
+    /// The formatting items shown, so they're only rebuilt when they change.
+    /// (Suggestions are rebuilt on every keystroke: their actions hold the query.)
+    private var shown: [String]? = ["format"]
+
+    /// While typing `@`, the bar offers pages instead of formatting, like the
+    /// keyboard's own suggestions. Otherwise it shows formatting, plus a button
+    /// to open the link at the caret.
+    func update(bold: Bool, italic: Bool, kind: ParagraphKind, open: Suggestion?, suggestions: [Suggestion]) {
         for (item, on) in zip(buttons, [bold, italic, kind == .bullet, kind == .numbered]) { item.isSelected = on }
+        let extra = suggestions.isEmpty ? open.map { [$0] } ?? [] : suggestions
+        let key = suggestions.isEmpty ? ["format"] + extra.map(\.label) : nil
+        if key != nil, key == shown { return }
+        shown = key
+        let items = extra.map { s in
+            let item = UIBarButtonItem(primaryAction: UIAction(title: s.title) { _ in s.action() })
+            item.accessibilityLabel = s.label
+            return item
+        }
+        if suggestions.isEmpty {
+            toolbar.setItems(buttons + (items.isEmpty ? [] : [.flexibleSpace()] + items), animated: false)
+        } else {
+            toolbar.setItems(items, animated: false)
+        }
     }
 }
 
