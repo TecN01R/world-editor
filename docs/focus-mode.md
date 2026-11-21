@@ -6,6 +6,9 @@ two sizing rules, `FocusEditor` (UIKit) does the rest.
 
 ## Layout
 
+- **The goal:** the text takes the most screen it can, always, folded or
+  open, so a blank page never feels small. Everything below serves that.
+
 - One paragraph per page. Return splits at the caret onto a new page;
   Backspace at the very start joins with the previous page.
 - The paragraph is set as large as the page allows, to half a point. What
