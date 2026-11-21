@@ -4,12 +4,11 @@ import WriterCore
 /// The open page's type and its fields, under the title in Edit mode. The
 /// type is a small line under the title, as Contacts puts a company under a
 /// name ("Add Type" on a plain page). Fields float on the page, without a
-/// card: a quiet name, then its value, stacked at accessibility text sizes.
+/// card: a quiet name, then its value, stacked when the two columns don't fit.
 /// Stock controls throughout, without glass: the HIG keeps Liquid Glass out
 /// of the content layer.
 struct PageFields: View {
     @Environment(Library.self) private var library
-    @Environment(\.dynamicTypeSize) private var textSize
     /// Its height, so the writing below starts after it.
     let onHeight: (CGFloat) -> Void
 
@@ -20,17 +19,16 @@ struct PageFields: View {
         VStack(alignment: .leading, spacing: 10) {
             typeMenu(Label(type?.name ?? "Add Type", systemImage: "square.text.square"))
             if let type {
-                if textSize.isAccessibilitySize {   // HIG layout: adjacent views stack as text grows
-                    VStack(alignment: .leading, spacing: 12) {
-                        ForEach(fields) { field in
-                            VStack(alignment: .leading, spacing: 2) { name(field); valueView(field) }
-                                .modifier(FieldRow(field: field, type: type))
-                        }
-                    }
-                } else {
+                ViewThatFits(in: .horizontal) {   // HIG layout: stack only where the columns don't fit
                     Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {   // each row centred on its control
                         ForEach(fields) { field in
                             GridRow { name(field); valueView(field) }
+                                .modifier(FieldRow(field: field, type: type))
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(fields) { field in
+                            VStack(alignment: .leading, spacing: 2) { name(field); valueView(field) }
                                 .modifier(FieldRow(field: field, type: type))
                         }
                     }
