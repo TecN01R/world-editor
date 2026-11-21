@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      gallery:
+        description: Every screen in every posture, orientation and appearance (slow)
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.ref }}-${{ github.event_name }}   # manual runs don't cancel pushes
@@ -150,6 +155,7 @@ jobs:
         if: steps.ui.outputs.changed == 'true'
         env:
           FULL_SHOTS: ${{ steps.ui.outputs.focus }}
+          GALLERY: ${{ inputs.gallery || 'false' }}
         run: ci/screenshots.sh app/WorldEditor.app
       # Force-pushed as a single orphan commit, so the branch only ever holds
       # the latest set and main's history never contains images.

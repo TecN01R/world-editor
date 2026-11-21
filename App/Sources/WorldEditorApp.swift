@@ -100,13 +100,18 @@ final class Library {
 /// - `-screenshotPages YES`: several pages, showing the pages list
 /// - `-startInFocus YES`: open the page in Focus mode (read by `RootView`)
 /// - `-focusControls YES`: with Focus mode's controls showing (read by `RootView`)
+/// - `-screenshotNewPage YES`: a new, empty page (cursor in its title)
+/// - `-screenshotModels YES`: with the On-device Models sheet open (with `-screenshotPages`)
 enum Screenshots {
     private static let defaults = UserDefaults.standard
-    static var isActive: Bool { defaults.string(forKey: "screenshotText") != nil || isRich || opensList }
+    static var isActive: Bool { defaults.string(forKey: "screenshotText") != nil || isRich || opensList || isNewPage }
     static var opensList: Bool { defaults.bool(forKey: "screenshotPages") }
     static var isRich: Bool { defaults.bool(forKey: "screenshotRich") }
+    static var isNewPage: Bool { defaults.bool(forKey: "screenshotNewPage") }
+    static var showsModels: Bool { defaults.bool(forKey: "screenshotModels") }
 
     static func pages() -> [WriterCore.Document] {
+        if isNewPage { return [WriterCore.Document()] }
         if let seeded = defaults.string(forKey: "screenshotText") {
             let text = seeded == "EMPTY" ? "" : seeded.replacingOccurrences(of: "\\n", with: "\n")
             return [WriterCore.Document(paragraphs: text.components(separatedBy: "\n").map { Paragraph(text: $0) })]

@@ -19,7 +19,6 @@ cat devices.txt
 
 while IFS='|' read -r UDID NAME; do
   [ -n "$UDID" ] || continue
-  DISPLAY_ID=""
   SLUG="$(echo "$NAME" | tr ' ' '-' | tr -cd '[:alnum:]-')"
   echo "== $NAME ($UDID)"
   xcrun simctl boot "$UDID" || true
@@ -34,43 +33,64 @@ while IFS='|' read -r UDID NAME; do
     local name="$1"; shift
     xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE" "$@" >/dev/null
     sleep 3   # launch, layout and keyboard animation
-    # Foldables expose several displays. Only the first (the outer screen)
-    # is captured: the simulator boots folded, so the inner one is black.
-    if [ -z "${DISPLAY_ID:-}" ] && ! err=$(xcrun simctl io "$UDID" screenshot "$OUT/$SLUG-$name.png" 2>&1 >/dev/null); then
-      DISPLAY_ID=$(echo "$err" | sed -nE 's/.*--display=([0-9]+).*/\1/p' | sort -n | head -1)
-    fi
-    if [ -n "${DISPLAY_ID:-}" ]; then
-      xcrun simctl io "$UDID" screenshot --display="$DISPLAY_ID" "$OUT/$SLUG-display$DISPLAY_ID-$name.png" >/dev/null
-    fi
+    xcrun simctl io "$UDID" screenshot ${DISPLAY_ID:+--display="$DISPLAY_ID"} "$OUT/$SLUG-$name.png" >/dev/null
     echo "   $name"
   }
 
-  shoot edit           -screenshotRich YES
-  shoot pages          -screenshotPages YES
-  shoot focus-pages    -screenshotText "$PAGES" -startInFocus YES
-  shoot focus-controls -screenshotText "$PAGES" -startInFocus YES -focusControls YES
-  # Fitting edge cases, only when Focus mode itself changed.
-  if [ "${FULL_SHOTS:-true}" = "true" ]; then
-    shoot focus-empty -screenshotText EMPTY -startInFocus YES
-    shoot focus-g     -screenshotText "g" -startInFocus YES
-    shoot focus-short -screenshotText "Hi. This" -startInFocus YES
-    shoot focus-long  -screenshotText "$LONG" -startInFocus YES
-  fi
-  # Unfolded: simctl has no fold command, so `hinge` (installed by the
-  # workflow) sends the simulator the same hinge event as Device Hub's Open
-  # button, from inside the simulator. Never fails the job.
-  if [ -n "$DISPLAY_ID" ] && command -v hinge >/dev/null; then (
-    set +e +o pipefail
-    { hinge -d "$UDID" open || hinge -d "$UDID" 180; } 2>&1 | sed 's/^/   hinge: /'
-    sleep 3
-    INNER=$(xcrun simctl io "$UDID" screenshot "$OUT/probe.png" 2>&1 | sed -nE 's/.*--display=([0-9]+).*/\1/p' | sort -n | tail -1)
-    rm -f "$OUT/probe.png"
-    if [ -n "$INNER" ] && [ "$INNER" != "$DISPLAY_ID" ]; then
-      DISPLAY_ID="$INNER"
+  # Every screen, for one posture and appearance (prefix names them).
+  screens() {
+    local p="$1"
+    shoot "$p-pages"          -screenshotPages YES
+    shoot "$p-models"         -screenshotPages YES -screenshotModels YES
+    shoot "$p-edit"           -screenshotRich YES
+    shoot "$p-edit-new"       -screenshotNewPage YES
+    shoot "$p-focus"          -screenshotText "$PAGES" -startInFocus YES
+    shoot "$p-focus-controls" -screenshotText "$PAGES" -startInFocus YES -focusControls YES
+    shoot "$p-focus-rich"     -screenshotRich YES -startInFocus YES
+    shoot "$p-focus-empty"    -screenshotText EMPTY -startInFocus YES
+    shoot "$p-focus-g"        -screenshotText "g" -startInFocus YES
+    shoot "$p-focus-long"     -screenshotText "$LONG" -startInFocus YES
+  }
+
+  # Displays: the Duo has an outer (lowest id) and inner (highest id) one.
+  DISPLAYS=$(xcrun simctl io "$UDID" screenshot "$OUT/probe.png" 2>&1 | sed -nE 's/.*--display=([0-9]+).*/\1/p' | sort -n)
+  rm -f "$OUT/probe.png"
+  OUTER=$(echo "$DISPLAYS" | head -1); INNER=$(echo "$DISPLAYS" | tail -1)
+  # `hinge` (installed by the workflow) sends the simulator the same hinge
+  # event as Device Hub's pose buttons; simctl has no fold command.
+  pose() { command -v hinge >/dev/null && hinge -d "$UDID" "$@" 2>&1 | sed 's/^/   hinge: /'; sleep 3; }
+
+  if [ "${GALLERY:-false}" = "true" ]; then
+    # Everything: each screen folded, open (landscape and portrait) and half
+    # open like a book, in dark and light.
+    for look in dark light; do
+      xcrun simctl ui "$UDID" appearance "$look"
+      pose close;  DISPLAY_ID="$OUTER"; screens "$look-folded"
+      pose open;   DISPLAY_ID="$INNER"
+      pose orient landscape-left; screens "$look-open-landscape"
+      pose orient portrait;       screens "$look-open-portrait"
+      pose half;                  screens "$look-book"
+      pose orient landscape-left
+    done
+  else
+    DISPLAY_ID="$OUTER"
+    shoot edit           -screenshotRich YES
+    shoot pages          -screenshotPages YES
+    shoot focus-pages    -screenshotText "$PAGES" -startInFocus YES
+    shoot focus-controls -screenshotText "$PAGES" -startInFocus YES -focusControls YES
+    # Fitting edge cases, only when Focus mode itself changed.
+    if [ "${FULL_SHOTS:-true}" = "true" ]; then
+      shoot focus-empty -screenshotText EMPTY -startInFocus YES
+      shoot focus-g     -screenshotText "g" -startInFocus YES
+      shoot focus-short -screenshotText "Hi. This" -startInFocus YES
+      shoot focus-long  -screenshotText "$LONG" -startInFocus YES
+    fi
+    if command -v hinge >/dev/null && [ "$INNER" != "$OUTER" ]; then
+      pose open; DISPLAY_ID="$INNER"
       shoot unfolded-edit       -screenshotRich YES
       shoot unfolded-focus-long -screenshotText "$LONG" -startInFocus YES
     fi
-  ) fi
+  fi
 done < devices.txt
 
 ls -l "$OUT"
