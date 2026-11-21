@@ -49,8 +49,9 @@ enum PageIndex {
     }
 
     /// Spotlight's ranked results for `text`, best first, one per page, and
-    /// its suggested completions.
-    static func search(_ text: String) async -> (results: [Result], suggestions: [String]) {
+    /// its suggested completions, passed to `update` as each arrives.
+    @MainActor
+    static func search(_ text: String, update: ([Result], [String]) -> Void) async {
         await ready?.value
         log.notice("searching")
         let context = CSUserQueryContext()
@@ -63,20 +64,22 @@ enum PageIndex {
             for try await response in CSUserQuery(userQueryString: text, userQueryContext: context).responses {
                 switch response {
                 case .item(let found):
+                    log.notice("result: \(found.item.uniqueIdentifier, privacy: .public)")
                     let parts = found.item.uniqueIdentifier.split(separator: "/").map(String.init)
                     guard let page = parts.first.flatMap(UUID.init), !results.contains(where: { $0.page == page }) else { continue }
                     results.append(Result(page: page, paragraph: parts.dropFirst().first.flatMap(UUID.init)))
                 case .suggestion(let suggestion):
+                    log.notice("suggestion")
                     suggestions.append(plain(suggestion.suggestion.localizedAttributedSuggestion))
                 @unknown default:
                     continue
                 }
+                update(results, suggestions)
             }
             log.notice("search finished: \(results.count) results")
         } catch {
             log.error("search failed: \(error.localizedDescription, privacy: .public)")
         }
-        return (results, suggestions)
     }
 
     private static func plain(_ s: AttributedString) -> String { String(s.characters) }
