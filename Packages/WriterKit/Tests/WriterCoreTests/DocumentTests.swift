@@ -45,32 +45,15 @@ final class DocumentTests: XCTestCase {
         XCTAssertEqual(try store.all(), [d])
     }
 
-    func testSearchFindsTitlesAndTextIgnoringCaseAndAccents() {
+    func testSearchResultsShowAndOpenAtTheWords() {
+        XCTAssertEqual(Search.terms(#"bell "north mooring" tide"#), ["bell", "north mooring", "tide"])
         let page = Document(title: "Mara", paragraphs: [
             Paragraph(text: "Keeps the lighthouse."),
             Paragraph(text: "Once sailed the long route past the Café de la Côte at dawn."),
         ])
-        XCTAssertTrue(page.matches("mara"))
-        XCTAssertTrue(page.matches("cote"))
-        XCTAssertFalse(page.matches("harbour"))
-        XCTAssertFalse(page.matches(""))
-        XCTAssertEqual(page.snippet(matching: "LIGHT"), "Keeps the lighthouse.")              // near the start: whole line
-        XCTAssertEqual(page.snippet(matching: "cote"), "…ute past the Café de la Côte at dawn.") // later: lead-in trimmed
-        XCTAssertNil(page.snippet(matching: "mara"))                                          // title only
-    }
-
-    func testSearchTermsMatchInAnyOrderAndRankTitlesFirst() {
-        XCTAssertEqual(Search.terms(#"bell "north mooring" tide"#), ["bell", "north mooring", "tide"])
-        let harbour = Document(title: "Harbour", paragraphs: [
-            Paragraph(text: "The tide came in."),
-            Paragraph(text: "Check the north mooring, then ask about the bell."),
-        ])
-        let bell = Document(title: "The Bell", paragraphs: [Paragraph(text: "Rung at the north mooring.")])
-        XCTAssertTrue(harbour.matches("bell mooring"))                 // any order
-        XCTAssertFalse(harbour.matches(#""mooring north""#))           // a phrase stays whole
-        XCTAssertEqual(harbour.hit("tide bell"), SearchHit(paragraph: 0, range: 4..<8))
-        XCTAssertEqual(harbour.hit("bell north"), SearchHit(paragraph: 1, range: 10..<15))   // most terms wins
-        XCTAssertEqual(Search.rank([harbour, bell], "bell mooring").map(\.title), ["The Bell", "Harbour"])
-        XCTAssertEqual(Search.rank([harbour, bell], "tide").map(\.title), ["Harbour"])
+        XCTAssertEqual(page.offset(of: "dawn cote", inParagraph: 1), 47)          // the earliest term, accents ignored
+        XCTAssertNil(page.offset(of: "harbour", inParagraph: 0))
+        XCTAssertEqual(page.excerpt(paragraph: 0), "Keeps the lighthouse.")
+        XCTAssertEqual(page.excerpt(paragraph: 1, at: 47), "…ute past the Café de la Côte at dawn.")
     }
 }

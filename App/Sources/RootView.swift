@@ -65,37 +65,41 @@ struct PageList: View {
     @Binding var selection: UUID?
     let newPage: () -> Void
     @State private var showModels = false
+    @State private var searching = false
 
     var body: some View {
         @Bindable var library = library
         let query = library.searchQuery
-        // Pages with all the words first, ranked and instant; then passages
-        // Spotlight finds by meaning, on other pages.
-        let words = query.isEmpty ? library.pages : Search.rank(library.pages, query)
-        let byMeaning: [(page: WriterCore.Document, paragraph: Int)] = library.searchPassages.compactMap { found in
-            guard !words.contains(where: { $0.id == found.page }),
-                  let page = library.pages.first(where: { $0.id == found.page }),
-                  let i = page.paragraphs.firstIndex(where: { $0.id == found.paragraph }) else { return nil }
-            return (page, i)
+        // Searching: Spotlight's results, in its order, each with the line that matched.
+        let results: [(page: WriterCore.Document, paragraph: Int?)] = library.searchResults.compactMap { found in
+            guard let page = library.pages.first(where: { $0.id == found.page }) else { return nil }
+            return (page, found.paragraph.flatMap { p in page.paragraphs.firstIndex { $0.id == p } })
         }
         List(selection: $selection) {
-            ForEach(words) { row($0, snippet: $0.snippet(matching: query)) }
-            if !byMeaning.isEmpty {
-                Section("Related") {
-                    ForEach(byMeaning, id: \.page.id) { row($0.page, snippet: $0.page.excerpt(paragraph: $0.paragraph)) }
+            if query.isEmpty {
+                ForEach(library.pages) { row($0, snippet: nil) }
+            } else {
+                ForEach(results, id: \.page.id) { found in
+                    row(found.page, snippet: found.paragraph.map { i in
+                        found.page.excerpt(paragraph: i, at: found.page.offset(of: query, inParagraph: i) ?? 0)
+                    })
                 }
             }
         }
         .searchable(text: $library.searchQuery, prompt: "Search Pages")
+        .searchSuggestions {
+            ForEach(library.searchSuggestions, id: \.self) { Text($0).searchCompletion($0) }
+        }
         .overlay {
-            if !query.isEmpty, words.isEmpty, byMeaning.isEmpty { ContentUnavailableView.search(text: query) }
+            if !query.isEmpty, !searching, results.isEmpty { ContentUnavailableView.search(text: query) }
         }
         .task(id: query) {
-            library.searchPassages = []
-            guard query.count >= 3 else { return }
-            try? await Task.sleep(for: .milliseconds(300))   // let typing settle
+            searching = true
+            defer { searching = false }
+            guard !query.isEmpty else { library.searchResults = []; library.searchSuggestions = []; return }
+            try? await Task.sleep(for: .milliseconds(150))   // let typing settle
             guard !Task.isCancelled else { return }
-            library.searchPassages = await PageIndex.search(query)
+            (library.searchResults, library.searchSuggestions) = await PageIndex.search(query)
         }
         .navigationTitle("Pages")
         .toolbar {

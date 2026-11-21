@@ -20,7 +20,7 @@ behaviour that only lives in a prompt isn't guaranteed.
 Semantic search finds and groups the author's own passages by meaning. It
 returns existing text with its location and never writes new text. Today it is
 Core Spotlight's on-device semantic search over the author's pages
-(`PageIndex`): it returns pages, ranked, and nothing else.
+(`PageIndex`): it returns the author's passages, ranked, and nothing else.
 
 ## Writing companion
 
