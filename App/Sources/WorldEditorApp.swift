@@ -48,7 +48,8 @@ final class Library {
         if Screenshots.isActive {
             store = nil                        // CI runs never touch saved pages
             pages = Screenshots.pages()
-            if !Screenshots.opensList, let open = pages.first {
+            // Mentions: Mara's page, which Harbour Notes links to.
+            if !Screenshots.opensList, let open = Screenshots.showsMentions ? pages[1] : pages.first {
                 selection = open.id
                 // Typed text: caret at its end. Rich sample: at the top, title in view.
                 let last = open.paragraphs.count - 1
@@ -126,6 +127,7 @@ final class Library {
 /// Launch arguments for CI screenshots (never used otherwise):
 /// - `-screenshotText "para one\npara two"`: a page with that text (`EMPTY` for blank)
 /// - `-screenshotRich YES`: one page showing bold, italic and both kinds of list
+/// - `-screenshotMentions YES`: with `-screenshotRich`, Mara's page with its Mentions sheet open
 /// - `-screenshotPages YES`: showing the pages list
 /// Each seeds two more pages, so `@` has something to find.
 /// - `-startInFocus YES`: open the page in Focus mode (read by `RootView`)
@@ -135,6 +137,7 @@ enum Screenshots {
     static var isActive: Bool { defaults.string(forKey: "screenshotText") != nil || isRich || opensList }
     static var opensList: Bool { defaults.bool(forKey: "screenshotPages") }
     static var isRich: Bool { defaults.bool(forKey: "screenshotRich") }
+    static var showsMentions: Bool { defaults.bool(forKey: "screenshotMentions") }
 
     static func pages() -> [WriterCore.Document] {
         let day: TimeInterval = 86_400

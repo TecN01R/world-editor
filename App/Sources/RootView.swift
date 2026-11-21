@@ -98,6 +98,7 @@ struct PageList: View {
 /// One page, in Edit mode or Focus mode.
 struct EditorView: View {
     @Environment(Library.self) private var library
+    @State private var showMentions = Screenshots.showsMentions
     @Binding var focusMode: Bool
     @Binding var focusControls: Bool
     let chromeHidden: Bool
@@ -123,6 +124,7 @@ struct EditorView: View {
         .navigationBarBackButtonHidden(focusMode)
         .toolbar(removing: focusMode ? .sidebarToggle : nil)
         .animation(.easeInOut(duration: 0.25), value: chromeHidden)
+        .sheet(isPresented: $showMentions) { MentionsView() }
         .toolbar {
             if focusMode {
                 ToolbarItem(placement: .cancellationAction) {
@@ -141,18 +143,51 @@ struct EditorView: View {
                 }
                 // Shown when there's room; first into "•••" when folded.
                 ToolbarItem(placement: .primaryAction) {
-                    let mentions = library.mentions(of: library.document.id)
-                    Menu("Mentions", systemImage: "at") {
-                        Section("Mentioned In") {
-                            ForEach(mentions) { page in
-                                Button(page.heading.isEmpty ? "New Page" : page.heading) { library.selection = page.id }
-                            }
-                            if mentions.isEmpty { Text("No pages link here yet") }
-                        }
-                    }
+                    Button("Mentions", systemImage: "at") { showMentions = true }
                 }
                 .visibilityPriority(.low)
             }
         }
+    }
+}
+
+/// The pages that `@`-link to the open page. A sheet, as content to browse
+/// rather than commands: half height to glance, full to read; tapping one opens it.
+struct MentionsView: View {
+    @Environment(Library.self) private var library
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        let mentions = library.mentions(of: library.document.id)
+        NavigationStack {
+            List(mentions) { page in
+                Button {
+                    dismiss()
+                    library.selection = page.id
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(page.heading.isEmpty ? "New Page" : page.heading).font(.headline)
+                        if !page.preview.isEmpty {
+                            Text(page.preview).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                        }
+                    }
+                }
+                .tint(.primary)
+            }
+            .overlay {
+                if mentions.isEmpty {
+                    ContentUnavailableView("No Mentions", systemImage: "at",
+                                           description: Text("Pages that link here with @ show up here."))
+                }
+            }
+            .navigationTitle("Mentions")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close", systemImage: "xmark") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
     }
 }
