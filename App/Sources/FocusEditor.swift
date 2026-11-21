@@ -236,19 +236,28 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
                                    attributes: Self.attributes(CGFloat(size)))
     }
 
-    /// Whether the paragraph fits the page at `size`: its height, and no word
-    /// wider than a line (words never break).
+    /// Whether the paragraph fits the page at `size`, and no word is wider
+    /// than a line (words never break). What must fit is from the top of the
+    /// tallest letter down to the bottom of the last line box: the caret spans
+    /// the box, and must stay clear of the keyboard, but the empty space above
+    /// lowercase letters (a lone "g") may run into the top margin.
     private func fits(_ size: Double, in page: CGSize) -> Bool {
         let s = styled(size)
         let longestWord = Self.words.matches(in: s.string, range: NSRange(location: 0, length: s.length))
             .map { s.attributedSubstring(from: $0.range).size().width }.max() ?? 0
         guard longestWord <= page.width else { return false }
-        return height(of: s, width: page.width) <= page.height
+        return box(of: s, width: page.width) - ink(of: s, width: page.width).minY <= page.height
     }
 
-    private func height(of s: NSAttributedString, width: CGFloat) -> CGFloat {
+    private func box(of s: NSAttributedString, width: CGFloat) -> CGFloat {
         ceil(s.boundingRect(with: CGSize(width: width, height: .greatestFiniteMagnitude),
                             options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil).height)
+    }
+
+    /// Where the letters are actually drawn, from TextKit (device metrics).
+    private func ink(of s: NSAttributedString, width: CGFloat) -> CGRect {
+        s.boundingRect(with: CGSize(width: width, height: .greatestFiniteMagnitude),
+                       options: [.usesLineFragmentOrigin, .usesDeviceMetrics], context: nil)
     }
 
     private static let words = try! NSRegularExpression(pattern: "\\S+")
@@ -263,19 +272,15 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
 
         if newSize != size { apply(newSize) }
         // The text view has the final say: if its layout is ever taller than
-        // the page, step down rather than let anything hang off it.
-        var h = measuredHeight(width: page.width)
-        while h > page.height, size > FocusFit.minSize {
+        // the page allows, step down rather than let anything hang off it.
+        var h = measuredHeight(width: page.width), drawn = inkOfText(width: page.width)
+        while h - drawn.minY > page.height, size > FocusFit.minSize {
             apply(max(FocusFit.minSize, size * 0.97))
-            h = measuredHeight(width: page.width)
+            h = measuredHeight(width: page.width); drawn = inkOfText(width: page.width)
         }
-        // Centre what's drawn, not the line boxes: a lone "g" has empty space
-        // above it in its line box. The boxes (and so the caret) still stay on
-        // the page and clear of the keyboard.
-        let ink = textView.text.isEmpty ? CGRect(x: 0, y: 0, width: 0, height: h)
-            : textView.attributedText.boundingRect(with: CGSize(width: page.width, height: .greatestFiniteMagnitude),
-                                                   options: [.usesLineFragmentOrigin, .usesDeviceMetrics], context: nil)
-        let y = min(max(page.midY - ink.midY, page.minY - 24), page.maxY - h)
+        // Centre the letters, keeping the last line box above the keyboard
+        // and the tallest letter below the top of the page.
+        let y = max(min(page.midY - drawn.midY, page.maxY - h), page.minY - drawn.minY)
         let frame = CGRect(x: page.minX, y: y, width: page.width, height: h)
         guard frame != textView.frame else { return }
         if animated {
@@ -294,6 +299,10 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
                                                       attributes: Self.attributes(CGFloat(size)))
         textView.selectedRange = selection
         updateTypingAttributes()
+    }
+
+    private func inkOfText(width: CGFloat) -> CGRect {
+        ink(of: styled(size), width: width)
     }
 
     private func measuredHeight(width: CGFloat) -> CGFloat {
