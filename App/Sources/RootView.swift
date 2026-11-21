@@ -138,18 +138,15 @@ struct EditorView: View {
                     }
                     .keyboardShortcut("f", modifiers: [.command, .shift])
                 }
-                // As in Notes: the key action stands alone, everything else
-                // goes in an explicit "•••" menu, so Focus is never folded away.
-                ToolbarSpacer(.fixed, placement: .primaryAction)
-                ToolbarItem(placement: .primaryAction) {
-                    Menu("More", systemImage: "ellipsis") {
-                        Section("Mentioned In") {
-                            let mentions = library.mentions(of: library.document.id)
-                            ForEach(mentions) { page in
-                                Button(page.heading.isEmpty ? "New Page" : page.heading) { library.selection = page.id }
-                            }
-                            if mentions.isEmpty { Text("No pages link here yet") }
+                .visibilityPriority(.high)   // Focus is the keystone: last to overflow
+                // Like Notes: the key action stands alone, everything else in "•••".
+                ToolbarOverflowMenu {
+                    Section("Mentioned In") {
+                        let mentions = library.mentions(of: library.document.id)
+                        ForEach(mentions) { page in
+                            Button(page.heading.isEmpty ? "New Page" : page.heading) { library.selection = page.id }
                         }
+                        if mentions.isEmpty { Text("No pages link here yet") }
                     }
                 }
             }
