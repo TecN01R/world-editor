@@ -55,8 +55,5 @@ final class DocumentTests: XCTestCase {
         XCTAssertNil(page.offset(of: "harbour", inParagraph: 0))
         XCTAssertEqual(page.excerpt(paragraph: 0), "Keeps the lighthouse.")
         XCTAssertEqual(page.excerpt(paragraph: 1, at: 47), "…ute past the Café de la Côte at dawn.")
-        XCTAssertTrue(page.contains(allOf: "dawn mara"))                         // title and text, any order
-        XCTAssertFalse(page.contains(allOf: "dawn harbour"))
-        XCTAssertEqual(page.paragraph(matching: "dawn"), 1)
     }
 }

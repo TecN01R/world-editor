@@ -51,7 +51,10 @@ while IFS='|' read -r UDID NAME; do
         edit)           shoot "$1-edit"           -screenshotRich YES ;;
         mention)        shoot "$1-mention"        -screenshotText "Ask @Map of the" ;;
         mentions)       shoot "$1-mentions"       -screenshotRich YES -screenshotMentions YES ;;
-        search)         shoot "$1-search"         -screenshotPages YES -screenshotSearch "about the bell" ;;
+        search)         shoot "$1-search"         -screenshotPages YES -screenshotSearch "about the bell"
+                        sleep 5   # then show what Spotlight did, for the job log
+                        xcrun simctl spawn "$UDID" log show --last 20s --style compact \
+                          --predicate 'subsystem == "world-editor"' || true ;;
         focus)          shoot "$1-focus"          -screenshotText "$PAGES" -startInFocus YES ;;
         focus-controls) shoot "$1-focus-controls" -screenshotText "$PAGES" -startInFocus YES -focusControls YES ;;
         focus-edges)    shoot "$1-focus-empty"    -screenshotText EMPTY -startInFocus YES
