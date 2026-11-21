@@ -172,22 +172,23 @@ final class RichTextTests: XCTestCase {
         XCTAssertFalse(d.mentions(UUID()))
     }
 
-    func testInsertLinkReplacesTheQueryAndEndsWithAPlainSpace() {
-        var d = Document(paragraphs: [Paragraph(text: "see @harb")])
-        let caret = d.insertLink(to: harbour, title: "Harbour Notes", replacing: 4..<9, in: 0)
-        XCTAssertEqual(d.paragraphs[0].text, "see Harbour Notes ")
-        XCTAssertEqual(d.paragraphs[0].links, [PageLink(location: 4, length: 13, page: harbour)])
-        XCTAssertEqual(caret, 18)
+    func testMentionQuery() {
+        XCTAssertEqual(Mention.query(in: "see @harb", caret: 9)?.range, 4..<9)
+        XCTAssertEqual(Mention.query(in: "@The Black Tower, again", caret: 23)?.query, "The Black Tower, again")
+        XCTAssertNil(Mention.query(in: "@" + String(repeating: "x", count: Mention.maxLength + 1),
+                                   caret: Mention.maxLength + 2))             // longer than a line: over
+        XCTAssertNil(Mention.query(in: "me@mail", caret: 7))                   // not after a space
+        XCTAssertNil(Mention.query(in: "@ 5pm", caret: 5))
+        XCTAssertEqual(Mention.query(in: "@", caret: 1)?.query, "")            // bare @: recent pages
     }
 
-    func testMentionQuery() {
-        let titles = ["Harbour Notes"]
-        XCTAssertEqual(Mention.query(in: "see @harb", caret: 9, titles: titles)?.range, 4..<9)
-        XCTAssertEqual(Mention.query(in: "@Harbour N", caret: 10, titles: titles)?.query, "Harbour N")
-        XCTAssertNil(Mention.query(in: "@Harbour Nx", caret: 11, titles: titles))   // no match, so spaces end it
-        XCTAssertEqual(Mention.query(in: "@Bell", caret: 5, titles: titles)?.query, "Bell")   // new page
-        XCTAssertNil(Mention.query(in: "me@mail", caret: 7, titles: titles))         // not after a space
-        XCTAssertNil(Mention.query(in: "@ 5pm", caret: 5, titles: titles))
-        XCTAssertEqual(Mention.query(in: "@", caret: 1, titles: titles)?.query, "")   // bare @: recent pages
+    func testRenamingAPageRenamesItsLinks() {
+        var d = Document(paragraphs: [Paragraph(text: "Ask Mara now", runs: [StyleRun(location: 4, length: 4, style: .bold)],
+                                                links: [PageLink(location: 4, length: 4, page: harbour)])])
+        XCTAssertTrue(d.retitleLinks(to: harbour, as: "Mara Vey"))
+        XCTAssertEqual(d.paragraphs[0].text, "Ask Mara Vey now")
+        XCTAssertEqual(d.paragraphs[0].links, [PageLink(location: 4, length: 8, page: harbour)])
+        XCTAssertEqual(d.paragraphs[0].runs, [StyleRun(location: 4, length: 8, style: .bold)])
+        XCTAssertFalse(d.retitleLinks(to: harbour, as: "Mara Vey"))   // already current
     }
 }

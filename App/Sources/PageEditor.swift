@@ -128,6 +128,7 @@ struct PageEditor: UIViewRepresentable {
         // MARK: View → model
 
         func textView(_ tv: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+            if RichText.unlinkIfEditing(tv, range: range, replacement: text) { return false }
             // Return on an empty list item ends the list, as in Notes.
             guard text == "\n", range.length == 0 else { return true }
             let p = library.document.paragraphs[library.document.locate(range.location).index]
@@ -168,11 +169,16 @@ struct PageEditor: UIViewRepresentable {
             DispatchQueue.main.async { [library] in library.selection = page }   // this editor goes away
         }
 
-        /// Turns the typed `@query` into a link to `page`.
+        /// Turns the typed `@query` into a link to `page`, then a plain space.
+        /// Typed into the text view like any text, so Undo takes it back.
         private func link(to page: UUID, title: String, replacing range: Range<Int>, in index: Int) {
-            var caret = 0
-            library.update { caret = $0.insertLink(to: page, title: title, replacing: range, in: index) }
-            render(selection: NSRange(location: library.document.paragraphStarts[index] + caret, length: 0))
+            guard let tv = textView else { return }
+            let start = library.document.paragraphStarts[index] + range.lowerBound
+            tv.selectedRange = NSRange(location: start, length: range.count)
+            tv.insertText(title + " ")
+            tv.textStorage.addAttribute(.link, value: RichText.url(page),
+                                        range: NSRange(location: start, length: title.utf16.count))
+            textViewDidChange(tv)   // save the link with the text
             UISelectionFeedbackGenerator().selectionChanged()
         }
 
@@ -181,16 +187,16 @@ struct PageEditor: UIViewRepresentable {
             let doc = library.document, p = doc.paragraphs[caret.index]
             let others = library.pages.filter { $0.id != doc.id && !$0.heading.isEmpty }
             guard selection.isEmpty, p.link(at: caret.offset) == nil,
-                  let mention = Mention.query(in: p.text, caret: caret.offset, titles: others.map(\.heading))
+                  let mention = Mention.query(in: p.text, caret: caret.offset)
             else { return [] }
             var items = others.filter { Mention.matches(mention.query, $0.heading) }.prefix(3).map { page in
-                FormatBar.Suggestion(title: page.heading, label: "Link to \(page.heading)") { [weak self] in
+                FormatBar.Suggestion(title: page.heading, label: "Link to \(page.heading)", page: page.id) { [weak self] in
                     self?.link(to: page.id, title: page.heading, replacing: mention.range, in: caret.index)
                 }
             }
             let title = mention.query.trimmingCharacters(in: .whitespaces)
             if !title.isEmpty, !others.contains(where: { $0.heading.localizedCaseInsensitiveCompare(title) == .orderedSame }) {
-                items.append(FormatBar.Suggestion(title: "New Page “\(title)”", label: "Link to a new page, \(title)") { [weak self] in
+                items.append(FormatBar.Suggestion(title: "New Page “\(title)”", label: "Link to a new page, \(title)", page: nil) { [weak self] in
                     guard let self else { return }
                     link(to: library.addPage(titled: title), title: title, replacing: mention.range, in: caret.index)
                 })
@@ -231,7 +237,7 @@ struct PageEditor: UIViewRepresentable {
             // Caret in a link: a button to open its page (tapping the link itself may just place the caret).
             let linked = range.isEmpty ? p.link(at: caret.offset).flatMap { link in library.pages.first { $0.id == link.page } } : nil
             let open = linked.map { page in
-                FormatBar.Suggestion(title: "Open \(page.heading)", label: "Open \(page.heading)") { [weak self] in
+                FormatBar.Suggestion(title: "Open \(page.heading)", label: "Open \(page.heading)", page: page.id) { [weak self] in
                     self?.open(page.id)
                 }
             }
@@ -269,19 +275,22 @@ final class FormatBar: UIView {
     struct Suggestion {
         let title: String
         let label: String
+        /// The page it opens or links, so a button is never reused for another page.
+        let page: UUID?
         let action: () -> Void
     }
 
     private static let gap: CGFloat = 8
-    private static let barHeight: CGFloat = 44
-    private static let height = barHeight + gap
+    /// 44 pt at the default text size, growing with Dynamic Type.
+    private var barHeight: CGFloat { UIFontMetrics.default.scaledValue(for: 44, compatibleWith: traitCollection) }
+    private lazy var heightConstraint = capsule.heightAnchor.constraint(equalToConstant: barHeight)
     private let capsule = UIVisualEffectView(effect: UIGlassEffect())
     private let scroll = UIScrollView()
     private let stack = UIStackView()
     private var buttons: [UIButton] = []
 
     init(onAction: @escaping (Action) -> Void) {
-        super.init(frame: CGRect(x: 0, y: 0, width: 320, height: Self.height))
+        super.init(frame: CGRect(x: 0, y: 0, width: 320, height: 44 + Self.gap))
         buttons = [Self.button(symbol: "bold", label: "Bold") { onAction(.style(.bold)) },
                    Self.button(symbol: "italic", label: "Italic") { onAction(.style(.italic)) },
                    Self.button(symbol: "list.bullet", label: "Bulleted List") { onAction(.list(.bullet)) },
@@ -303,7 +312,7 @@ final class FormatBar: UIView {
             capsule.centerXAnchor.constraint(equalTo: centerXAnchor),
             capsule.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 12),
             capsule.topAnchor.constraint(equalTo: topAnchor),
-            capsule.heightAnchor.constraint(equalToConstant: Self.barHeight),
+            heightConstraint,
             fit,
             scroll.leadingAnchor.constraint(equalTo: capsule.contentView.leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: capsule.contentView.trailingAnchor),
@@ -316,10 +325,15 @@ final class FormatBar: UIView {
             stack.heightAnchor.constraint(equalTo: scroll.frameLayoutGuide.heightAnchor),
         ])
         show(buttons)
+        addInteraction(UILargeContentViewerInteraction())   // press and hold at large text sizes
+        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (bar: FormatBar, _: UITraitCollection) in
+            bar.heightConstraint.constant = bar.barHeight
+            bar.invalidateIntrinsicContentSize()
+        }
     }
     required init?(coder: NSCoder) { fatalError() }
 
-    override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: Self.height) }
+    override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: barHeight + Self.gap) }
 
     private static func button(symbol: String? = nil, title: String? = nil, label: String,
                                action: @escaping () -> Void) -> UIButton {
@@ -333,6 +347,9 @@ final class FormatBar: UIView {
         config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14)
         let b = UIButton(configuration: config, primaryAction: UIAction { _ in action() })
         b.accessibilityLabel = label
+        b.showsLargeContentViewer = true
+        b.largeContentTitle = label
+        b.largeContentImage = config.image
         b.widthAnchor.constraint(greaterThanOrEqualToConstant: 56).isActive = true   // even slots, as in Notes
         b.setContentCompressionResistancePriority(.required, for: .horizontal)   // scroll, never squeeze
         b.configurationUpdateHandler = { b in
@@ -347,9 +364,9 @@ final class FormatBar: UIView {
         scroll.contentOffset = .zero
     }
 
-    /// While formatting shows, the labels of the buttons beside it, so it's only
-    /// rebuilt when they change; nil while suggestions show (rebuilt on every
-    /// keystroke: their actions hold the query).
+    /// While formatting shows, the buttons beside it, so it's only rebuilt when
+    /// they change; nil while suggestions show (rebuilt on every keystroke:
+    /// their actions hold the query).
     private var shownExtras: [String]? = []
 
     /// While typing `@`, the bar offers pages instead of formatting, like the
@@ -359,11 +376,15 @@ final class FormatBar: UIView {
         for (b, on) in zip(buttons, [bold, italic, kind == .bullet, kind == .numbered]) { b.isSelected = on }
         if suggestions.isEmpty {
             let extras = open.map { [$0] } ?? []
-            let labels = extras.map(\.label)
-            guard labels != shownExtras else { return }
-            shownExtras = labels
+            let keys = extras.map { "\($0.label) \($0.page?.uuidString ?? "")" }
+            guard keys != shownExtras else { return }
+            shownExtras = keys
             show(buttons + extras.map(Self.button(for:)))
         } else {
+            if shownExtras != nil {   // formatting gave way to suggestions: tell VoiceOver
+                UIAccessibility.post(notification: .announcement,
+                                     argument: suggestions.count == 1 ? "1 page suggestion" : "\(suggestions.count) page suggestions")
+            }
             shownExtras = nil
             show(suggestions.map(Self.button(for:)))
         }
@@ -400,6 +421,12 @@ final class PageView: UIView {
         showBar(textView.isFirstResponder)
     }
     required init?(coder: NSCoder) { fatalError() }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let height = bar.isHidden ? 0 : bar.intrinsicContentSize.height   // follows Dynamic Type
+        if textView.barHeight != height { textView.barHeight = height }
+    }
 
     /// The bar shows only while writing, like the keyboard it sits on.
     func showBar(_ shown: Bool) {

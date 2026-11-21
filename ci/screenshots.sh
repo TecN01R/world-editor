@@ -49,7 +49,7 @@ while IFS='|' read -r UDID NAME; do
       case "$screen" in
         pages)          shoot "$1-pages"          -screenshotPages YES ;;
         edit)           shoot "$1-edit"           -screenshotRich YES ;;
-        mention)        shoot "$1-mention"        -screenshotText "Ask @Ma" ;;
+        mention)        shoot "$1-mention"        -screenshotText "Ask @Map of the" ;;
         mentions)       shoot "$1-mentions"       -screenshotRich YES -screenshotMentions YES ;;
         search)         shoot "$1-search"         -screenshotPages YES -screenshotSearch light ;;
         focus)          shoot "$1-focus"          -screenshotText "$PAGES" -startInFocus YES ;;

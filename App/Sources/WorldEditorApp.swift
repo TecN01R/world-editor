@@ -92,10 +92,16 @@ final class Library {
     /// Applies a user edit to the open page.
     func update(_ change: (inout WriterCore.Document) -> Void) {
         guard let i = pages.firstIndex(where: { $0.id == selection }) else { return }
+        let heading = pages[i].heading
         change(&pages[i])
         let page = pages.remove(at: i)
         pages.insert(page, at: 0)
         scheduleSave(page)
+        // Renamed: links to it everywhere show the new name, as in Apple Notes.
+        guard page.heading != heading else { return }
+        for j in pages.indices.dropFirst() where pages[j].retitleLinks(to: page.id, as: page.heading) {
+            scheduleSave(pages[j])
+        }
     }
 
     private func discardIfEmpty(_ id: UUID) {

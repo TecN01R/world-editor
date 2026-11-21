@@ -136,6 +136,28 @@ public struct Paragraph: Identifiable, Hashable, Sendable {
         runs = Self.runs(from: styles)
     }
 
+    /// Rewrites the text of every link to `page` as `title`, keeping each
+    /// link's styling. Returns whether anything changed.
+    @discardableResult
+    public mutating func retitleLinks(to page: UUID, as title: String) -> Bool {
+        var units = Array(text.utf16), styles = self.styles, targets = self.targets
+        let new = Array(title.utf16)
+        var changed = false
+        for link in links.reversed() where link.page == page {
+            let r = link.location..<(link.location + link.length)
+            guard Array(units[r]) != new else { continue }
+            units.replaceSubrange(r, with: new)
+            styles.replaceSubrange(r, with: Array(repeating: styles[link.location], count: new.count))
+            targets.replaceSubrange(r, with: Array(repeating: page, count: new.count))
+            changed = true
+        }
+        guard changed else { return false }
+        text = String(decoding: units, as: UTF16.self)
+        runs = Self.runs(from: styles)
+        links = Self.links(from: targets)
+        return true
+    }
+
     /// The text, styling and links from `range`, as a new paragraph of the same kind.
     func slice(_ range: Range<Int>, id: UUID = UUID()) -> Paragraph {
         let units = Array(text.utf16), styles = self.styles, targets = self.targets
@@ -237,6 +259,15 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
 
     public func paragraph(_ id: UUID) -> Paragraph? { paragraphs.first { $0.id == id } }
 
+    /// Rewrites links to `page` as its new `title` (renaming a page renames its links).
+    @discardableResult
+    public mutating func retitleLinks(to page: UUID, as title: String) -> Bool {
+        guard !title.isEmpty else { return false }
+        var changed = false
+        for i in paragraphs.indices where paragraphs[i].retitleLinks(to: page, as: title) { changed = true }
+        return changed   // not an edit of this page, so `modified` stays
+    }
+
     /// Whether any `@` link on this page points at `page` (backlinks).
     public func mentions(_ page: UUID) -> Bool {
         paragraphs.contains { $0.links.contains { $0.page == page } }
@@ -325,20 +356,6 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
         let offset = (lines.count == 1 ? range.lowerBound : 0) + lines.last!.utf16.count
         modified = Date()
         return (at, offset)
-    }
-
-    /// Replaces `range` of paragraph `index` (the typed `@query`) with a link
-    /// to `page` reading `title`, then a plain space. Returns the caret offset.
-    @discardableResult
-    public mutating func insertLink(to page: UUID, title: String, replacing range: Range<Int>, in index: Int) -> Int {
-        guard paragraphs.indices.contains(index) else { return 0 }
-        var p = paragraphs[index]
-        p.replace(range, with: title + " ", style: p.style(at: range.lowerBound))
-        let start = min(range.lowerBound, p.length), length = title.utf16.count
-        p.setText(p.text, runs: p.runs, links: p.links + [PageLink(location: start, length: length, page: page)])
-        paragraphs[index] = p
-        modified = Date()
-        return start + length + 1
     }
 
     // MARK: Formatting a selection (document positions)
