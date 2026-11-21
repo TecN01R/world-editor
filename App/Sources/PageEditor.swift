@@ -18,6 +18,7 @@ struct PageEditor: UIViewRepresentable {
         tv.keyboardDismissMode = .interactive
         tv.allowsEditingTextAttributes = true      // ⌘B, ⌘I and the Format menu
         tv.inputAccessoryView = context.coordinator.formatBar
+        context.coordinator.formatBar.column = tv
         tv.titleField = context.coordinator.titleField
         context.coordinator.textView = tv
         context.coordinator.render(selection: nil)
@@ -256,10 +257,11 @@ struct PageEditor: UIViewRepresentable {
 }
 
 /// Bold, italic, bulleted and numbered list above the keyboard, or pages to
-/// link while typing `@`. One glass capsule centred on the keyboard, with a
-/// small gap above it as in Notes. It scrolls sideways when its buttons don't
-/// fit, as Notes' does: customised at Kevin's request, since the stock toolbar
-/// folds extra items into "•••" and centres on the app rather than the keyboard.
+/// link while typing `@`. One glass capsule with a small gap above it, kept
+/// inside the page's column (clear of the pages list and the Duo's side
+/// column) and scrolling sideways when its buttons don't fit, as in Notes.
+/// Customised at Kevin's request: the stock toolbar folds extra items into
+/// "•••" and spans the whole keyboard.
 final class FormatBar: UIView {
     enum Action { case style(InlineStyle), list(ParagraphKind) }
 
@@ -276,6 +278,14 @@ final class FormatBar: UIView {
     private let scroll = UIScrollView()
     private let stack = UIStackView()
     private var buttons: [UIButton] = []
+    /// Where the bar may sit: the page's column, in this view's coordinates.
+    private let area = UILayoutGuide()
+    private lazy var areaLeading = area.leadingAnchor.constraint(equalTo: leadingAnchor)
+    private lazy var areaTrailing = area.trailingAnchor.constraint(equalTo: trailingAnchor)
+
+    /// The page's text view. The bar lives in the keyboard's window, so it
+    /// follows the column's safe area through screen coordinates.
+    weak var column: UIView? { didSet { setNeedsLayout() } }
 
     init(onAction: @escaping (Action) -> Void) {
         super.init(frame: CGRect(x: 0, y: 0, width: 320, height: Self.barHeight + Self.gap))
@@ -295,12 +305,14 @@ final class FormatBar: UIView {
         capsule.contentView.addSubview(scroll)
         addSubview(capsule)
 
-        let pad: CGFloat = 6
+        addLayoutGuide(area)
+        let pad: CGFloat = 8
         let fit = capsule.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: 2 * pad)
         fit.priority = .defaultHigh   // as wide as its buttons, until the keyboard's width runs out
         NSLayoutConstraint.activate([
-            capsule.centerXAnchor.constraint(equalTo: centerXAnchor),   // the keyboard's centre
-            capsule.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 12),
+            areaLeading, areaTrailing,
+            capsule.centerXAnchor.constraint(equalTo: area.centerXAnchor),
+            capsule.leadingAnchor.constraint(greaterThanOrEqualTo: area.leadingAnchor, constant: 12),
             capsule.topAnchor.constraint(equalTo: topAnchor),
             capsule.heightAnchor.constraint(equalToConstant: Self.barHeight),
             fit,
@@ -320,10 +332,20 @@ final class FormatBar: UIView {
 
     override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: Self.barHeight + Self.gap) }
 
+    override func layoutSubviews() {
+        if let column, let space = column.window?.windowScene?.screen.coordinateSpace {
+            let frame = convert(column.convert(column.safeAreaLayoutGuide.layoutFrame, to: space), from: space)
+            areaLeading.constant = max(0, frame.minX)
+            areaTrailing.constant = min(0, frame.maxX - bounds.width)
+        }
+        super.layoutSubviews()
+    }
+
     private static func button(symbol: String? = nil, title: String? = nil, label: String,
                                action: @escaping () -> Void) -> UIButton {
         var config = UIButton.Configuration.plain()
         config.image = symbol.flatMap { UIImage(systemName: $0) }
+        config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .title3)
         config.title = title
         config.baseForegroundColor = .label
         config.cornerStyle = .capsule
@@ -331,6 +353,7 @@ final class FormatBar: UIView {
         config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14)
         let b = UIButton(configuration: config, primaryAction: UIAction { _ in action() })
         b.accessibilityLabel = label
+        b.widthAnchor.constraint(greaterThanOrEqualToConstant: 56).isActive = true   // even slots, as in Notes
         b.configurationUpdateHandler = { b in
             b.configuration?.background.backgroundColor = b.isSelected ? .tertiarySystemFill : .clear
         }
@@ -376,6 +399,7 @@ final class PageTextView: PlainPasteTextView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        inputAccessoryView?.setNeedsLayout()   // the bar follows this column
         guard let title = titleField else { return }
         let width = bounds.width
         let column = min(width - 44, 36 * PageEditor.font.pointSize)
