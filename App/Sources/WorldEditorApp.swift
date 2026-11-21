@@ -68,6 +68,19 @@ final class Library {
         selection = page.id
     }
 
+    /// A titled page for an `@` mention, saved but not opened.
+    func addPage(titled title: String) -> UUID {
+        let page = WriterCore.Document(title: title)
+        pages.insert(page, at: min(1, pages.count))   // just behind the open page
+        scheduleSave(page)
+        return page.id
+    }
+
+    /// Pages with an `@` link to `id`, most recent first.
+    func mentions(of id: UUID) -> [WriterCore.Document] {
+        pages.filter { $0.id != id && $0.mentions(id) }
+    }
+
     func delete(_ id: UUID) {
         pendingSaves.removeValue(forKey: id)?.cancel()
         if selection == id { selection = nil }
@@ -111,9 +124,10 @@ final class Library {
 }
 
 /// Launch arguments for CI screenshots (never used otherwise):
-/// - `-screenshotText "para one\npara two"`: one page with that text (`EMPTY` for blank)
+/// - `-screenshotText "para one\npara two"`: a page with that text (`EMPTY` for blank)
 /// - `-screenshotRich YES`: one page showing bold, italic and both kinds of list
-/// - `-screenshotPages YES`: several pages, showing the pages list
+/// - `-screenshotPages YES`: showing the pages list
+/// Each seeds two more pages, so `@` has something to find.
 /// - `-startInFocus YES`: open the page in Focus mode (read by `RootView`)
 /// - `-focusControls YES`: with Focus mode's controls showing (read by `RootView`)
 enum Screenshots {
@@ -123,9 +137,14 @@ enum Screenshots {
     static var isRich: Bool { defaults.bool(forKey: "screenshotRich") }
 
     static func pages() -> [WriterCore.Document] {
+        let day: TimeInterval = 86_400
+        let mara = WriterCore.Document(title: "Mara", paragraphs: [Paragraph(text: "Keeps the lighthouse.")],
+                                       modified: Date().addingTimeInterval(-day))
+        let map = WriterCore.Document(title: "Map of the Coast", paragraphs: [Paragraph(text: "Three coves, one road.")],
+                                      modified: Date().addingTimeInterval(-3 * day))
         if let seeded = defaults.string(forKey: "screenshotText") {
             let text = seeded == "EMPTY" ? "" : seeded.replacingOccurrences(of: "\\n", with: "\n")
-            return [WriterCore.Document(paragraphs: text.components(separatedBy: "\n").map { Paragraph(text: $0) })]
+            return [WriterCore.Document(paragraphs: text.components(separatedBy: "\n").map { Paragraph(text: $0) }), mara, map]
         }
         let rich = WriterCore.Document(title: "Harbour Notes", paragraphs: [
             Paragraph(text: "The tide came in faster than the charts promised.",
@@ -134,16 +153,9 @@ enum Screenshots {
             Paragraph(text: "Rope, two coils", kind: .bullet),
             Paragraph(text: "Check the north mooring", kind: .numbered,
                       runs: [StyleRun(location: 10, length: 5, style: .bold)]),
-            Paragraph(text: "Ask about the bell", kind: .numbered),
+            Paragraph(text: "Ask Mara about the bell", kind: .numbered,
+                      links: [PageLink(location: 4, length: 4, page: mara.id)]),
         ])
-        guard opensList else { return [rich] }
-        let day: TimeInterval = 86_400
-        return [
-            rich,
-            WriterCore.Document(title: "Characters", paragraphs: [Paragraph(text: "Mara keeps the lighthouse.")],
-                                modified: Date().addingTimeInterval(-day)),
-            WriterCore.Document(title: "Map of the Coast", paragraphs: [Paragraph(text: "Three coves, one road.")],
-                                modified: Date().addingTimeInterval(-3 * day)),
-        ]
+        return [rich, mara, map]
     }
 }
