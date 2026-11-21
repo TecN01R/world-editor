@@ -56,7 +56,7 @@ struct PageList: View {
     @Environment(Library.self) private var library
     @Binding var selection: UUID?
     let newPage: () -> Void
-    @State private var showModels = Screenshots.showsModels
+    @State private var showModels = false
 
     var body: some View {
         List(selection: $selection) {

@@ -181,7 +181,7 @@ struct PageEditor: UIViewRepresentable {
             tv.selectedRange = NSRange(location: loc, length: 0)
             updateTypingAttributes()
             // A new page starts in its title; otherwise carry on writing.
-            let startInTitle = doc.isEmpty && (!Screenshots.isActive || Screenshots.isNewPage)
+            let startInTitle = doc.isEmpty && !Screenshots.isActive
             DispatchQueue.main.async { [titleField] in
                 if startInTitle { titleField.becomeFirstResponder(); return }
                 tv.becomeFirstResponder()
