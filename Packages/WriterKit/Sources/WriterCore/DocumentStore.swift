@@ -1,7 +1,7 @@
 import Foundation
 
 /// Stores documents as JSON files, one per document, in a directory the app
-/// owns. Writes are atomic so a crash can never leave a half-written note.
+/// owns. Writes are atomic so a crash can never leave a half-written page.
 public final class DocumentStore: @unchecked Sendable {
     public let directory: URL
     private let encoder: JSONEncoder = {
@@ -26,10 +26,6 @@ public final class DocumentStore: @unchecked Sendable {
     public func save(_ document: Document) throws {
         let data = try encoder.encode(document)
         try data.write(to: url(for: document.id), options: [.atomic])
-    }
-
-    public func load(_ id: UUID) throws -> Document {
-        try decoder.decode(Document.self, from: Data(contentsOf: url(for: id)))
     }
 
     public func all() throws -> [Document] {

@@ -85,8 +85,6 @@ public enum ModelCatalog {
             licenseURL: URL(string: "https://huggingface.co/lllyasviel/ControlNet-v1-1")!,
             obligations: ["Same as Stable Diffusion 1.5"]),
     ]
-
-    public static func descriptor(_ id: String) -> ModelDescriptor? { all.first { $0.id == id } }
 }
 
 /// A loaded model that can release its memory.
@@ -96,11 +94,9 @@ public protocol ResidentModel: AnyObject, Sendable {
 }
 
 /// Keeps at most a memory budget's worth of models resident and unloads the
-/// least recently used first. Heavy models (diffusion) evict everything else.
+/// least recently used first, so a heavy model (diffusion) can evict all the others.
 public actor ModelResidency {
-    public typealias Resident = ResidentModel
-
-    private var loaded: [(id: String, model: any Resident, lastUse: Date)] = []
+    private var loaded: [(id: String, model: any ResidentModel, lastUse: Date)] = []
     public let budgetBytes: Int64
 
     public init(budgetBytes: Int64) { self.budgetBytes = budgetBytes }
@@ -108,7 +104,7 @@ public actor ModelResidency {
     public var residentIDs: [String] { loaded.map(\.id) }
 
     /// Returns the resident model, loading it with `load` if needed.
-    public func use(_ id: String, load: @Sendable () async throws -> any Resident) async throws -> any Resident {
+    public func use(_ id: String, load: @Sendable () async throws -> any ResidentModel) async throws -> any ResidentModel {
         if let i = loaded.firstIndex(where: { $0.id == id }) {
             loaded[i].lastUse = Date()
             return loaded[i].model

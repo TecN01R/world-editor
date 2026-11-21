@@ -2,8 +2,10 @@
 
 Everything builds on GitHub's Mac runners. Two workflows:
 
-- **CI** (every push): tests the shared Swift package on Linux and macOS and
-  builds the iOS app for the simulator. Needs no setup.
+- **CI** (every push): tests the shared Swift package on Linux, builds the
+  iOS app for the simulator and, when UI code changed, screenshots it on the
+  iPhone Duo simulator (published to the `ci-screenshots` branch). Needs no
+  setup.
 - **TestFlight** (manual, or on a `v*` tag): archives, signs and uploads a
   build. Needs the one-time setup below.
 
@@ -37,5 +39,5 @@ certificates are exported or stored in the repo.
 ## Cost
 
 GitHub's macOS minutes count 10× against a private repository's free
-allowance. Each iOS build takes a few minutes. The Linux job runs first and
-is cheap, so a broken shared package fails before any Mac time is used.
+allowance. Each iOS build takes a few minutes; the screenshot job uses a
+second Mac, and only when UI code changed. The Linux test job is cheap.

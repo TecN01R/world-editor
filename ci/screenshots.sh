@@ -60,8 +60,8 @@ while IFS='|' read -r UDID NAME; do
 
   DISPLAY_ID="$OUTER"
   screens folded
-  # Open: `hinge` (installed by the workflow) sends the simulator the same
-  # hinge event as Device Hub's Open button; simctl has no fold command.
+  # Open: `hinge` (installed by the workflow) unfolds the simulator; simctl
+  # has no fold command.
   if command -v hinge >/dev/null && [ "$INNER" != "$OUTER" ]; then
     hinge -d "$UDID" open 2>&1 | sed 's/^/   hinge: /'
     sleep 3

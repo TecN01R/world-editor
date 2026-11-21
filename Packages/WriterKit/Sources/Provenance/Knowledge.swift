@@ -140,14 +140,21 @@ public struct KnowledgeBase: Codable, Sendable {
         var dropped = 0
         for c in candidates {
             switch v.validate(c, in: documents) {
-            case .success(let f): facts.removeAll { $0.subject == f.subject && $0.attribute == f.attribute && $0.value == f.value }; facts.append(f)
-            case .failure(let r): dropped += 1; rejected.append("\(c.subject).\(c.attribute): \(r)")
+            case .success(let f):
+                facts.removeAll { $0.subject == f.subject && $0.attribute == f.attribute && $0.value == f.value }
+                facts.append(f)
+            case .failure(let r):
+                dropped += 1
+                rejected.append("\(c.subject).\(c.attribute): \(r)")
             }
         }
         for r in rels {
             switch v.validate(r, in: documents) {
-            case .success(let ok): relationships.append(ok)
-            case .failure(let why): dropped += 1; rejected.append("\(r.from) \(r.relation) \(r.to): \(why)")
+            case .success(let ok):
+                relationships.append(ok)
+            case .failure(let why):
+                dropped += 1
+                rejected.append("\(r.from) \(r.relation) \(r.to): \(why)")
             }
         }
         return dropped

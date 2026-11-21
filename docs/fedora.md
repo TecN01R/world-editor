@@ -2,8 +2,8 @@
 
 [xtool](https://github.com/xtool-org/xtool) builds, signs and installs the
 app from Linux. The repository root is a Swift package (`Package.swift` +
-`xtool.yml`) for exactly this; GitHub CI checks that it builds for iOS on every
-push.
+`xtool.yml`) for exactly this; GitHub CI checks that it builds for iOS whenever
+the manifest changes or Swift files are added.
 
 ## One-time setup (about 20 minutes, mostly downloading)
 
