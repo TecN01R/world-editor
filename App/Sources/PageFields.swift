@@ -1,9 +1,10 @@
 import SwiftUI
 import WriterCore
 
-/// The open page's type and its fields, under the title in Edit mode: a
-/// grouped section of standard controls, label on the left, value on the
-/// right, as in Contacts. A plain page shows only a small "Add Type".
+/// The open page's type and its fields, under the title in Edit mode. The
+/// type is a small line under the title, as Contacts puts a company under a
+/// name ("Add Type" on a plain page); the fields are a grouped section of
+/// standard controls, label on the left, value on the right.
 struct PageFields: View {
     @Environment(Library.self) private var library
     /// Its height, so the writing below starts after it.
@@ -11,12 +12,15 @@ struct PageFields: View {
 
     var body: some View {
         let page = library.document
-        Group {
-            if let type = library.type(of: page) {
+        VStack(alignment: .leading, spacing: 8) {
+            let type = library.type(of: page)
+            typeMenu(type.map { Label($0.name, systemImage: "square.text.square") }
+                     ?? Label("Add Type", systemImage: "square.text.square"))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            if let type {
                 VStack(spacing: 0) {
-                    typeMenu(LabeledContent("Type") { Text(type.name) })
                     ForEach(library.fields(of: page)) { field in
-                        Divider()
                         FieldRow(field: field, value: value(field))
                             .contextMenu {
                                 Button("Edit Field…", systemImage: "pencil") { library.fieldsRequest = .editField(field.id) }
@@ -24,21 +28,17 @@ struct PageFields: View {
                                     library.remove(field.id, from: type.id)
                                 }
                             }
+                        Divider()
                     }
-                    Divider()
                     Button("Add Field", systemImage: "plus") { library.fieldsRequest = .addField(type: type.id) }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 11)
                 }
                 .padding(.horizontal, 16)
                 .background(.background.secondary, in: .rect(cornerRadius: 16))
-            } else {
-                typeMenu(Label("Add Type", systemImage: "square.text.square"))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)   // its own height, whatever the frame
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onHeight($0) }
     }
@@ -54,9 +54,10 @@ struct PageFields: View {
                 Button("No Type", role: .destructive) { library.update { $0.type = nil } }
             }
         } label: {
-            label.padding(.vertical, 11).contentShape(.rect)
+            label.padding(.vertical, 6).contentShape(.rect)
         }
-        .tint(.primary)
+        .tint(.secondary)
+        .accessibilityLabel("Type")
     }
 
     private func value(_ field: FieldDefinition) -> Binding<FieldValue?> {
