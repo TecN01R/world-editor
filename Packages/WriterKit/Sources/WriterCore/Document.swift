@@ -2,7 +2,7 @@ import Foundation
 
 /// How a paragraph is presented: plain body text or an item in a list.
 /// Numbers are not stored; a numbered item's number is its position in its
-/// run of consecutive numbered paragraphs (`Document.listOrdinal(at:)`).
+/// run of consecutive numbered paragraphs (TextKit's `NSTextList` counts them).
 public enum ParagraphKind: String, Codable, Hashable, Sendable, CaseIterable {
     case body, bullet, numbered
 
@@ -196,14 +196,6 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
         return (i, max(0, min(location - starts[i], paragraphs[i].length)))
     }
 
-    /// 1-based number of a numbered item within its run of numbered paragraphs.
-    public func listOrdinal(at index: Int) -> Int? {
-        guard paragraphs.indices.contains(index), paragraphs[index].kind == .numbered else { return nil }
-        var n = 1, i = index - 1
-        while i >= 0, paragraphs[i].kind == .numbered { n += 1; i -= 1 }
-        return n
-    }
-
     // MARK: Editing (user-initiated only)
 
     public mutating func setTitle(_ title: String) {
@@ -217,12 +209,6 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
     public mutating func setParagraphs(_ new: [Paragraph]) {
         paragraphs = ParagraphDiff.reconcile(old: paragraphs, new: new)
         modified = Date()
-    }
-
-    /// Replaces the whole text with unstyled body paragraphs, one per line.
-    public mutating func setPlainText(_ text: String) {
-        let lines = text.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
-        setParagraphs(lines.map { Paragraph(text: $0) })
     }
 
     /// Replaces one paragraph's text and styling, keeping its identity and kind.

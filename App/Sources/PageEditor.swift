@@ -78,7 +78,18 @@ struct PageEditor: UIViewRepresentable {
             return false
         }
 
-        init(library: Library) { self.library = library }
+        init(library: Library) {
+            self.library = library
+            super.init()
+            // Text size changed in Settings: show the page at the new size.
+            NotificationCenter.default.addObserver(forName: UIContentSizeCategory.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, let tv = self.textView else { return }
+                    self.titleField.font = PageEditor.titleFont
+                    self.render(selection: tv.selectedRange)
+                }
+            }
+        }
 
         private var selection: Range<Int> {
             let r = textView?.selectedRange ?? NSRange()
@@ -236,7 +247,7 @@ final class FormatBar: UIView {
 
 /// The page's text view. Lays out the title above the writing whenever its
 /// width changes (rotation, fold), in a readable column of ~36em.
-final class PageTextView: UITextView {
+final class PageTextView: PlainPasteTextView {
     override init(frame: CGRect, textContainer: NSTextContainer?) {
         super.init(frame: frame, textContainer: textContainer)
         keyboardLayoutGuide.followsUndockedKeyboard = true
@@ -259,7 +270,9 @@ final class PageTextView: UITextView {
         if textContainerInset != inset { textContainerInset = inset }
 
         // The view runs under the keyboard; keep everything scrollable above it.
-        let covered = max(0, bounds.maxY - keyboardLayoutGuide.layoutFrame.minY)
+        // In screen coordinates: a scroll view's own bounds move as it scrolls.
+        let keyboardTop = window.map { $0.keyboardLayoutGuide.layoutFrame.minY } ?? .greatestFiniteMagnitude
+        let covered = max(0, convert(bounds, to: nil).maxY - keyboardTop)
         if contentInset.bottom != covered {
             contentInset.bottom = covered
             verticalScrollIndicatorInsets.bottom = covered

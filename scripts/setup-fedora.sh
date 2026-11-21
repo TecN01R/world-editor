@@ -64,16 +64,16 @@ if ! command -v netmuxd >/dev/null 2>&1; then
   curl -fL "$url" -o "$BIN/netmuxd" && chmod +x "$BIN/netmuxd"
 fi
 sudo systemctl enable --now avahi-daemon
-# netmuxd takes over the usbmuxd socket; plug in the cable and stop it
-# (sudo systemctl stop netmuxd) if you ever need to pair again over USB.
+# netmuxd and usbmuxd share one socket. Plugging the phone in starts usbmuxd
+# (udev); netmuxd keeps retrying and takes over again once it exits.
 sudo tee /etc/systemd/system/netmuxd.service >/dev/null <<UNIT
 [Unit]
 Description=netmuxd (iPhone over Wi-Fi)
 After=network-online.target avahi-daemon.service
-Conflicts=usbmuxd.service
 [Service]
 ExecStart=$BIN/netmuxd
-Restart=on-failure
+Restart=always
+RestartSec=15
 [Install]
 WantedBy=multi-user.target
 UNIT

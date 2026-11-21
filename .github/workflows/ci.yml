@@ -76,7 +76,9 @@ jobs:
       # compiles. Runs after the app is handed over, so it never delays it.
       - name: Check the xtool package layout builds
         if: steps.ui.outputs.layout == 'true'
+        # Without the generated .xcodeproj, so xcodebuild builds Package.swift.
         run: |
+          rm -rf WorldEditor.xcodeproj
           xcodebuild build -scheme WorldEditor -sdk iphonesimulator \
             -derivedDataPath build-spm -skipPackagePluginValidation -skipMacroValidation \
             ARCHS=arm64 ONLY_ACTIVE_ARCH=YES COMPILER_INDEX_STORE_ENABLE=NO \
@@ -135,7 +137,7 @@ jobs:
             state=$(gh api "$jobs" -q '.jobs[]|select(.name=="ios-build")|((.steps[]|select(.name|startswith("Run actions/upload-artifact"))|.conclusion) // .conclusion // "")' 2>/dev/null | head -1)
             case "$state" in
               success) exit 0 ;;
-              failure|cancelled) echo "Build failed"; exit 1 ;;
+              failure|cancelled|skipped) echo "Build failed"; exit 1 ;;
             esac
             sleep 3
           done

@@ -39,7 +39,7 @@ TextKit measures, `FocusFit` (shared, tested) holds the two sizing rules,
 ## Navigation
 
 - Vertical dots, one per paragraph, centred on the page; drag or tap to move.
-  Always shown, dimmed while writing. Current page is a pill; empty pages are
+  Shown whenever the page has more than one paragraph, dimmed while writing. Current page is a pill; empty pages are
   hollow.
 - Everything else (bars, status, home indicator, pages list) hides while
   writing. A tap outside the text shows a close button for a few seconds;

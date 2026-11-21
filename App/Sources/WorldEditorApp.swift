@@ -4,11 +4,15 @@ import WriterCore
 @main
 struct WorldEditorApp: App {
     @State private var library = Library()
+    @Environment(\.scenePhase) private var phase
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(library)
+        }
+        .onChange(of: phase) { _, phase in
+            if phase != .active { library.flushAll() }   // never lose the last edits
         }
     }
 }
@@ -24,7 +28,7 @@ final class Library {
         didSet {
             guard oldValue != selection else { return }
             cursor = (0, 0)
-            if let old = oldValue { discardIfEmpty(old) }
+            if let old = oldValue { flush(old); discardIfEmpty(old) }
         }
     }
 
@@ -32,7 +36,8 @@ final class Library {
     var cursor = (paragraph: 0, offset: 0)
 
     private let store: DocumentStore?
-    private var saveTask: Task<Void, Never>?
+    /// Pending debounced saves, one per page, so editing one page never drops another's.
+    private var pendingSaves: [UUID: Task<Void, Never>] = [:]
 
     /// The open page (an empty one if none is open).
     var document: WriterCore.Document {
@@ -64,6 +69,7 @@ final class Library {
     }
 
     func delete(_ id: UUID) {
+        pendingSaves.removeValue(forKey: id)?.cancel()
         if selection == id { selection = nil }
         pages.removeAll { $0.id == id }
         try? store?.delete(id)
@@ -80,18 +86,28 @@ final class Library {
 
     private func discardIfEmpty(_ id: UUID) {
         guard let page = pages.first(where: { $0.id == id }), page.isEmpty else { return }
+        pendingSaves.removeValue(forKey: id)?.cancel()
         pages.removeAll { $0.id == id }
         try? store?.delete(id)
     }
 
     private func scheduleSave(_ page: WriterCore.Document) {
-        saveTask?.cancel()
-        saveTask = Task { [store] in
+        pendingSaves[page.id]?.cancel()
+        pendingSaves[page.id] = Task { [store] in
             try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled else { return }
             try? store?.save(page)
         }
     }
+
+    /// Saves a page now if it has an edit waiting (leaving it, or the app going away).
+    func flush(_ id: UUID) {
+        guard let task = pendingSaves.removeValue(forKey: id) else { return }
+        task.cancel()
+        if let page = pages.first(where: { $0.id == id }), !page.isEmpty { try? store?.save(page) }
+    }
+
+    func flushAll() { for id in Array(pendingSaves.keys) { flush(id) } }
 }
 
 /// Launch arguments for CI screenshots (never used otherwise):
