@@ -145,8 +145,14 @@ struct PageEditor: UIViewRepresentable {
             updateFormatBar()
         }
 
-        func textViewDidBeginEditing(_ tv: UITextView) { (tv.superview as? PageView)?.showBar(true) }
-        func textViewDidEndEditing(_ tv: UITextView) { (tv.superview as? PageView)?.showBar(false) }
+        func textViewDidBeginEditing(_ tv: UITextView) {
+            (tv.superview as? PageView)?.showBar(true)
+            updateFormatBar()   // the @ menu can only appear once writing
+        }
+        func textViewDidEndEditing(_ tv: UITextView) {
+            (tv.superview as? PageView)?.showBar(false)
+            closeMentionMenu()
+        }
 
         func textViewDidChangeSelection(_ tv: UITextView) {
             tv.typingAttributes[.link] = nil   // typing beside a link never extends it
@@ -182,26 +188,57 @@ struct PageEditor: UIViewRepresentable {
             UISelectionFeedbackGenerator().selectionChanged()
         }
 
-        /// Pages matching the `@query` at the caret, then a new page by that name.
-        private func suggestions(at caret: (index: Int, offset: Int)) -> [FormatBar.Suggestion] {
+        /// The `@` menu: shown while the caret ends an `@query`, updated as it grows.
+        private var mentionMenu: MentionMenu?
+
+        private func updateMentionMenu(at caret: (index: Int, offset: Int)) {
+            let sections = mentionSections(at: caret)
+            guard let tv = textView, tv.window != nil, tv.isFirstResponder, !sections.isEmpty,
+                  let end = tv.selectedTextRange?.end else { return closeMentionMenu() }
+            let rect = tv.caretRect(for: end)
+            if let menu = mentionMenu, menu.presentingViewController != nil {
+                menu.sections = sections
+                menu.popoverPresentationController?.sourceRect = rect
+                return
+            }
+            var host = tv.window?.rootViewController
+            while let next = host?.presentedViewController { host = next }
+            let menu = MentionMenu()
+            menu.sections = sections
+            menu.popoverPresentationController?.sourceView = tv
+            menu.popoverPresentationController?.sourceRect = rect
+            menu.popoverPresentationController?.passthroughViews = [tv]   // keep typing; taps move the caret
+            host?.present(menu, animated: true)
+            mentionMenu = menu
+        }
+
+        private func closeMentionMenu() {
+            mentionMenu?.dismiss(animated: true)
+            mentionMenu = nil
+        }
+
+        /// This page, then the others matching the `@query` at the caret (all of
+        /// them for a bare `@`), then a new page by that name if none has it.
+        private func mentionSections(at caret: (index: Int, offset: Int)) -> [[MentionMenu.Item]] {
             let doc = library.document, p = doc.paragraphs[caret.index]
-            let others = library.pages.filter { $0.id != doc.id && !$0.heading.isEmpty }
             guard selection.isEmpty, p.link(at: caret.offset) == nil,
-                  let mention = Mention.query(in: p.text, caret: caret.offset)
-            else { return [] }
-            var items = others.filter { Mention.matches(mention.query, $0.heading) }.prefix(3).map { page in
-                FormatBar.Suggestion(title: page.heading, label: "Link to \(page.heading)", page: page.id) { [weak self] in
+                  let mention = Mention.query(in: p.text, caret: caret.offset) else { return [] }
+            func item(_ page: WriterCore.Document) -> MentionMenu.Item {
+                MentionMenu.Item(title: page.heading, date: page.modified) { [weak self] in
                     self?.link(to: page.id, title: page.heading, replacing: mention.range, in: caret.index)
                 }
             }
+            let pages = library.pages.filter { !$0.heading.isEmpty && Mention.matches(mention.query, $0.heading) }
+            var others = pages.filter { $0.id != doc.id }.map(item)
             let title = mention.query.trimmingCharacters(in: .whitespaces)
-            if !title.isEmpty, !others.contains(where: { $0.heading.localizedCaseInsensitiveCompare(title) == .orderedSame }) {
-                items.append(FormatBar.Suggestion(title: "New Page “\(title)”", label: "Link to a new page, \(title)", page: nil) { [weak self] in
+            if !title.isEmpty, !library.pages.contains(where: { $0.heading.localizedCaseInsensitiveCompare(title) == .orderedSame }) {
+                others.append(MentionMenu.Item(title: "Create page “\(title)”", creates: true) { [weak self] in
                     guard let self else { return }
                     link(to: library.addPage(titled: title), title: title, replacing: mention.range, in: caret.index)
                 })
             }
-            return items
+            let current = pages.first { $0.id == doc.id }.map { [item($0)] } ?? []
+            return [current, others].filter { !$0.isEmpty }
         }
 
         // MARK: Formatting
@@ -237,12 +274,12 @@ struct PageEditor: UIViewRepresentable {
             // Caret in a link: a button to open its page (tapping the link itself may just place the caret).
             let linked = range.isEmpty ? p.link(at: caret.offset).flatMap { link in library.pages.first { $0.id == link.page } } : nil
             let open = linked.map { page in
-                FormatBar.Suggestion(title: "Open \(page.heading)", label: "Open \(page.heading)", page: page.id) { [weak self] in
+                FormatBar.OpenButton(title: "Open \(page.heading)", page: page.id) { [weak self] in
                     self?.open(page.id)
                 }
             }
-            formatBar.update(bold: active(.bold), italic: active(.italic), kind: p.kind,
-                             open: open, suggestions: suggestions(at: caret))
+            formatBar.update(bold: active(.bold), italic: active(.italic), kind: p.kind, open: open)
+            updateMentionMenu(at: caret)
         }
 
         func restoreCaret() {
@@ -263,20 +300,19 @@ struct PageEditor: UIViewRepresentable {
     }
 }
 
-/// Bold, italic, bulleted and numbered list above the keyboard, or pages to
-/// link while typing `@`. One glass capsule with a small gap below it, in
+/// Bold, italic, bulleted and numbered list above the keyboard, plus Open
+/// while the caret is in a link. One glass capsule with a small gap below it, in
 /// the page's column, scrolling sideways when its buttons don't fit, as in Notes.
 /// Customised at Kevin's request: the stock toolbar folds extra items into
 /// "•••" and spans the whole keyboard.
 final class FormatBar: UIView {
     enum Action { case style(InlineStyle), list(ParagraphKind) }
 
-    /// A page to link to while typing `@`, or to open from a link.
-    struct Suggestion {
+    /// Open, for the link at the caret.
+    struct OpenButton {
         let title: String
-        let label: String
-        /// The page it opens or links, so a button is never reused for another page.
-        let page: UUID?
+        /// The page it opens, so a button is never reused for another page.
+        let page: UUID
         let action: () -> Void
     }
 
@@ -364,34 +400,20 @@ final class FormatBar: UIView {
         scroll.contentOffset = .zero
     }
 
-    /// While formatting shows, the buttons beside it, so it's only rebuilt when
-    /// they change; nil while suggestions show (rebuilt on every keystroke:
-    /// their actions hold the query).
-    private var shownExtras: [String]? = []
+    /// The extra button beside formatting, so the bar's only rebuilt when it changes.
+    private var shownExtra: String?
 
-    /// While typing `@`, the bar offers pages instead of formatting, like the
-    /// keyboard's own suggestions. Otherwise it shows formatting, plus a button
-    /// to open the link at the caret.
-    func update(bold: Bool, italic: Bool, kind: ParagraphKind, open: Suggestion?, suggestions: [Suggestion]) {
+    /// Formatting, plus a button to open the link at the caret.
+    func update(bold: Bool, italic: Bool, kind: ParagraphKind, open: OpenButton?) {
         for (b, on) in zip(buttons, [bold, italic, kind == .bullet, kind == .numbered]) { b.isSelected = on }
-        if suggestions.isEmpty {
-            let extras = open.map { [$0] } ?? []
-            let keys = extras.map { "\($0.label) \($0.page?.uuidString ?? "")" }
-            guard keys != shownExtras else { return }
-            shownExtras = keys
-            show(buttons + extras.map(Self.button(for:)))
-        } else {
-            if shownExtras != nil {   // formatting gave way to suggestions: tell VoiceOver
-                UIAccessibility.post(notification: .announcement,
-                                     argument: suggestions.count == 1 ? "1 page suggestion" : "\(suggestions.count) page suggestions")
-            }
-            shownExtras = nil
-            show(suggestions.map(Self.button(for:)))
-        }
+        let key = open.map { "\($0.title) \($0.page)" }
+        guard key != shownExtra else { return }
+        shownExtra = key
+        show(buttons + (open.map { [Self.button(for: $0)] } ?? []))
     }
 
-    private static func button(for s: Suggestion) -> UIButton {
-        button(title: s.title, label: s.label, action: s.action)
+    private static func button(for open: OpenButton) -> UIButton {
+        button(title: open.title, label: open.title, action: open.action)
     }
 }
 
