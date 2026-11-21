@@ -98,17 +98,7 @@ struct PageList: View {
             guard !query.isEmpty else { library.searchResults = []; library.searchSuggestions = []; return }
             try? await Task.sleep(for: .milliseconds(150))   // let typing settle
             guard !Task.isCancelled else { return }
-            // Pages with the words, at once, so search never shows nothing
-            // while Spotlight works (or if it can't answer); then Spotlight's
-            // ranked results, words and meaning, as soon as it has any.
-            library.searchResults = library.pages.filter { $0.contains(allOf: query) }.map { page in
-                PageIndex.Result(page: page.id, paragraph: page.paragraph(matching: query).map { page.paragraphs[$0].id })
-            }
-            searching = false
-            let found = await PageIndex.search(query)
-            guard !Task.isCancelled else { return }
-            if !found.results.isEmpty { library.searchResults = found.results }
-            library.searchSuggestions = found.suggestions
+            (library.searchResults, library.searchSuggestions) = await PageIndex.search(query)
             searching = false
         }
         .navigationTitle("Pages")

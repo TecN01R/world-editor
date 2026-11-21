@@ -1,8 +1,7 @@
 import Foundation
 
 /// Showing search results: which words to bold and where a passage's match
-/// is. Finding and ranking is Spotlight's job (the app's `PageIndex`); plain
-/// word matching here only covers the moment before Spotlight answers.
+/// is. Finding and ranking is Spotlight's job (the app's `PageIndex`).
 public enum Search {
     /// Where `query` first appears in `text`, ignoring case and accents.
     public static func range(of query: String, in text: String) -> Range<String.Index>? {
@@ -28,20 +27,6 @@ public enum Search {
 }
 
 extension Document {
-    /// Whether every term of `query` appears in the title or text.
-    public func contains(allOf query: String) -> Bool {
-        let terms = Search.terms(query)
-        return !terms.isEmpty && terms.allSatisfy { term in
-            Search.range(of: term, in: title) != nil || paragraphs.contains { Search.range(of: term, in: $0.text) != nil }
-        }
-    }
-
-    /// The first paragraph holding any of `query`'s terms.
-    public func paragraph(matching query: String) -> Int? {
-        let terms = Search.terms(query)
-        return paragraphs.firstIndex { p in terms.contains { Search.range(of: $0, in: p.text) != nil } }
-    }
-
     /// The UTF-16 offset of the first of `query`'s terms in paragraph `index`,
     /// so a result opens at the words, not the paragraph's start.
     public func offset(of query: String, inParagraph index: Int) -> Int? {

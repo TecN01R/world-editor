@@ -1,4 +1,5 @@
 import CoreSpotlight
+import OSLog
 import WriterCore
 
 /// Search is Spotlight's: pages live in the phone's private, on-device index,
@@ -16,14 +17,22 @@ enum PageIndex {
     }
 
     private static let index = CSSearchableIndex(name: "pages")
+    /// Each step, so CI's log shows whether indexing or searching stalls.
+    private static let log = Logger(subsystem: "world-editor", category: "search")
     private static var ready: Task<Void, Never>?
 
     /// Once at launch: readies Spotlight and indexes every page afresh.
     static func start(with pages: [WriterCore.Document]) {
         CSUserQuery.prepare()
         ready = Task {
-            try? await index.deleteAllSearchableItems()
-            try? await index.indexSearchableItems(pages.flatMap(items))
+            log.notice("indexing \(pages.count) pages")
+            do {
+                try await index.deleteAllSearchableItems()
+                try await index.indexSearchableItems(pages.flatMap(items))
+                log.notice("indexed")
+            } catch {
+                log.error("indexing failed: \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 
@@ -41,6 +50,7 @@ enum PageIndex {
     /// its suggested completions.
     static func search(_ text: String) async -> (results: [Result], suggestions: [String]) {
         await ready?.value
+        log.notice("searching")
         let context = CSUserQueryContext()
         context.fetchAttributes = ["title"]
         context.enableRankedResults = true
@@ -60,7 +70,10 @@ enum PageIndex {
                     continue
                 }
             }
-        } catch {}   // no results is the honest answer when Spotlight can't search
+            log.notice("search finished: \(results.count) results")
+        } catch {
+            log.error("search failed: \(error.localizedDescription, privacy: .public)")
+        }
         return (results, suggestions)
     }
 
