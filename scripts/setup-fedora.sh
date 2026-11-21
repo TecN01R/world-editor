@@ -6,15 +6,22 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 say() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
+# Installs only the packages that are missing, so a re-run doesn't ask for
+# your password (or fingerprint) when there's nothing to do.
+install_packages() {
+  local missing=()
+  for p in "$@"; do rpm -q "$p" >/dev/null 2>&1 || missing+=("$p"); done
+  if [ ${#missing[@]} -gt 0 ]; then sudo dnf install -y "${missing[@]}"; else echo "Already installed."; fi
+}
 BIN="$HOME/.local/bin"
 mkdir -p "$BIN"
 case ":$PATH:" in *":$BIN:"*) ;; *) export PATH="$BIN:$PATH"
   grep -q 'local/bin' "$HOME/.bashrc" 2>/dev/null || echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.bashrc";;
 esac
 
-say "Installing system packages (needs your password)"
+say "System packages"
 # usbmuxd + libimobiledevice: talk to the iPhone. fuse-libs: run AppImages.
-sudo dnf install -y usbmuxd libimobiledevice-utils fuse-libs curl git unzip
+install_packages usbmuxd libimobiledevice-utils fuse-libs curl git unzip
 
 say "Swift toolchain"
 # A toolchain is about 1 GB; downloads are retried, and a re-run carries on
@@ -85,7 +92,7 @@ say "Wireless installs"
 # for that pairing; pymobiledevice3 sets it (iTunes' "Show this iPhone when
 # on Wi-Fi"). netmuxd then finds the phone on the network and stands in for
 # usbmuxd, so xtool reaches it without a cable.
-sudo dnf install -y python3-pip avahi nss-mdns
+install_packages python3-pip avahi nss-mdns
 pip install --user --quiet pymobiledevice3
 pymobiledevice3 lockdown wifi-connections --state on || echo "(couldn't enable Wi-Fi connections; installs will need the cable)"
 if ! command -v netmuxd >/dev/null 2>&1; then
@@ -93,10 +100,11 @@ if ! command -v netmuxd >/dev/null 2>&1; then
         | python3 -c 'import json,sys,platform; a=platform.machine(); print(next(x["browser_download_url"] for x in json.load(sys.stdin)["assets"] if a in x["name"] and "linux" in x["name"].lower()))')
   curl -fL --retry 5 "$url" -o "$BIN/netmuxd" && chmod +x "$BIN/netmuxd"
 fi
-sudo systemctl enable --now avahi-daemon
+systemctl is-enabled --quiet avahi-daemon && systemctl is-active --quiet avahi-daemon \
+  || sudo systemctl enable --now avahi-daemon
 # netmuxd and usbmuxd share one socket. Plugging the phone in starts usbmuxd
 # (udev); netmuxd keeps retrying and takes over again once it exits.
-sudo tee /etc/systemd/system/netmuxd.service >/dev/null <<UNIT
+unit=$(cat <<UNIT
 [Unit]
 Description=netmuxd (iPhone over Wi-Fi)
 After=network-online.target avahi-daemon.service
@@ -107,8 +115,13 @@ RestartSec=15
 [Install]
 WantedBy=multi-user.target
 UNIT
-sudo systemctl daemon-reload
-sudo systemctl enable --now netmuxd
+)
+if [ "$unit" != "$(cat /etc/systemd/system/netmuxd.service 2>/dev/null)" ]; then
+  echo "$unit" | sudo tee /etc/systemd/system/netmuxd.service >/dev/null
+  sudo systemctl daemon-reload
+fi
+systemctl is-enabled --quiet netmuxd && systemctl is-active --quiet netmuxd \
+  || sudo systemctl enable --now netmuxd
 xtool devices || true
 
 say "Automatic updates"
@@ -128,7 +141,7 @@ WantedBy=default.target
 UNIT
 systemctl --user daemon-reload
 systemctl --user enable --now world-editor-autodeploy
-sudo loginctl enable-linger "$USER"
+[ "$(loginctl show-user "$USER" -p Linger --value 2>/dev/null)" = yes ] || sudo loginctl enable-linger "$USER"
 
 say "Done"
 echo "New builds now install on the iPhone by themselves once CI passes."
