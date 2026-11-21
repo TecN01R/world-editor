@@ -3,8 +3,9 @@ import WriterCore
 
 /// The open page's type and its fields, under the title in Edit mode. The
 /// type is a small line under the title, as Contacts puts a company under a
-/// name ("Add Type" on a plain page); the fields are a grouped section of
-/// standard controls, label on the left, value on the right.
+/// name ("Add Type" on a plain page). Fields float on the page, without a
+/// card: a quiet name, then its value; the values you tap (choices, dates,
+/// page links) sit in Liquid Glass capsules like the app's other controls.
 struct PageFields: View {
     @Environment(Library.self) private var library
     /// Its height, so the writing below starts after it.
@@ -12,33 +13,35 @@ struct PageFields: View {
 
     var body: some View {
         let page = library.document
-        VStack(alignment: .leading, spacing: 8) {
-            let type = library.type(of: page)
-            typeMenu(type.map { Label($0.name, systemImage: "square.text.square") }
-                     ?? Label("Add Type", systemImage: "square.text.square"))
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+        let type = library.type(of: page)
+        let fields = library.fields(of: page)
+        VStack(alignment: .leading, spacing: 10) {
+            typeMenu(Label(type?.name ?? "Add Type", systemImage: "square.text.square"))
             if let type {
-                VStack(spacing: 0) {
-                    ForEach(library.fields(of: page)) { field in
-                        FieldRow(field: field, value: value(field))
-                            .contextMenu {
-                                Button("Edit Field…", systemImage: "pencil") { library.fieldsRequest = .editField(field.id) }
-                                Button("Remove from \(type.name)", systemImage: "minus.circle", role: .destructive) {
-                                    library.remove(field.id, from: type.id)
-                                }
+                Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 16, verticalSpacing: 10) {
+                    ForEach(fields) { field in
+                        GridRow {
+                            Text(field.name).foregroundStyle(.secondary).gridColumnAlignment(.leading)
+                            FieldValueView(field: field, value: value(field))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .contextMenu {
+                            Button("Edit Field…", systemImage: "pencil") { library.fieldsRequest = .editField(field.id) }
+                            Button("Remove from \(type.name)", systemImage: "minus.circle", role: .destructive) {
+                                library.remove(field.id, from: type.id)
                             }
-                        Divider()
+                        }
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                     }
-                    Button("Add Field", systemImage: "plus") { library.fieldsRequest = .addField(type: type.id) }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 11)
                 }
-                .padding(.horizontal, 16)
-                .background(.background.secondary, in: .rect(cornerRadius: 16))
+                Button("Add Field", systemImage: "plus") { library.fieldsRequest = .addField(type: type.id) }
+                    .font(.subheadline)
+                    .tint(.secondary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .animation(.spring(duration: 0.35), value: type?.id)
+        .animation(.spring(duration: 0.35), value: fields.map(\.id))
         .fixedSize(horizontal: false, vertical: true)   // its own height, whatever the frame
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onHeight($0) }
     }
@@ -54,10 +57,12 @@ struct PageFields: View {
                 Button("No Type", role: .destructive) { library.update { $0.type = nil } }
             }
         } label: {
-            label.padding(.vertical, 6).contentShape(.rect)
+            label.padding(.vertical, 4).contentShape(.rect)
         }
+        .font(.subheadline)
         .tint(.secondary)
         .accessibilityLabel("Type")
+        .sensoryFeedback(.selection, trigger: library.document.type)
     }
 
     private func value(_ field: FieldDefinition) -> Binding<FieldValue?> {
@@ -65,60 +70,50 @@ struct PageFields: View {
     }
 }
 
-/// One field: the standard control for its kind.
-private struct FieldRow: View {
+/// A field's value: the standard control for its kind, without its label
+/// (the name sits beside it).
+private struct FieldValueView: View {
     @Environment(Library.self) private var library
     let field: FieldDefinition
     @Binding var value: FieldValue?
 
     var body: some View {
-        content.padding(.vertical, 11)
-    }
-
-    @ViewBuilder private var content: some View {
         switch field.kind {
         case .text:
-            LabeledContent(field.name) {
-                TextField(field.name, text: text).multilineTextAlignment(.trailing)
-            }
+            TextField(field.name, text: text, prompt: Text("Add"))
         case .longText:
-            VStack(alignment: .leading, spacing: 4) {
-                Text(field.name).font(.subheadline).foregroundStyle(.secondary)
-                TextField(field.name, text: text, axis: .vertical)
-            }
+            TextField(field.name, text: text, prompt: Text("Add"), axis: .vertical)
         case .number:
-            LabeledContent(field.name) {
-                TextField(field.name, value: number, format: .number)
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.trailing)
-            }
+            TextField(field.name, value: number, format: .number, prompt: Text("Add"))
+                .keyboardType(.decimalPad)
         case .date:
             if case .date(let date)? = value {
                 DatePicker(field.name, selection: Binding { date } set: { value = .date($0) }, displayedComponents: .date)
+                    .labelsHidden()
+                    .sensoryFeedback(.selection, trigger: date)
             } else {
-                LabeledContent(field.name) { Button("Add Date") { value = .date(Date()) } }
+                Button("Add Date") { value = .date(Date()) }.glassCapsule()
             }
         case .choice:
-            LabeledContent(field.name) {
-                dropdown(text, current: text.wrappedValue.isEmpty ? "None" : text.wrappedValue) {
-                    Text("None").tag("")
-                    ForEach(field.options, id: \.self) { Text($0).tag($0) }
-                }
+            dropdown(text, current: text.wrappedValue.isEmpty ? "Choose" : text.wrappedValue) {
+                Text("None").tag("")
+                ForEach(field.options, id: \.self) { Text($0).tag($0) }
             }
         case .toggle:
             Toggle(field.name, isOn: Binding { if case .toggle(true)? = value { true } else { false } } set: { value = .toggle($0) })
+                .labelsHidden()
+                .sensoryFeedback(.selection, trigger: value)
         case .page:
-            LabeledContent(field.name) {
-                HStack(spacing: 12) {
-                    let name = page.wrappedValue.flatMap { id in library.pages.first { $0.id == id }?.heading }
-                    dropdown(page, current: name ?? "None") {
-                        Text("None").tag(UUID?.none)
-                        ForEach(candidates) { Text($0.heading).tag(Optional($0.id)) }
-                    }
-                    if let id = page.wrappedValue {
-                        Button("Open", systemImage: "arrow.up.right") { library.selection = id }
-                            .labelStyle(.iconOnly)
-                    }
+            HStack(spacing: 8) {
+                let name = page.wrappedValue.flatMap { id in library.pages.first { $0.id == id }?.heading }
+                dropdown(page, current: name ?? "Choose") {
+                    Text("None").tag(UUID?.none)
+                    ForEach(candidates) { Text($0.heading).tag(Optional($0.id)) }
+                }
+                if let id = page.wrappedValue {
+                    Button("Open", systemImage: "arrow.up.right") { library.selection = id }
+                        .labelStyle(.iconOnly)
+                        .glassCapsule()
                 }
             }
         }
@@ -133,9 +128,12 @@ private struct FieldRow: View {
         } label: {
             HStack(spacing: 4) {
                 Text(current).lineLimit(1)
-                Image(systemName: "chevron.up.chevron.down").imageScale(.small)
+                Image(systemName: "chevron.up.chevron.down").imageScale(.small).foregroundStyle(.secondary)
             }
         }
+        .tint(.primary)
+        .glassCapsule()
+        .sensoryFeedback(.selection, trigger: selection.wrappedValue)
         .accessibilityLabel(field.name)
         .accessibilityValue(current)
     }
@@ -261,5 +259,13 @@ extension FieldDefinition.Kind {
         case .toggle: "Yes or No"
         case .page: "Page"
         }
+    }
+}
+
+extension View {
+    /// A tappable value in a small Liquid Glass capsule.
+    func glassCapsule() -> some View {
+        padding(.horizontal, 12).padding(.vertical, 6)
+            .glassEffect(.regular.interactive(), in: .capsule)
     }
 }
