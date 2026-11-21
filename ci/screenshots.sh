@@ -50,6 +50,7 @@ while IFS='|' read -r UDID NAME; do
         pages)          shoot "$1-pages"          -screenshotPages YES ;;
         edit)           shoot "$1-edit"           -screenshotRich YES ;;
         mention)        shoot "$1-mention"        -screenshotText "Ask @Ma" ;;
+        mentions)       shoot "$1-mentions"       -screenshotRich YES -screenshotMentions YES ;;
         focus)          shoot "$1-focus"          -screenshotText "$PAGES" -startInFocus YES ;;
         focus-controls) shoot "$1-focus-controls" -screenshotText "$PAGES" -startInFocus YES -focusControls YES ;;
         focus-edges)    shoot "$1-focus-empty"    -screenshotText EMPTY -startInFocus YES
