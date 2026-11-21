@@ -9,7 +9,7 @@ struct RootView: View {
     @State private var column: NavigationSplitViewColumn = Screenshots.opensList ? .sidebar : .detail
     @State private var focusMode = Self.startsInFocus
     @State private var focusControls = false
-    @State private var columns: NavigationSplitViewVisibility = Self.startsInFocus ? .detailOnly : .automatic
+    @State private var columns: NavigationSplitViewVisibility = Self.startsInFocus ? .detailOnly : .all
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
 
     private static var startsInFocus: Bool { UserDefaults.standard.bool(forKey: "startInFocus") }
@@ -47,7 +47,7 @@ struct RootView: View {
         }
         .onChange(of: focusMode) { _, focus in
             focusControls = false
-            withAnimation { columns = focus ? .detailOnly : .automatic }
+            withAnimation { columns = focus ? .detailOnly : .all }   // unfolded: list beside the page
         }
     }
 }

@@ -270,9 +270,7 @@ final class PageTextView: PlainPasteTextView {
         if textContainerInset != inset { textContainerInset = inset }
 
         // The view runs under the keyboard; keep everything scrollable above it.
-        // In screen coordinates: a scroll view's own bounds move as it scrolls.
-        let keyboardTop = window.map { $0.keyboardLayoutGuide.layoutFrame.minY } ?? .greatestFiniteMagnitude
-        let covered = max(0, convert(bounds, to: nil).maxY - keyboardTop)
+        let covered = max(0, bounds.maxY - keyboardLayoutGuide.layoutFrame.minY)
         if contentInset.bottom != covered {
             contentInset.bottom = covered
             verticalScrollIndicatorInsets.bottom = covered
