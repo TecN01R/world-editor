@@ -99,24 +99,21 @@ private struct FieldRow: View {
             }
         case .choice:
             LabeledContent(field.name) {
-                Picker(field.name, selection: text) {
+                dropdown(text, current: text.wrappedValue.isEmpty ? "None" : text.wrappedValue) {
                     Text("None").tag("")
                     ForEach(field.options, id: \.self) { Text($0).tag($0) }
                 }
-                .labelsHidden()
-                .pickerStyle(.menu)
             }
         case .toggle:
             Toggle(field.name, isOn: Binding { if case .toggle(true)? = value { true } else { false } } set: { value = .toggle($0) })
         case .page:
             LabeledContent(field.name) {
-                HStack(spacing: 4) {
-                    Picker(field.name, selection: page) {
+                HStack(spacing: 12) {
+                    let name = page.wrappedValue.flatMap { id in library.pages.first { $0.id == id }?.heading }
+                    dropdown(page, current: name ?? "None") {
                         Text("None").tag(UUID?.none)
                         ForEach(candidates) { Text($0.heading).tag(Optional($0.id)) }
                     }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
                     if let id = page.wrappedValue {
                         Button("Open", systemImage: "arrow.up.right") { library.selection = id }
                             .labelStyle(.iconOnly)
@@ -124,6 +121,22 @@ private struct FieldRow: View {
                 }
             }
         }
+    }
+
+    /// A dropdown like a menu-style Picker, but its value stays on one line
+    /// (truncated), so a long page name never wraps the row.
+    private func dropdown<Value: Hashable>(_ selection: Binding<Value>, current: String,
+                                           @ViewBuilder options: () -> some View) -> some View {
+        Menu {
+            Picker(field.name, selection: selection, content: options).pickerStyle(.inline)
+        } label: {
+            HStack(spacing: 4) {
+                Text(current).lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down").imageScale(.small)
+            }
+        }
+        .accessibilityLabel(field.name)
+        .accessibilityValue(current)
     }
 
     /// Pages this field may link to: of its type, if it names one.
