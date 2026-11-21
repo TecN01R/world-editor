@@ -22,8 +22,9 @@ two sizing rules, `FocusEditor` (UIKit) does the rest.
   clipped and its measurement is the layout. The text view has the final
   say: if its layout is ever taller than the page, the size steps down.
 - Words never break mid-word unless one word can't fit at the minimum size.
-- The block is centred on the page by its drawn letters (TextKit's device
-  metrics), not its line boxes, and left-aligned. The line boxes (and caret)
+- The block is centred on the page by its drawn letters (Core Text glyph
+  outlines), not its line boxes. A single line is centred across the page;
+  once it wraps it's left-aligned (the switch comes with the size change). The line boxes (and caret)
   still stay clear of the keyboard.
 - The page ignores the safe area: revealed controls draw over it, so showing
   or hiding them never reflows the text.

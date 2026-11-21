@@ -44,6 +44,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
 
     private var index = 0
     private var size = 0.0   // current font size; 0 until the page is first fitted
+    private var alignment = NSTextAlignment.center
 
     init(library: Library) {
         self.library = library
@@ -290,6 +291,12 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
             apply(max(FocusFit.minSize, size * 0.97))
             h = measuredHeight(width: page.width); drawn = inkOfText(width: page.width)
         }
+        // One line is centred across the page too; once it wraps it's left-aligned
+        // (the switch comes with the size change that wrapping brings).
+        let lineHeight = (Self.attributes(CGFloat(size))[.font] as? UIFont)?.lineHeight ?? h
+        alignment = h < lineHeight * 1.5 ? .center : .natural
+        textView.textAlignment = alignment
+        updateTypingAttributes()
         // Centre the letters, keeping the last line box above the keyboard
         // and the tallest letter below the top of the page.
         let y = max(min(page.midY - drawn.midY, page.maxY - h), page.minY - drawn.minY)
@@ -334,6 +341,9 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
     private func updateTypingAttributes() {
         let p = Paragraph(text: textView.text ?? "", runs: RichText.runs(in: textView.attributedText))
         var typing = Self.attributes(CGFloat(max(size, 17)))
+        let style = NSMutableParagraphStyle()
+        style.alignment = alignment
+        typing[.paragraphStyle] = style
         if let base = typing[.font] as? UIFont {
             typing[.font] = RichText.font(base, p.style(at: textView.selectedRange.location))
         }
