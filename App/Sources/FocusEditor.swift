@@ -113,6 +113,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         textView.becomeFirstResponder()
+        if size > 0 { apply(size) }   // becoming first responder resets an empty view's typing font
     }
 
     override func viewDidLayoutSubviews() {
@@ -324,7 +325,9 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
     }
 
     private func measuredHeight(width: CGFloat) -> CGFloat {
-        textView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
+        // Empty, the caret is one line of the current font tall.
+        if textView.text.isEmpty { return ceil((Self.attributes(CGFloat(size))[.font] as? UIFont)?.lineHeight ?? 0) }
+        return textView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
     }
 
     /// New text continues the style before the caret.
