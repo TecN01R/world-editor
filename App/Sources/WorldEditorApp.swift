@@ -36,14 +36,15 @@ final class Library {
     var cursor = (paragraph: 0, offset: 0)
     /// The pages list's search, so a result opens at its match, not the top.
     var searchQuery = Screenshots.searchQuery ?? ""
-    /// Passages Spotlight found by meaning, best first.
-    var searchPassages: [(page: UUID, paragraph: UUID)] = []
+    /// Spotlight's results for it, best first, and its suggested completions.
+    var searchResults: [PageIndex.Result] = []
+    var searchSuggestions: [String] = []
 
     private func searchCursor(_ id: UUID) -> (paragraph: Int, offset: Int)? {
-        guard !searchQuery.isEmpty, let page = pages.first(where: { $0.id == id }) else { return nil }
-        if let hit = page.hit(searchQuery) { return (hit.paragraph, hit.range.lowerBound) }
-        let passage = searchPassages.first { $0.page == id }?.paragraph
-        return passage.flatMap { p in page.paragraphs.firstIndex { $0.id == p } }.map { ($0, 0) }
+        guard !searchQuery.isEmpty, let page = pages.first(where: { $0.id == id }),
+              let passage = searchResults.first(where: { $0.page == id })?.paragraph,
+              let i = page.paragraphs.firstIndex(where: { $0.id == passage }) else { return nil }
+        return (i, page.offset(of: searchQuery, inParagraph: i) ?? 0)
     }
 
     private let store: DocumentStore?
@@ -59,6 +60,7 @@ final class Library {
         if Screenshots.isActive {
             store = nil                        // CI runs never touch saved pages
             pages = Screenshots.pages()
+            PageIndex.start(with: pages)       // the simulator's own index
             // Mentions: Mara's page, which Harbour Notes links to.
             if !Screenshots.opensList, let open = Screenshots.showsMentions ? pages[1] : pages.first {
                 selection = open.id
