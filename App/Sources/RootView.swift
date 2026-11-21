@@ -97,7 +97,7 @@ struct PageList: View {
 
 /// One page, in Edit mode or Focus mode.
 struct EditorView: View {
-    @State private var showMentions = Screenshots.showsMentions
+    @State private var showMentions = false
     @Binding var focusMode: Bool
     @Binding var focusControls: Bool
     let chromeHidden: Bool
@@ -124,6 +124,12 @@ struct EditorView: View {
         .toolbar(removing: focusMode ? .sidebarToggle : nil)
         .animation(.easeInOut(duration: 0.25), value: chromeHidden)
         .sheet(isPresented: $showMentions) { MentionsView() }
+        .task {
+            // CI: open Mentions once the page is up and writing, as a tap would.
+            guard Screenshots.showsMentions else { return }
+            try? await Task.sleep(for: .seconds(1))
+            showMentions = true
+        }
         .toolbar {
             if focusMode {
                 ToolbarItem(placement: .cancellationAction) {
@@ -188,7 +194,5 @@ struct MentionsView: View {
             }
         }
         .presentationDetents([.medium, .large])
-        // The page keeps its caret, but the keyboard steps aside for the sheet.
-        .onAppear { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
     }
 }
