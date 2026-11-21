@@ -58,4 +58,19 @@ final class DocumentTests: XCTestCase {
         XCTAssertEqual(page.snippet(matching: "cote"), "…ute past the Café de la Côte at dawn.") // later: lead-in trimmed
         XCTAssertNil(page.snippet(matching: "mara"))                                          // title only
     }
+
+    func testSearchTermsMatchInAnyOrderAndRankTitlesFirst() {
+        XCTAssertEqual(Search.terms(#"bell "north mooring" tide"#), ["bell", "north mooring", "tide"])
+        let harbour = Document(title: "Harbour", paragraphs: [
+            Paragraph(text: "The tide came in."),
+            Paragraph(text: "Check the north mooring, then ask about the bell."),
+        ])
+        let bell = Document(title: "The Bell", paragraphs: [Paragraph(text: "Rung at the north mooring.")])
+        XCTAssertTrue(harbour.matches("bell mooring"))                 // any order
+        XCTAssertFalse(harbour.matches(#""mooring north""#))           // a phrase stays whole
+        XCTAssertEqual(harbour.hit("tide bell"), SearchHit(paragraph: 0, range: 4..<8))
+        XCTAssertEqual(harbour.hit("bell north"), SearchHit(paragraph: 1, range: 10..<15))   // most terms wins
+        XCTAssertEqual(Search.rank([harbour, bell], "bell mooring").map(\.title), ["The Bell", "Harbour"])
+        XCTAssertEqual(Search.rank([harbour, bell], "tide").map(\.title), ["Harbour"])
+    }
 }
