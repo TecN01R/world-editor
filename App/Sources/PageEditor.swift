@@ -18,6 +18,10 @@ struct PageEditor: UIViewRepresentable {
         tv.keyboardDismissMode = .interactive
         tv.allowsEditingTextAttributes = true      // ⌘B, ⌘I and the Format menu
         tv.titleField = context.coordinator.titleField
+        let fields = UIHostingController(rootView: PageFields { [weak tv] in tv?.fieldsHeight = $0 }.environment(library))
+        fields.view.backgroundColor = .clear
+        fields.safeAreaRegions = []
+        tv.fieldsController = fields
         context.coordinator.textView = tv
         context.coordinator.render(selection: nil)
         context.coordinator.restoreCaret()
@@ -474,6 +478,29 @@ final class PageTextView: PlainPasteTextView {
         didSet { oldValue?.removeFromSuperview(); titleField.map(addSubview) }   // scrolls with the page
     }
 
+    /// The page's type and fields (SwiftUI), under the title; scrolls with the page.
+    var fieldsController: UIViewController? {
+        didSet { oldValue?.view.removeFromSuperview(); fieldsController.map { addSubview($0.view) } }
+    }
+
+    /// The fields join the screen's view controller, so their menus and
+    /// date picker can present.
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        guard let fields = fieldsController else { return }
+        if window == nil {
+            fields.willMove(toParent: nil)
+            fields.removeFromParent()
+            return
+        }
+        var responder = next
+        while let r = responder, !(r is UIViewController) { responder = r.next }
+        guard fields.parent == nil, let parent = responder as? UIViewController else { return }
+        parent.addChild(fields)
+        fields.didMove(toParent: parent)
+    }
+    var fieldsHeight: CGFloat = 0 { didSet { if fieldsHeight != oldValue { setNeedsLayout() } } }
+
     /// The format bar's height while it floats over the bottom of the page.
     var barHeight: CGFloat = 0 { didSet { setNeedsLayout() } }
 
@@ -485,8 +512,13 @@ final class PageTextView: PlainPasteTextView {
         let side = max(22, (width - column) / 2)
         let titleHeight = ceil(title.font?.lineHeight ?? 34) + 8
         title.frame = CGRect(x: side, y: 8, width: max(0, width - 2 * side), height: titleHeight)
+        var top = title.frame.maxY
+        if let fields = fieldsController?.view {
+            fields.frame = CGRect(x: side, y: top + 6, width: title.frame.width, height: fieldsHeight)
+            top = fields.frame.maxY
+        }
 
-        let inset = UIEdgeInsets(top: title.frame.maxY + 14, left: side, bottom: 40, right: side)
+        let inset = UIEdgeInsets(top: top + 14, left: side, bottom: 40, right: side)
         if textContainerInset != inset { textContainerInset = inset }
 
         // The view runs under the keyboard and bar; keep everything scrollable above them.

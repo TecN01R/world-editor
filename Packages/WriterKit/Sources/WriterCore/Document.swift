@@ -227,12 +227,46 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
     public var title: String
     public private(set) var paragraphs: [Paragraph]
     public var modified: Date
+    /// The page's type (Character, Place…), whose fields it has; nil for a plain page.
+    public var type: UUID?
+    /// Field values by field id. A value outlives its field being removed
+    /// from the type; it just isn't shown.
+    public var values: [UUID: FieldValue]
 
-    public init(id: UUID = UUID(), title: String = "", paragraphs: [Paragraph] = [Paragraph()], modified: Date = Date()) {
+    public init(id: UUID = UUID(), title: String = "", paragraphs: [Paragraph] = [Paragraph()], modified: Date = Date(),
+                type: UUID? = nil, values: [UUID: FieldValue] = [:]) {
         self.id = id
         self.title = title
         self.paragraphs = paragraphs.isEmpty ? [Paragraph()] : paragraphs
         self.modified = modified
+        self.type = type
+        self.values = values
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, title, paragraphs, modified, type, values }
+
+    /// Pages saved before types existed have no `type` or `values`.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let values = try c.decodeIfPresent([String: FieldValue].self, forKey: .values) ?? [:]
+        self.init(id: try c.decode(UUID.self, forKey: .id),
+                  title: try c.decodeIfPresent(String.self, forKey: .title) ?? "",
+                  paragraphs: try c.decode([Paragraph].self, forKey: .paragraphs),
+                  modified: try c.decode(Date.self, forKey: .modified),
+                  type: try c.decodeIfPresent(UUID.self, forKey: .type),
+                  values: Dictionary(uniqueKeysWithValues: values.compactMap { k, v in UUID(uuidString: k).map { ($0, v) } }))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(title, forKey: .title)
+        try c.encode(paragraphs, forKey: .paragraphs)
+        try c.encode(modified, forKey: .modified)
+        try c.encodeIfPresent(type, forKey: .type)
+        if !values.isEmpty {
+            try c.encode(Dictionary(uniqueKeysWithValues: values.map { ($0.key.uuidString, $0.value) }), forKey: .values)
+        }
     }
 
     public var isEmpty: Bool {

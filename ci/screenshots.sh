@@ -51,6 +51,7 @@ while IFS='|' read -r UDID NAME; do
         edit)           shoot "$1-edit"           -screenshotRich YES ;;
         mention)        shoot "$1-mention"        -screenshotText "Ask @Map of the" ;;
         mentions)       shoot "$1-mentions"       -screenshotRich YES -screenshotMentions YES ;;
+        fields)         shoot "$1-fields"         -screenshotRich YES -screenshotMara YES ;;
         search)         shoot "$1-search"         -screenshotPages YES -screenshotSearch "about the bell" ;;   # layout only: results need a device
         focus)          shoot "$1-focus"          -screenshotText "$PAGES" -startInFocus YES ;;
         focus-controls) shoot "$1-focus-controls" -screenshotText "$PAGES" -startInFocus YES -focusControls YES ;;

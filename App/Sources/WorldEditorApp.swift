@@ -47,7 +47,37 @@ final class Library {
         return (i, page.offset(of: searchQuery, inParagraph: i) ?? 0)
     }
 
+    /// A sheet or alert the page's fields asked for, shown by the editor.
+    enum FieldsRequest: Identifiable, Hashable {
+        case newType, addField(UUID)
+        var id: Self { self }
+    }
+    var fieldsRequest: FieldsRequest?
+
+    /// The author's page types (Character, Place…), whose fields their pages share.
+    private(set) var types: [PageType] = []
+    func type(of page: WriterCore.Document) -> PageType? { page.type.flatMap { id in types.first { $0.id == id } } }
+
+    /// Creates a type with no fields yet and gives it to the open page.
+    func addType(named name: String) {
+        let type = PageType(name: name)
+        types.append(type)
+        saveTypes()
+        update { $0.type = type.id }
+    }
+
+    /// Changes a type's fields (or name); every page of the type follows.
+    func updateType(_ type: PageType) {
+        guard let i = types.firstIndex(where: { $0.id == type.id }) else { return }
+        types[i] = type
+        saveTypes()
+        for page in pages where page.type == type.id { PageIndex.update(page, type: type) }
+    }
+
+    private func saveTypes() { try? typeStore?.save(types) }
+
     private let store: DocumentStore?
+    private let typeStore: TypeStore?
     /// Pending debounced saves, one per page, so editing one page never drops another's.
     private var pendingSaves: [UUID: Task<Void, Never>] = [:]
 
@@ -59,10 +89,10 @@ final class Library {
     init() {
         if Screenshots.isActive {
             store = nil                        // CI runs never touch saved pages
-            pages = Screenshots.pages()
-            PageIndex.start(with: pages)       // the simulator's own index
-            // Mentions: Mara's page, which Harbour Notes links to.
-            if !Screenshots.opensList, let open = Screenshots.showsMentions ? pages[1] : pages.first {
+            typeStore = nil
+            (pages, types) = Screenshots.pages()
+            PageIndex.start(with: pages, types: types)   // the simulator's own index
+            if !Screenshots.opensList, let open = Screenshots.opensMara ? pages[1] : pages.first {
                 selection = open.id
                 // Typed text: caret at its end. Rich sample: at the top, title in view.
                 let last = open.paragraphs.count - 1
@@ -72,8 +102,10 @@ final class Library {
         }
         let dir = URL.applicationSupportDirectory.appendingPathComponent("Documents", isDirectory: true)
         store = try? DocumentStore(directory: dir)
+        typeStore = TypeStore(url: URL.applicationSupportDirectory.appendingPathComponent("Types.json"))
         pages = (try? store?.all()) ?? []
-        PageIndex.start(with: pages)
+        types = typeStore?.load() ?? []
+        PageIndex.start(with: pages, types: types)
         if pages.isEmpty { newPage() } else { selection = pages.first?.id }
     }
 
@@ -128,11 +160,12 @@ final class Library {
 
     private func scheduleSave(_ page: WriterCore.Document) {
         pendingSaves[page.id]?.cancel()
+        let type = type(of: page)
         pendingSaves[page.id] = Task { [store] in
             try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled, let store else { return }
             try? store.save(page)
-            PageIndex.update(page)
+            PageIndex.update(page, type: type)
         }
     }
 
@@ -142,7 +175,7 @@ final class Library {
         task.cancel()
         if let store, let page = pages.first(where: { $0.id == id }), !page.isEmpty {
             try? store.save(page)
-            PageIndex.update(page)
+            PageIndex.update(page, type: type(of: page))
         }
     }
 
@@ -153,6 +186,7 @@ final class Library {
 /// - `-screenshotText "para one\npara two"`: a page with that text (`EMPTY` for blank)
 /// - `-screenshotRich YES`: one page showing bold, italic and both kinds of list
 /// - `-screenshotMentions YES`: with `-screenshotRich`, Mara's page with its Mentions sheet open
+/// - `-screenshotMara YES`: with `-screenshotRich`, Mara's page: a Character with fields
 /// - `-screenshotPages YES`: showing the pages list
 /// - `-screenshotSearch "about the bell"`: with `-screenshotPages`, searching the list
 /// Each seeds two more pages, so `@` has something to find.
@@ -164,17 +198,36 @@ enum Screenshots {
     static var opensList: Bool { defaults.bool(forKey: "screenshotPages") }
     static var isRich: Bool { defaults.bool(forKey: "screenshotRich") }
     static var showsMentions: Bool { defaults.bool(forKey: "screenshotMentions") }
+    /// Mara's page: a Character, which Harbour Notes links to.
+    static var opensMara: Bool { showsMentions || defaults.bool(forKey: "screenshotMara") }
     static var searchQuery: String? { defaults.string(forKey: "screenshotSearch") }
 
-    static func pages() -> [WriterCore.Document] {
+    /// Sample pages: Harbour Notes, Mara (a Character), Map of the Coast.
+    static func pages() -> ([WriterCore.Document], [PageType]) {
+        let status = FieldDefinition(name: "Status", kind: .choice, options: ["Alive", "Dead", "Unknown"])
+        let character = PageType(name: "Character", fields: [
+            status,
+            FieldDefinition(name: "Age", kind: .number),
+            FieldDefinition(name: "First seen", kind: .date),
+            FieldDefinition(name: "Keeps a secret", kind: .toggle),
+            FieldDefinition(name: "Allegiance", kind: .text),
+        ])
+        let values: [UUID: FieldValue] = [
+            status.id: .text("Alive"),
+            character.fields[1].id: .number(61),
+            character.fields[2].id: .date(Date(timeIntervalSince1970: 1_790_000_000)),
+            character.fields[3].id: .toggle(true),
+            character.fields[4].id: .text("The harbour"),
+        ]
         let day: TimeInterval = 86_400
         let mara = WriterCore.Document(title: "Mara", paragraphs: [Paragraph(text: "Keeps the lighthouse.")],
-                                       modified: Date().addingTimeInterval(-day))
+                                       modified: Date().addingTimeInterval(-day), type: character.id, values: values)
         let map = WriterCore.Document(title: "Map of the Coast", paragraphs: [Paragraph(text: "Three coves, one road.")],
                                       modified: Date().addingTimeInterval(-3 * day))
         if let seeded = defaults.string(forKey: "screenshotText") {
             let text = seeded == "EMPTY" ? "" : seeded.replacingOccurrences(of: "\\n", with: "\n")
-            return [WriterCore.Document(paragraphs: text.components(separatedBy: "\n").map { Paragraph(text: $0) }), mara, map]
+            return ([WriterCore.Document(paragraphs: text.components(separatedBy: "\n").map { Paragraph(text: $0) }), mara, map],
+                    [character])
         }
         let rich = WriterCore.Document(title: "Harbour Notes", paragraphs: [
             Paragraph(text: "The tide came in faster than the charts promised.",
@@ -186,6 +239,6 @@ enum Screenshots {
             Paragraph(text: "Ask Mara about the bell", kind: .numbered,
                       links: [PageLink(location: 4, length: 4, page: mara.id)]),
         ])
-        return [rich, mara, map]
+        return ([rich, mara, map], [character])
     }
 }
