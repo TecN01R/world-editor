@@ -64,6 +64,7 @@ struct PageEditor: UIViewRepresentable {
             f.adjustsFontForContentSizeCategory = true
             f.textColor = .label
             f.placeholder = "Title"
+            f.clearButtonMode = .never   // the fields' clear buttons are for short values, not the title
             f.text = library.document.title
             f.returnKeyType = .next
             f.autocapitalizationType = .words
@@ -472,6 +473,9 @@ final class PageTextView: PlainPasteTextView {
     override init(frame: CGRect, textContainer: NSTextContainer?) {
         super.init(frame: frame, textContainer: textContainer)
         keyboardLayoutGuide.followsUndockedKeyboard = true
+        // HIG text fields: a Clear button at the trailing end. SwiftUI has no
+        // modifier for it, so the page's fields take UIKit's own.
+        UITextField.appearance(whenContainedInInstancesOf: [PageTextView.self]).clearButtonMode = .whileEditing
     }
     required init?(coder: NSCoder) { fatalError() }
 

@@ -4,11 +4,12 @@ import WriterCore
 /// The open page's type and its fields, under the title in Edit mode. The
 /// type is a small line under the title, as Contacts puts a company under a
 /// name ("Add Type" on a plain page). Fields float on the page, without a
-/// card: a quiet name, then its value. Stock controls throughout: choices,
-/// dates and page links in Apple's glass button style, text and numbers as
-/// plain text fields (iOS has no glass text field), as in Contacts.
+/// card: a quiet name, then its value, stacked at accessibility text sizes.
+/// Stock controls throughout, without glass: the HIG keeps Liquid Glass out
+/// of the content layer.
 struct PageFields: View {
     @Environment(Library.self) private var library
+    @Environment(\.dynamicTypeSize) private var textSize
     /// Its height, so the writing below starts after it.
     let onHeight: (CGFloat) -> Void
 
@@ -19,20 +20,19 @@ struct PageFields: View {
         VStack(alignment: .leading, spacing: 10) {
             typeMenu(Label(type?.name ?? "Add Type", systemImage: "square.text.square"))
             if let type {
-                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {   // each row centred on its control
-                    ForEach(fields) { field in
-                        GridRow {
-                            Text(field.name).foregroundStyle(.secondary).gridColumnAlignment(.leading)
-                            FieldValueView(field: field, value: value(field))
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                if textSize.isAccessibilitySize {   // HIG layout: adjacent views stack as text grows
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(fields) { field in
+                            VStack(alignment: .leading, spacing: 2) { name(field); valueView(field) }
+                                .modifier(FieldRow(field: field, type: type))
                         }
-                        .contextMenu {
-                            Button("Edit Field…", systemImage: "pencil") { library.fieldsRequest = .editField(field.id) }
-                            Button("Remove from \(type.name)", systemImage: "minus.circle", role: .destructive) {
-                                library.remove(field.id, from: type.id)
-                            }
+                    }
+                } else {
+                    Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {   // each row centred on its control
+                        ForEach(fields) { field in
+                            GridRow { name(field); valueView(field) }
+                                .modifier(FieldRow(field: field, type: type))
                         }
-                        .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                 }
                 Button("Add Field", systemImage: "plus") { library.fieldsRequest = .addField(type: type.id) }
@@ -66,8 +66,34 @@ struct PageFields: View {
         .sensoryFeedback(.selection, trigger: library.document.type)
     }
 
+    private func name(_ field: FieldDefinition) -> some View {
+        Text(field.name).foregroundStyle(.secondary)
+    }
+
+    private func valueView(_ field: FieldDefinition) -> some View {
+        FieldValueView(field: field, value: value(field)).frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private func value(_ field: FieldDefinition) -> Binding<FieldValue?> {
         Binding { library.document.values[field.id] } set: { value in library.update { $0.values[field.id] = value } }
+    }
+}
+
+/// A field row's menu (edit, remove) and its entrance.
+private struct FieldRow: ViewModifier {
+    @Environment(Library.self) private var library
+    let field: FieldDefinition
+    let type: PageType
+
+    func body(content: Content) -> some View {
+        content
+            .contextMenu {
+                Button("Edit Field…", systemImage: "pencil") { library.fieldsRequest = .editField(field.id) }
+                Button("Remove from \(type.name)", systemImage: "minus.circle", role: .destructive) {
+                    library.remove(field.id, from: type.id)
+                }
+            }
+            .transition(.opacity.combined(with: .move(edge: .top)))
     }
 }
 
@@ -93,7 +119,7 @@ private struct FieldValueView: View {
                     .labelsHidden()
                     .sensoryFeedback(.selection, trigger: date)
             } else {
-                Button("Add Date") { value = .date(Date()) }.buttonStyle(.glass)
+                Button("Add Date") { value = .date(Date()) }
             }
         case .choice:
             dropdown(text, current: text.wrappedValue.isEmpty ? "Choose" : text.wrappedValue) {
@@ -114,14 +140,14 @@ private struct FieldValueView: View {
                 if let id = page.wrappedValue {
                     Button("Open", systemImage: "arrow.up.right") { library.selection = id }
                         .labelStyle(.iconOnly)
-                        .buttonStyle(.glass)
                 }
             }
         }
     }
 
-    /// A dropdown like a menu-style Picker, but its value stays on one line
-    /// (truncated), so a long page name never wraps the row.
+    /// A pull-down like a menu-style Picker (value in the accent colour, per
+    /// the HIG), but its value stays on one line (truncated), so a long page
+    /// name never wraps the row.
     private func dropdown<Value: Hashable>(_ selection: Binding<Value>, current: String,
                                            @ViewBuilder options: () -> some View) -> some View {
         Menu {
@@ -129,11 +155,9 @@ private struct FieldValueView: View {
         } label: {
             HStack(spacing: 4) {
                 Text(current).lineLimit(1)
-                Image(systemName: "chevron.up.chevron.down").imageScale(.small).foregroundStyle(.secondary)
+                Image(systemName: "chevron.up.chevron.down").imageScale(.small)
             }
         }
-        .tint(.primary)
-        .buttonStyle(.glass)
         .sensoryFeedback(.selection, trigger: selection.wrappedValue)
         .accessibilityLabel(field.name)
         .accessibilityValue(current)
