@@ -21,6 +21,7 @@ has() { grep -qE "$1" && echo true || echo false; }
     on() { echo "$files" | grep -qE "$1"; }
     on 'FocusEditor|FocusLayout/'          && shots="$shots focus focus-controls focus-edges"
     on 'PageEditor|RichText'               && shots="$shots edit mention"
+    on 'PageFields'                        && shots="$shots fields"
     on 'RootView|WorldEditorApp|ModelsView' && shots="$shots pages edit focus-controls"
     on '^ci/'                              && shots="$shots edit focus"
     shots=$(echo $shots | tr ' ' '\n' | awk '!seen[$0]++' | tr '\n' ' ')

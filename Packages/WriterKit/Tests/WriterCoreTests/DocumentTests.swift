@@ -56,4 +56,23 @@ final class DocumentTests: XCTestCase {
         XCTAssertEqual(page.excerpt(paragraph: 0), "Keeps the lighthouse.")
         XCTAssertEqual(page.excerpt(paragraph: 1, at: 47), "…ute past the Café de la Côte at dawn.")
     }
+
+    func testTypedPagesKeepTheirValuesAndOldPagesStillLoad() throws {
+        let status = FieldDefinition(name: "Status", kind: .choice, options: ["Alive", "Dead"])
+        let age = FieldDefinition(name: "Age", kind: .number)
+        let character = PageType(name: "Character", fields: [status, age])
+        let mara = Document(title: "Mara", type: character.id, values: [status.id: .text("Alive"), age.id: .number(34)])
+        XCTAssertEqual(try JSONDecoder().decode(Document.self, from: JSONEncoder().encode(mara)), mara)
+        XCTAssertEqual(mara.fieldText(character), "Status: Alive\nAge: 34")
+
+        let old = #"{"id":"\#(UUID().uuidString)","title":"Old","paragraphs":[{"id":"\#(UUID().uuidString)","text":"Hi"}],"modified":0}"#
+        let page = try JSONDecoder().decode(Document.self, from: Data(old.utf8))
+        XCTAssertNil(page.type)
+        XCTAssertTrue(page.values.isEmpty)
+
+        let store = TypeStore(url: FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).json"))
+        XCTAssertEqual(store.load(), [])
+        try store.save([character])
+        XCTAssertEqual(store.load(), [character])
+    }
 }

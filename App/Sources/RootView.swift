@@ -163,10 +163,23 @@ struct PageList: View {
 
 /// One page, in Edit mode or Focus mode.
 struct EditorView: View {
+    @Environment(Library.self) private var library
     @State private var showMentions = false
+    @State private var typeName = ""
     @Binding var focusMode: Bool
     @Binding var focusControls: Bool
     let chromeHidden: Bool
+
+    private var newType: Binding<Bool> {
+        Binding { library.fieldsRequest == .newType } set: { if !$0 { library.fieldsRequest = nil } }
+    }
+
+    private struct TypeRef: Identifiable { let id: UUID }
+    private var addFieldType: Binding<TypeRef?> {
+        Binding {
+            if case .addField(let id)? = library.fieldsRequest { TypeRef(id: id) } else { nil }
+        } set: { if $0 == nil { library.fieldsRequest = nil } }
+    }
 
     var body: some View {
         ZStack {
@@ -190,6 +203,18 @@ struct EditorView: View {
         .toolbar(removing: focusMode ? .sidebarToggle : nil)
         .animation(.easeInOut(duration: 0.25), value: chromeHidden)
         .sheet(isPresented: $showMentions) { MentionsView() }
+        .sheet(item: addFieldType) { AddFieldSheet(typeID: $0.id) }
+        .alert("New Type", isPresented: newType) {
+            TextField("Name, such as Character or Place", text: $typeName)
+            Button("Cancel", role: .cancel) { typeName = "" }
+            Button("Create") {
+                let name = typeName.trimmingCharacters(in: .whitespaces)
+                if !name.isEmpty { library.addType(named: name) }
+                typeName = ""
+            }
+        } message: {
+            Text("Pages of a type share its fields.")
+        }
         .task {
             // CI: open Mentions once the page is up and writing, as a tap would.
             guard Screenshots.showsMentions else { return }
