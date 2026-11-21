@@ -49,35 +49,59 @@ final class Library {
 
     /// A sheet or alert the page's fields asked for, shown by the editor.
     enum FieldsRequest: Identifiable, Hashable {
-        case newType, addField(UUID)
+        case newType, addField(type: UUID), editField(UUID)
         var id: Self { self }
     }
     var fieldsRequest: FieldsRequest?
 
-    /// The author's page types (Character, Place…), whose fields their pages share.
-    private(set) var types: [PageType] = []
-    func type(of page: WriterCore.Document) -> PageType? { page.type.flatMap { id in types.first { $0.id == id } } }
+    /// The author's shared fields and the types (Character, Place…) built from them.
+    private(set) var schema = Schema()
+    func type(of page: WriterCore.Document) -> PageType? { schema.type(page.type) }
+    func fields(of page: WriterCore.Document) -> [FieldDefinition] { schema.fields(of: type(of: page)) }
 
     /// Creates a type with no fields yet and gives it to the open page.
     func addType(named name: String) {
         let type = PageType(name: name)
-        types.append(type)
-        saveTypes()
+        schema.types.append(type)
+        saveSchema()
         update { $0.type = type.id }
     }
 
-    /// Changes a type's fields (or name); every page of the type follows.
-    func updateType(_ type: PageType) {
-        guard let i = types.firstIndex(where: { $0.id == type.id }) else { return }
-        types[i] = type
-        saveTypes()
-        for page in pages where page.type == type.id { PageIndex.update(page, type: type) }
+    /// Adds `field` to the shared list if it's new, and to the end of `type`.
+    func add(_ field: FieldDefinition, to type: UUID) {
+        if !schema.fields.contains(where: { $0.id == field.id }) { schema.fields.append(field) }
+        guard let i = schema.types.firstIndex(where: { $0.id == type }), !schema.types[i].fields.contains(field.id) else { return }
+        schema.types[i].fields.append(field.id)
+        saveSchema()
     }
 
-    private func saveTypes() { try? typeStore?.save(types) }
+    /// Changes a shared field (its name or choices) for every type that uses it.
+    func updateField(_ field: FieldDefinition) {
+        guard let i = schema.fields.firstIndex(where: { $0.id == field.id }) else { return }
+        schema.fields[i] = field
+        saveSchema()
+    }
+
+    /// Takes a field off a type, for every page of it. The field stays in the
+    /// shared list, and values stay saved on the pages, so nothing is lost.
+    func remove(_ field: UUID, from type: UUID) {
+        guard let i = schema.types.firstIndex(where: { $0.id == type }) else { return }
+        schema.types[i].fields.removeAll { $0 == field }
+        saveSchema()
+    }
+
+    /// "Name: value" lines for a page's fields, for search.
+    func fieldText(_ page: WriterCore.Document) -> String {
+        page.fieldText(fields(of: page)) { id in pages.first { $0.id == id }?.heading }
+    }
+
+    private func saveSchema() {
+        try? schemaStore?.save(schema)
+        for page in pages where page.type != nil { PageIndex.update(page, fields: fieldText(page)) }
+    }
 
     private let store: DocumentStore?
-    private let typeStore: TypeStore?
+    private let schemaStore: SchemaStore?
     /// Pending debounced saves, one per page, so editing one page never drops another's.
     private var pendingSaves: [UUID: Task<Void, Never>] = [:]
 
@@ -89,9 +113,9 @@ final class Library {
     init() {
         if Screenshots.isActive {
             store = nil                        // CI runs never touch saved pages
-            typeStore = nil
-            (pages, types) = Screenshots.pages()
-            PageIndex.start(with: pages, types: types)   // the simulator's own index
+            schemaStore = nil
+            (pages, schema) = Screenshots.pages()
+            PageIndex.start(with: pages.map { ($0, fieldText($0)) })   // the simulator's own index
             if !Screenshots.opensList, let open = Screenshots.opensMara ? pages[1] : pages.first {
                 selection = open.id
                 // Typed text: caret at its end. Rich sample: at the top, title in view.
@@ -102,10 +126,10 @@ final class Library {
         }
         let dir = URL.applicationSupportDirectory.appendingPathComponent("Documents", isDirectory: true)
         store = try? DocumentStore(directory: dir)
-        typeStore = TypeStore(url: URL.applicationSupportDirectory.appendingPathComponent("Types.json"))
+        schemaStore = SchemaStore(url: URL.applicationSupportDirectory.appendingPathComponent("Schema.json"))
         pages = (try? store?.all()) ?? []
-        types = typeStore?.load() ?? []
-        PageIndex.start(with: pages, types: types)
+        schema = schemaStore?.load() ?? Schema()
+        PageIndex.start(with: pages.map { ($0, fieldText($0)) })
         if pages.isEmpty { newPage() } else { selection = pages.first?.id }
     }
 
@@ -160,12 +184,12 @@ final class Library {
 
     private func scheduleSave(_ page: WriterCore.Document) {
         pendingSaves[page.id]?.cancel()
-        let type = type(of: page)
+        let fields = fieldText(page)
         pendingSaves[page.id] = Task { [store] in
             try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled, let store else { return }
             try? store.save(page)
-            PageIndex.update(page, type: type)
+            PageIndex.update(page, fields: fields)
         }
     }
 
@@ -175,7 +199,7 @@ final class Library {
         task.cancel()
         if let store, let page = pages.first(where: { $0.id == id }), !page.isEmpty {
             try? store.save(page)
-            PageIndex.update(page, type: type(of: page))
+            PageIndex.update(page, fields: fieldText(page))
         }
     }
 
@@ -203,31 +227,32 @@ enum Screenshots {
     static var searchQuery: String? { defaults.string(forKey: "screenshotSearch") }
 
     /// Sample pages: Harbour Notes, Mara (a Character), Map of the Coast.
-    static func pages() -> ([WriterCore.Document], [PageType]) {
-        let status = FieldDefinition(name: "Status", kind: .choice, options: ["Alive", "Dead", "Unknown"])
-        let character = PageType(name: "Character", fields: [
-            status,
+    static func pages() -> ([WriterCore.Document], Schema) {
+        let place = PageType(name: "Place")
+        let fields = [
+            FieldDefinition(name: "Species", kind: .choice, options: ["Human", "Elf", "Selkie"]),
             FieldDefinition(name: "Age", kind: .number),
+            FieldDefinition(name: "Home", kind: .page, pageType: place.id),
             FieldDefinition(name: "First seen", kind: .date),
             FieldDefinition(name: "Keeps a secret", kind: .toggle),
-            FieldDefinition(name: "Allegiance", kind: .text),
-        ])
-        let values: [UUID: FieldValue] = [
-            status.id: .text("Alive"),
-            character.fields[1].id: .number(61),
-            character.fields[2].id: .date(Date(timeIntervalSince1970: 1_790_000_000)),
-            character.fields[3].id: .toggle(true),
-            character.fields[4].id: .text("The harbour"),
         ]
+        let character = PageType(name: "Character", fields: fields.map(\.id))
+        let schema = Schema(fields: fields, types: [character, place])
         let day: TimeInterval = 86_400
-        let mara = WriterCore.Document(title: "Mara", paragraphs: [Paragraph(text: "Keeps the lighthouse.")],
-                                       modified: Date().addingTimeInterval(-day), type: character.id, values: values)
         let map = WriterCore.Document(title: "Map of the Coast", paragraphs: [Paragraph(text: "Three coves, one road.")],
-                                      modified: Date().addingTimeInterval(-3 * day))
+                                      modified: Date().addingTimeInterval(-3 * day), type: place.id)
+        let mara = WriterCore.Document(title: "Mara", paragraphs: [Paragraph(text: "Keeps the lighthouse.")],
+                                       modified: Date().addingTimeInterval(-day), type: character.id, values: [
+                                           fields[0].id: .text("Selkie"),
+                                           fields[1].id: .number(61),
+                                           fields[2].id: .page(map.id),
+                                           fields[3].id: .date(Date(timeIntervalSince1970: 1_790_000_000)),
+                                           fields[4].id: .toggle(true),
+                                       ])
         if let seeded = defaults.string(forKey: "screenshotText") {
             let text = seeded == "EMPTY" ? "" : seeded.replacingOccurrences(of: "\\n", with: "\n")
             return ([WriterCore.Document(paragraphs: text.components(separatedBy: "\n").map { Paragraph(text: $0) }), mara, map],
-                    [character])
+                    schema)
         }
         let rich = WriterCore.Document(title: "Harbour Notes", paragraphs: [
             Paragraph(text: "The tide came in faster than the charts promised.",
@@ -239,6 +264,6 @@ enum Screenshots {
             Paragraph(text: "Ask Mara about the bell", kind: .numbered,
                       links: [PageLink(location: 4, length: 4, page: mara.id)]),
         ])
-        return ([rich, mara, map], [character])
+        return ([rich, mara, map], schema)
     }
 }

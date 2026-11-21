@@ -57,22 +57,33 @@ final class DocumentTests: XCTestCase {
         XCTAssertEqual(page.excerpt(paragraph: 1, at: 47), "…ute past the Café de la Côte at dawn.")
     }
 
-    func testTypedPagesKeepTheirValuesAndOldPagesStillLoad() throws {
-        let status = FieldDefinition(name: "Status", kind: .choice, options: ["Alive", "Dead"])
+    func testTypesShareFieldsAndPageFieldsAreMentions() throws {
+        let place = PageType(name: "Place")
+        let tower = Document(title: "The Black Tower", type: place.id)
+        let species = FieldDefinition(name: "Species", kind: .choice, options: ["Human", "Elf"])
         let age = FieldDefinition(name: "Age", kind: .number)
-        let character = PageType(name: "Character", fields: [status, age])
-        let mara = Document(title: "Mara", type: character.id, values: [status.id: .text("Alive"), age.id: .number(34)])
+        let home = FieldDefinition(name: "Home", kind: .page, pageType: place.id)
+        let character = PageType(name: "Character", fields: [species.id, age.id, home.id])
+        let creature = PageType(name: "Creature", fields: [species.id])
+        let schema = Schema(fields: [species, age, home], types: [place, character, creature])
+        XCTAssertEqual(schema.fields(of: character).map(\.name), ["Species", "Age", "Home"])
+        XCTAssertEqual(schema.fields(of: creature), [species])                  // one shared field
+
+        let mara = Document(title: "Mara", type: character.id,
+                            values: [species.id: .text("Elf"), age.id: .number(34), home.id: .page(tower.id)])
         XCTAssertEqual(try JSONDecoder().decode(Document.self, from: JSONEncoder().encode(mara)), mara)
-        XCTAssertEqual(mara.fieldText(character), "Status: Alive\nAge: 34")
+        XCTAssertEqual(mara.fieldText(schema.fields(of: character)) { $0 == tower.id ? tower.title : nil },
+                       "Species: Elf\nAge: 34\nHome: The Black Tower")
+        XCTAssertTrue(mara.mentions(tower.id))                                   // a page field is a backlink
 
         let old = #"{"id":"\#(UUID().uuidString)","title":"Old","paragraphs":[{"id":"\#(UUID().uuidString)","text":"Hi"}],"modified":0}"#
         let page = try JSONDecoder().decode(Document.self, from: Data(old.utf8))
         XCTAssertNil(page.type)
         XCTAssertTrue(page.values.isEmpty)
 
-        let store = TypeStore(url: FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).json"))
-        XCTAssertEqual(store.load(), [])
-        try store.save([character])
-        XCTAssertEqual(store.load(), [character])
+        let store = SchemaStore(url: FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).json"))
+        XCTAssertEqual(store.load(), Schema())
+        try store.save(schema)
+        XCTAssertEqual(store.load(), schema)
     }
 }

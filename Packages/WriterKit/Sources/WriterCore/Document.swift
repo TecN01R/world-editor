@@ -302,9 +302,9 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
         return changed   // not an edit of this page, so `modified` stays
     }
 
-    /// Whether any `@` link on this page points at `page` (backlinks).
+    /// Whether any `@` link or page field on this page points at `page` (backlinks).
     public func mentions(_ page: UUID) -> Bool {
-        paragraphs.contains { $0.links.contains { $0.page == page } }
+        paragraphs.contains { $0.links.contains { $0.page == page } } || values.values.contains(.page(page))
     }
 
     /// Position of each paragraph's first character in the whole document.

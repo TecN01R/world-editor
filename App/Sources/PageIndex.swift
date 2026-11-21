@@ -21,15 +21,16 @@ enum PageIndex {
     /// Once at launch: readies Spotlight and indexes every page (items with
     /// the same identifier replace the old ones; deleted pages are removed as
     /// they're deleted).
-    static func start(with pages: [WriterCore.Document], types: [PageType]) {
+    /// `pages` come with their fields' text ("Species: Elf").
+    static func start(with pages: [(WriterCore.Document, String)]) {
         CSUserQuery.prepare()
-        let items = pages.flatMap { page in Self.items(page, type: types.first { $0.id == page.type }) }
+        let items = pages.flatMap { page, fields in Self.items(page, fields: fields) }
         ready = Task { try? await index.indexSearchableItems(items) }
     }
 
-    static func update(_ page: WriterCore.Document, type: PageType?) {
+    static func update(_ page: WriterCore.Document, fields: String) {
         index.deleteSearchableItems(withDomainIdentifiers: [page.id.uuidString]) { _ in
-            index.indexSearchableItems(items(page, type: type))
+            index.indexSearchableItems(items(page, fields: fields))
         }
     }
 
@@ -69,8 +70,8 @@ enum PageIndex {
     private static func plain(_ s: NSAttributedString) -> String { s.string }
 
     /// The title, the field values, then each paragraph, as items of the page's domain.
-    private static func items(_ page: WriterCore.Document, type: PageType?) -> [CSSearchableItem] {
-        let title = page.title.trimmingCharacters(in: .whitespaces), fields = page.fieldText(type)
+    private static func items(_ page: WriterCore.Document, fields: String) -> [CSSearchableItem] {
+        let title = page.title.trimmingCharacters(in: .whitespaces)
         let passages = (title.isEmpty ? [] : [("title", title)]) + (fields.isEmpty ? [] : [("fields", fields)])
             + page.paragraphs.filter { !$0.text.trimmingCharacters(in: .whitespaces).isEmpty }.map { ($0.id.uuidString, $0.text) }
         return passages.map { id, text in
