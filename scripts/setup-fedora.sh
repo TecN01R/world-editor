@@ -17,23 +17,37 @@ say "Installing system packages (needs your password)"
 sudo dnf install -y usbmuxd libimobiledevice-utils fuse-libs curl git unzip
 
 say "Swift toolchain"
+# A toolchain is about 1 GB; downloads are retried, and a re-run carries on
+# from an earlier, interrupted one.
+SWIFTLY_ENV="${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}/env.sh"
+# shellcheck disable=SC1090
+[ -f "$SWIFTLY_ENV" ] && . "$SWIFTLY_ENV"
 if ! command -v swift >/dev/null 2>&1; then
-  tmp=$(mktemp -d)
-  curl -fsSL "https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz" -o "$tmp/swiftly.tar.gz"
-  tar -xzf "$tmp/swiftly.tar.gz" -C "$tmp"
-  # swiftly only recognises the Fedora it has builds for (39) and calls any
-  # newer one unsupported; swift.org's Fedora 39 builds run on later Fedora.
-  platform=()
-  [ "$(. /etc/os-release && echo "$ID")" = fedora ] && platform=(--platform fedora39)
-  "$tmp/swiftly" init --assume-yes --quiet-shell-followup "${platform[@]}"
-  # shellcheck disable=SC1091
-  . "${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}/env.sh"
+  if ! command -v swiftly >/dev/null 2>&1; then
+    tmp=$(mktemp -d)
+    curl -fsSL --retry 5 "https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz" -o "$tmp/swiftly.tar.gz"
+    tar -xzf "$tmp/swiftly.tar.gz" -C "$tmp"
+    # swiftly only recognises the Fedora it has builds for (39) and calls any
+    # newer one unsupported; swift.org's Fedora 39 builds run on later Fedora.
+    platform=()
+    [ "$(. /etc/os-release && echo "$ID")" = fedora ] && platform=(--platform fedora39)
+    # Its first toolchain download may time out; the loop below retries it.
+    "$tmp/swiftly" init --assume-yes --quiet-shell-followup "${platform[@]}" || true
+    # shellcheck disable=SC1090
+    . "$SWIFTLY_ENV"
+  fi
+  for attempt in 1 2 3 4 5; do
+    command -v swift >/dev/null 2>&1 && break
+    [ "$attempt" = 1 ] || { echo "Download failed; retrying ($attempt of 5)…"; sleep 10; }
+    swiftly install latest --use --assume-yes || true
+    hash -r
+  done
 fi
 swift --version
 
 say "xtool"
 if ! command -v xtool >/dev/null 2>&1; then
-  curl -fL "https://github.com/xtool-org/xtool/releases/latest/download/xtool-$(uname -m).AppImage" -o "$BIN/xtool"
+  curl -fL --retry 5 "https://github.com/xtool-org/xtool/releases/latest/download/xtool-$(uname -m).AppImage" -o "$BIN/xtool"
   chmod +x "$BIN/xtool"
 fi
 xtool --help >/dev/null && echo "xtool installed"
@@ -66,7 +80,7 @@ pymobiledevice3 lockdown wifi-connections --state on || echo "(couldn't enable W
 if ! command -v netmuxd >/dev/null 2>&1; then
   url=$(curl -fsSL https://api.github.com/repos/jkcoxson/netmuxd/releases/latest \
         | python3 -c 'import json,sys,platform; a=platform.machine(); print(next(x["browser_download_url"] for x in json.load(sys.stdin)["assets"] if a in x["name"] and "linux" in x["name"].lower()))')
-  curl -fL "$url" -o "$BIN/netmuxd" && chmod +x "$BIN/netmuxd"
+  curl -fL --retry 5 "$url" -o "$BIN/netmuxd" && chmod +x "$BIN/netmuxd"
 fi
 sudo systemctl enable --now avahi-daemon
 # netmuxd and usbmuxd share one socket. Plugging the phone in starts usbmuxd
