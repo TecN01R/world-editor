@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import CoreText
 import WriterCore
 import FocusLayout
 
@@ -254,10 +255,20 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
                             options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil).height)
     }
 
-    /// Where the letters are actually drawn, from TextKit (device metrics).
+    /// Where the letters are actually drawn (glyph outlines), top-left origin.
+    /// UIKit's bounding rects only give line boxes, so this asks Core Text,
+    /// which lays the text out the same way.
     private func ink(of s: NSAttributedString, width: CGFloat) -> CGRect {
-        s.boundingRect(with: CGSize(width: width, height: .greatestFiniteMagnitude),
-                       options: [.usesLineFragmentOrigin, .usesDeviceMetrics], context: nil)
+        let setter = CTFramesetterCreateWithAttributedString(s)
+        let height: CGFloat = 100_000
+        let frame = CTFramesetterCreateFrame(setter, CFRange(), CGPath(rect: CGRect(x: 0, y: 0, width: width, height: height), transform: nil), nil)
+        guard let lines = CTFrameGetLines(frame) as? [CTLine], !lines.isEmpty else { return .zero }
+        var origins = [CGPoint](repeating: .zero, count: lines.count)
+        CTFrameGetLineOrigins(frame, CFRange(), &origins)
+        return zip(lines, origins).reduce(CGRect.null) { drawn, line in
+            let b = CTLineGetBoundsWithOptions(line.0, .useGlyphPathBounds)
+            return drawn.union(CGRect(x: line.1.x + b.minX, y: height - (line.1.y + b.maxY), width: b.width, height: b.height))
+        }
     }
 
     private static let words = try! NSRegularExpression(pattern: "\\S+")
