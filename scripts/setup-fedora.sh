@@ -101,10 +101,16 @@ say "Wireless installs"
 install_packages python3-pip avahi nss-mdns
 pip install --user --quiet pymobiledevice3
 pymobiledevice3 lockdown wifi-connections on || echo "(couldn't enable Wi-Fi connections; installs will need the cable)"
-if ! command -v netmuxd >/dev/null 2>&1; then
+# It lives in /usr/local/bin because SELinux won't let a system service run a
+# program from your home folder (it fails with "Permission denied").
+NETMUXD=/usr/local/bin/netmuxd
+rm -f "$BIN/netmuxd"   # where earlier versions of this script put it
+if [ ! -x "$NETMUXD" ]; then
   url=$(curl -fsSL https://api.github.com/repos/jkcoxson/netmuxd/releases/latest \
         | python3 -c 'import json,sys,platform; a=platform.machine(); print(next(x["browser_download_url"] for x in json.load(sys.stdin)["assets"] if a in x["name"] and "linux" in x["name"].lower()))')
-  curl -fL --retry 5 "$url" -o "$BIN/netmuxd" && chmod +x "$BIN/netmuxd"
+  tmp=$(mktemp)
+  curl -fL --retry 5 "$url" -o "$tmp" && sudo install -m 755 "$tmp" "$NETMUXD" && sudo restorecon "$NETMUXD"
+  rm -f "$tmp"
 fi
 systemctl is-enabled --quiet avahi-daemon && systemctl is-active --quiet avahi-daemon \
   || sudo systemctl enable --now avahi-daemon
@@ -115,7 +121,7 @@ unit=$(cat <<UNIT
 Description=netmuxd (iPhone over Wi-Fi)
 After=network-online.target avahi-daemon.service
 [Service]
-ExecStart=$BIN/netmuxd
+ExecStart=$NETMUXD
 Restart=always
 RestartSec=15
 [Install]
@@ -125,6 +131,7 @@ UNIT
 if [ "$unit" != "$(cat /etc/systemd/system/netmuxd.service 2>/dev/null)" ]; then
   echo "$unit" | sudo tee /etc/systemd/system/netmuxd.service >/dev/null
   sudo systemctl daemon-reload
+  sudo systemctl restart netmuxd
 fi
 systemctl is-enabled --quiet netmuxd && systemctl is-active --quiet netmuxd \
   || sudo systemctl enable --now netmuxd

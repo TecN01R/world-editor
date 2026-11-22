@@ -14,3 +14,7 @@ build/
 *.gguf
 *.mlmodelc/
 *.mlpackage/
+
+# Local Swift toolchain on Fedora (swiftly pin, VS Code build server)
+.swift-version
+.bsp/

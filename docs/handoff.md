@@ -45,14 +45,15 @@ features below. Read `CLAUDE.md` first; this covers what isn't there.
    - **Next, if wanted:** dimmed suggestion rows in Edit mode with the source
      sentence and a tap to accept, behind a launch flag. Focus mode is never
      interrupted.
-2. **Autodeploy service tweaks (proposed, not done):**
-   - Re-install weekly, so the free 7-day signature never lapses.
-   - Install once the tests and build pass, without waiting for the screenshot
-     job.
-3. **Fast local loop:** now that Claude can run on the Fedora machine,
-   `scripts/run-on-phone.sh` builds and installs in about a minute, with no
-   GitHub round trip. CI stays the safety net for `main`.
-4. **Later:** on-device art at the top of a page (with colour derived from it),
+2. **Local loop (the way we work now):** Claude runs on the Fedora machine,
+   tests WriterKit locally and installs with `scripts/run-on-phone.sh`; Kevin
+   tries it on the Duo, then we push and CI stays the safety net. The
+   autodeploy service is redundant with this, and it works in the same
+   checkout and relaunches the app once CI passes, so Kevin may turn it off
+   (`systemctl --user disable --now world-editor-autodeploy`). A weekly
+   re-install isn't needed: every install re-signs, so the 7-day signature
+   only lapses after a week without one.
+3. **Later:** on-device art at the top of a page (with colour derived from it),
    the Socratic and continuity companion features, and possibly NLP-based field
    suggestions. All need the device. Tags and "book posture" were dropped:
    Apple's seated posture keeps documents in place, so there's nothing to do.
@@ -60,8 +61,12 @@ features below. Read `CLAUDE.md` first; this covers what isn't there.
 ## Device setup (Fedora, done)
 
 - **Setup is one command:** `scripts/setup-fedora.sh`. Background installs
-  (`scripts/autodeploy.sh`, a user service) are live, with Wi-Fi via netmuxd.
+  (`scripts/autodeploy.sh`, a user service) are live.
   Logs: `journalctl --user -u world-editor-autodeploy -f`.
+- **Wi-Fi installs** go through netmuxd, a system service. Until 21 Nov it
+  never started: SELinux won't let a system service run a program from the
+  home folder, so the setup now puts it in `/usr/local/bin`. With the cable
+  plugged in, usbmuxd takes over.
 - **Swift** is matched to the iOS SDK's own Swift version (read from the SDK),
   installed with swiftly as swift.org's UBI 9 build. swift.org's Fedora builds
   stopped at Fedora 39 and Swift 6.2.
