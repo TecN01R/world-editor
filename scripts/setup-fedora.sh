@@ -22,35 +22,8 @@ esac
 say "System packages"
 # usbmuxd + libimobiledevice: talk to the iPhone. fuse-libs: run AppImages.
 install_packages usbmuxd libimobiledevice-utils fuse-libs curl git unzip
-
-say "Swift toolchain"
-# A toolchain is about 1 GB; downloads are retried, and a re-run carries on
-# from an earlier, interrupted one.
-SWIFTLY_ENV="${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}/env.sh"
-# shellcheck disable=SC1090
-[ -f "$SWIFTLY_ENV" ] && . "$SWIFTLY_ENV"
-if ! command -v swift >/dev/null 2>&1; then
-  if ! command -v swiftly >/dev/null 2>&1; then
-    tmp=$(mktemp -d)
-    curl -fsSL --retry 5 "https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz" -o "$tmp/swiftly.tar.gz"
-    tar -xzf "$tmp/swiftly.tar.gz" -C "$tmp"
-    # swiftly only recognises the Fedora it has builds for (39) and calls any
-    # newer one unsupported; swift.org's Fedora 39 builds run on later Fedora.
-    platform=()
-    [ "$(. /etc/os-release && echo "$ID")" = fedora ] && platform=(--platform fedora39)
-    # Its first toolchain download may time out; the loop below retries it.
-    "$tmp/swiftly" init --assume-yes --quiet-shell-followup "${platform[@]}" || true
-    # shellcheck disable=SC1090
-    . "$SWIFTLY_ENV"
-  fi
-  for attempt in 1 2 3 4 5; do
-    command -v swift >/dev/null 2>&1 && break
-    [ "$attempt" = 1 ] || { echo "Download failed; retrying ($attempt of 5)…"; sleep 10; }
-    swiftly install latest --use --assume-yes || true
-    hash -r
-  done
-fi
-swift --version
+# What swift.org's toolchains need to compile and link.
+install_packages binutils gcc libcurl-devel libedit-devel libicu-devel sqlite-devel libuuid-devel libxml2-devel python3 python3-devel
 
 say "xtool"
 # Our build of xtool, with the fix for Apple ID sign-in codes never arriving
@@ -75,6 +48,39 @@ else
   echo "Using $xip"
   xtool sdk install "$xip"
 fi
+
+say "Swift toolchain"
+# The compiler must match the Swift that built the iOS SDK (Xcode 27.1:
+# Swift 6.4), so the version is read from the SDK itself and a new Xcode
+# brings its Swift along. Toolchains come from swift.org via swiftly, as its
+# RHEL 9 (UBI 9) builds: they run on any newer Fedora and get every release,
+# while swift.org's Fedora builds stopped at Fedora 39 and Swift 6.2.
+# Downloads (about 1 GB) are retried; a re-run carries on from an earlier one.
+SWIFTLY_HOME="${SWIFTLY_HOME_DIR:-$HOME/.local/share/swiftly}"
+interface=$(ls "$HOME"/.swiftpm/swift-sdks/darwin.artifactbundle/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS*.sdk/usr/lib/swift/Swift.swiftmodule/arm64e-apple-ios.swiftinterface 2>/dev/null | tail -1)
+want=$(sed -n 's/^\/\/ swift-compiler-version: Apple Swift version \([0-9]*\.[0-9]*\).*/\1/p' "$interface" 2>/dev/null | head -1)
+want=${want:-6.4}
+echo "The iOS SDK needs Swift $want."
+# An earlier setup used swiftly's Fedora 39 builds; start swiftly over on UBI 9.
+if [ -d "$SWIFTLY_HOME" ] && ! grep -q '"ubi9"' "$SWIFTLY_HOME/config.json" 2>/dev/null; then
+  rm -rf "$SWIFTLY_HOME"
+fi
+if [ ! -f "$SWIFTLY_HOME/env.sh" ]; then
+  tmp=$(mktemp -d)
+  curl -fsSL --retry 5 "https://download.swift.org/swiftly/linux/swiftly-$(uname -m).tar.gz" -o "$tmp/swiftly.tar.gz"
+  tar -xzf "$tmp/swiftly.tar.gz" -C "$tmp"
+  "$tmp/swiftly" init --assume-yes --quiet-shell-followup --skip-install --platform ubi9 \
+    || "$tmp/swiftly" init --assume-yes --quiet-shell-followup --platform ubi9 || true
+fi
+# shellcheck disable=SC1091
+. "$SWIFTLY_HOME/env.sh"
+for attempt in 1 2 3 4 5; do
+  swift --version 2>/dev/null | grep -q "Swift version $want" && break
+  [ "$attempt" = 1 ] || { echo "Download failed; retrying ($attempt of 5)…"; sleep 10; }
+  swiftly install "$want" --use --assume-yes || true
+  hash -r
+done
+swift --version
 
 say "Apple ID"
 echo "Sign in with the Apple ID that signs the app (one without Advanced Data Protection)."
