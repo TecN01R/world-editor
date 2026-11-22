@@ -521,17 +521,21 @@ final class PageTextView: PlainPasteTextView {
         let width = bounds.width
         let column = min(width - 44, 36 * PageEditor.font.pointSize)
         let side = max(22, (width - column) / 2)
+        // The title, fields and writing share a left edge, 7 px (2⅓ pt) in from
+        // `side` so the title sits where the pages list's title does (measured
+        // on the Duo).
+        let lead = side + 7.0 / 3
         let titleHeight = ceil(title.font?.lineHeight ?? 34) + 8
         // Its letters sit exactly where the world's title sits on the pages
         // list (measured on the Duo), so going into a page the title stays put.
-        title.frame = CGRect(x: side + 2, y: 8 - 20.0 / 3, width: max(0, width - 2 * side), height: titleHeight)
+        title.frame = CGRect(x: lead - 1.0 / 3, y: 8 - 20.0 / 3, width: max(0, width - lead - side), height: titleHeight)
         var top = title.frame.maxY
         if let fields = fieldsController?.view {
-            fields.frame = CGRect(x: side, y: top + 6, width: title.frame.width, height: fieldsHeight)
+            fields.frame = CGRect(x: lead, y: top + 6, width: max(0, width - lead - side), height: fieldsHeight)
             top = fields.frame.maxY
         }
 
-        let inset = UIEdgeInsets(top: top + 14, left: side, bottom: 40, right: side)
+        let inset = UIEdgeInsets(top: top + 14, left: lead, bottom: 40, right: side)
         if textContainerInset != inset { textContainerInset = inset }
 
         // The format bar floats over the bottom of the page (which stops at the
