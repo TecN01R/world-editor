@@ -94,7 +94,7 @@ say "Wireless installs"
 # usbmuxd, so xtool reaches it without a cable.
 install_packages python3-pip avahi nss-mdns
 pip install --user --quiet pymobiledevice3
-pymobiledevice3 lockdown wifi-connections --state on || echo "(couldn't enable Wi-Fi connections; installs will need the cable)"
+pymobiledevice3 lockdown wifi-connections on || echo "(couldn't enable Wi-Fi connections; installs will need the cable)"
 if ! command -v netmuxd >/dev/null 2>&1; then
   url=$(curl -fsSL https://api.github.com/repos/jkcoxson/netmuxd/releases/latest \
         | python3 -c 'import json,sys,platform; a=platform.machine(); print(next(x["browser_download_url"] for x in json.load(sys.stdin)["assets"] if a in x["name"] and "linux" in x["name"].lower()))')
