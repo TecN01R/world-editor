@@ -67,7 +67,7 @@ struct PageEditor: UIViewRepresentable {
             let f = UITextField()
             f.font = PageEditor.titleFont
             f.adjustsFontForContentSizeCategory = true
-            f.textColor = .label
+            f.textColor = PageEditor.ink   // the writing's colour: it's the user's too
             f.placeholder = "Title"
             f.clearButtonMode = .never   // the fields' clear buttons are for short values, not the title
             f.text = library.document.title
