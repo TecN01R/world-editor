@@ -64,9 +64,10 @@ features below. Read `CLAUDE.md` first; this covers what isn't there.
   (`scripts/autodeploy.sh`, a user service) are live.
   Logs: `journalctl --user -u world-editor-autodeploy -f`.
 - **Wi-Fi installs** go through netmuxd, a system service. Until 21 Nov it
-  never started: SELinux won't let a system service run a program from the
-  home folder, so the setup now puts it in `/usr/local/bin`. With the cable
-  plugged in, usbmuxd takes over.
+  never started: the setup installed its release *archive* as the program,
+  in the home folder, where SELinux won't let a system service run anything.
+  It now unpacks it into `/usr/local/bin`. With the cable plugged in, usbmuxd
+  takes over.
 - **Swift** is matched to the iOS SDK's own Swift version (read from the SDK),
   installed with swiftly as swift.org's UBI 9 build. swift.org's Fedora builds
   stopped at Fedora 39 and Swift 6.2.

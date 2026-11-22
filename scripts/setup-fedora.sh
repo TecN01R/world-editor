@@ -105,12 +105,15 @@ pymobiledevice3 lockdown wifi-connections on || echo "(couldn't enable Wi-Fi con
 # program from your home folder (it fails with "Permission denied").
 NETMUXD=/usr/local/bin/netmuxd
 rm -f "$BIN/netmuxd"   # where earlier versions of this script put it
-if [ ! -x "$NETMUXD" ]; then
-  url=$(curl -fsSL https://api.github.com/repos/jkcoxson/netmuxd/releases/latest \
-        | python3 -c 'import json,sys,platform; a=platform.machine(); print(next(x["browser_download_url"] for x in json.load(sys.stdin)["assets"] if a in x["name"] and "linux" in x["name"].lower()))')
-  tmp=$(mktemp)
-  curl -fL --retry 5 "$url" -o "$tmp" && sudo install -m 755 "$tmp" "$NETMUXD" && sudo restorecon "$NETMUXD"
-  rm -f "$tmp"
+# Releases are .tar.gz archives; an earlier version of this script installed
+# the archive itself, so replace anything that isn't a program (ELF).
+if ! head -c 4 "$NETMUXD" 2>/dev/null | grep -q ELF; then
+  tmp=$(mktemp -d)
+  curl -fL --retry 5 "https://github.com/jkcoxson/netmuxd/releases/latest/download/netmuxd-$(uname -m)-unknown-linux-gnu.tar.gz" \
+    | tar -xz -C "$tmp" netmuxd
+  sudo install -m 755 "$tmp/netmuxd" "$NETMUXD" && sudo restorecon "$NETMUXD"
+  rm -rf "$tmp"
+  sudo systemctl try-restart netmuxd
 fi
 systemctl is-enabled --quiet avahi-daemon && systemctl is-active --quiet avahi-daemon \
   || sudo systemctl enable --now avahi-daemon
