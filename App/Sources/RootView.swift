@@ -100,7 +100,7 @@ struct PageList: View {
                 Section {
                     TitleMenu(title: library.world.name, hint: "Switches, creates and manages worlds") { worldMenu }
                         .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 0))   // the page's text margin, which a page's title shares
+                        .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 0))   // clear of the card's rounded corners, which clip a flush M's serifs
                         .selectionDisabled()
                 }
             }
