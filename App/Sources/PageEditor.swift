@@ -156,9 +156,11 @@ struct PageEditor: UIViewRepresentable {
         }
 
         func textViewDidBeginEditing(_ tv: UITextView) {
+            (tv.superview as? PageView)?.showBar(true)
             updateFormatBar()   // the @ menu can only appear once writing
         }
         func textViewDidEndEditing(_ tv: UITextView) {
+            (tv.superview as? PageView)?.showBar(false)
             closeMentionMenu()
         }
 
@@ -312,9 +314,9 @@ struct PageEditor: UIViewRepresentable {
     }
 }
 
-/// Bold, italic, bulleted and numbered list on the keyboard (its accessory
-/// view), plus Open while the caret is in a link. One glass capsule with a
-/// small gap below it, scrolling sideways when its buttons don't fit, as in Notes.
+/// Bold, italic, bulleted and numbered list above the keyboard, plus Open
+/// while the caret is in a link. One glass capsule with a small gap below it, in
+/// the page's column, scrolling sideways when its buttons don't fit, as in Notes.
 /// Customised at Kevin's request: the stock toolbar folds extra items into
 /// "•••" and spans the whole keyboard.
 final class FormatBar: UIView {
@@ -435,34 +437,48 @@ final class FormatBar: UIView {
     }
 }
 
-/// The page: its text view, with the format bar riding on the keyboard as its
-/// accessory, so iOS moves it with the keyboard, keeps the writing clear of
-/// both and softens the writing under them (scroll edge effect). (On iOS 27
-/// an accessory no longer crowds the Duo's side column.)
+/// The page: its text view, with the format bar floating just above the
+/// keyboard while writing. The bar is part of the page, not the keyboard's
+/// accessory view: an accessory counts as keyboard, which shortens the Duo's
+/// side column and pushes toolbar items into "•••" (Notes does the same).
 final class PageView: UIView {
     let textView: PageTextView
+    private let bar: FormatBar
 
     init(textView: PageTextView, bar: FormatBar) {
         self.textView = textView
+        self.bar = bar
         super.init(frame: .zero)
         keyboardLayoutGuide.followsUndockedKeyboard = true
-        textView.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(textView)
+        for v in [textView, bar] as [UIView] { v.translatesAutoresizingMaskIntoConstraints = false; addSubview(v) }
         NSLayoutConstraint.activate([
             textView.leadingAnchor.constraint(equalTo: leadingAnchor),
             textView.trailingAnchor.constraint(equalTo: trailingAnchor),
             textView.topAnchor.constraint(equalTo: topAnchor),
             textView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            bar.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor),
+            bar.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor),
+            bar.bottomAnchor.constraint(equalTo: keyboardLayoutGuide.topAnchor),
         ])
-        bar.autoresizingMask = .flexibleWidth
-        bar.frame.size.height = bar.intrinsicContentSize.height
-        textView.inputAccessoryView = bar
+        showBar(textView.isFirstResponder)
     }
     required init?(coder: NSCoder) { fatalError() }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let height = bar.isHidden ? 0 : bar.intrinsicContentSize.height   // follows Dynamic Type
+        if textView.barHeight != height { textView.barHeight = height }
+    }
+
+    /// The bar shows only while writing, like the keyboard it sits on.
+    func showBar(_ shown: Bool) {
+        bar.isHidden = !shown
+        textView.barHeight = shown ? bar.intrinsicContentSize.height : 0
+    }
 }
 
 /// The page's text view. Lays out the title above the writing whenever its
-/// width changes (rotation, fold), in a readable column of ~33 em.
+/// width changes (rotation, fold), in a readable column of ~36em.
 final class PageTextView: PlainPasteTextView {
     override init(frame: CGRect, textContainer: NSTextContainer?) {
         super.init(frame: frame, textContainer: textContainer)
@@ -500,6 +516,9 @@ final class PageTextView: PlainPasteTextView {
     }
     var fieldsHeight: CGFloat = 0 { didSet { if fieldsHeight != oldValue { setNeedsLayout() } } }
 
+    /// The format bar's height while it floats over the bottom of the page.
+    var barHeight: CGFloat = 0 { didSet { setNeedsLayout() } }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         guard let title = titleField else { return }
@@ -523,9 +542,10 @@ final class PageTextView: PlainPasteTextView {
         let inset = UIEdgeInsets(top: top + 14, left: lead, bottom: 40, right: side)
         if textContainerInset != inset { textContainerInset = inset }
 
-        // The page stops at the keyboard (with its format bar), but any part
-        // still under them counts; keep everything scrollable above.
-        let covered = max(0, bounds.maxY - keyboardLayoutGuide.layoutFrame.minY)
+        // The format bar floats over the bottom of the page (which stops at the
+        // keyboard, though any part still under it counts); keep everything
+        // scrollable above them.
+        let covered = max(0, bounds.maxY - keyboardLayoutGuide.layoutFrame.minY) + barHeight
         if contentInset.bottom != covered {
             contentInset.bottom = covered
             verticalScrollIndicatorInsets.bottom = covered
