@@ -67,7 +67,7 @@ struct PageList: View {
     @Binding var selection: UUID?
     /// Unfolded, the sidebar's buttons share a row with the title; folded,
     /// they move to the Duo's side column and the title heads the list.
-    var titleInBar = false
+    let titleInBar: Bool
     let newPage: () -> Void
     @State private var searching = false
     /// Showing only one type's pages, or Recently Deleted.
@@ -94,8 +94,8 @@ struct PageList: View {
             return (page, found.paragraph.flatMap { p in page.paragraphs.firstIndex { $0.id == p } })
         }
         List(selection: $selection) {
-            // The world's name, large, as the screen's title: tap it to switch,
-            // make or manage worlds.
+            // Folded: the world's name, large, as the screen's title: tap it to
+            // switch, make or manage worlds.
             if !titleInBar {
                 Section {
                     TitleMenu(title: library.world.name, hint: "Switches, creates and manages worlds") { worldMenu }

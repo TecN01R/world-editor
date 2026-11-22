@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# Draws App/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png: a New York W as large
-# as fits, and an iOS-style caret after it. Needs Pillow and Apple's New York font
+# Draws the app icon (App/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-{dark,light,tinted}.png):
+# a New York W as large as fits, and an iOS-style caret after it. Needs Pillow and Apple's New York font
 # (developer.apple.com/fonts; NewYorkExtraLarge-Bold.otf in ~/.cache/apple-fonts).
 # Usage: scripts/make-icon.py <out.png> [dark|light|tinted]   (dark is the default)
 import os, sys

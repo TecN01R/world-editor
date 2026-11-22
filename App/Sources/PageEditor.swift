@@ -486,7 +486,7 @@ final class PageView: UIView {
 }
 
 /// The page's text view. Lays out the title above the writing whenever its
-/// width changes (rotation, fold), in a readable column of ~36em.
+/// width changes (rotation, fold), in a readable column of ~33 em.
 final class PageTextView: PlainPasteTextView {
     override init(frame: CGRect, textContainer: NSTextContainer?) {
         super.init(frame: frame, textContainer: textContainer)
@@ -537,13 +537,14 @@ final class PageTextView: PlainPasteTextView {
         // `side`, where the pages list's title sits (measured on the Duo), so
         // going into a page the title stays put.
         let lead = side + 7.0 / 3
+        let lineWidth = max(0, width - lead - side)
         let titleHeight = ceil(title.font?.lineHeight ?? 34) + 8
-        // Its letters sit exactly where the world's title sits on the pages
-        // list (measured on the Duo), so going into a page the title stays put.
-        title.frame = CGRect(x: lead - 1.0 / 3, y: 8 - 20.0 / 3, width: max(0, width - lead - side), height: titleHeight)
+        // Offset so the title's letters, not its field, land on that edge and
+        // level with the list's title (also measured on the Duo).
+        title.frame = CGRect(x: lead - 1.0 / 3, y: 8 - 20.0 / 3, width: lineWidth, height: titleHeight)
         var top = title.frame.maxY
         if let fields = fieldsController?.view {
-            fields.frame = CGRect(x: lead, y: top + 6, width: max(0, width - lead - side), height: fieldsHeight)
+            fields.frame = CGRect(x: lead, y: top + 6, width: lineWidth, height: fieldsHeight)
             top = fields.frame.maxY
         }
 
