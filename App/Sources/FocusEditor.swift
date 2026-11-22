@@ -272,7 +272,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
     /// Natural line spacing: TextKit's line boxes hold every glyph, so
     /// nothing clips and the measurement is the layout.
     static func attributes(_ size: CGFloat) -> [NSAttributedString.Key: Any] {
-        [.font: font(size), .foregroundColor: UIColor.label]
+        [.font: font(size), .foregroundColor: PageEditor.ink]   // as in Edit mode
     }
 
     /// The paragraph at `size`, styled as the text view shows it.

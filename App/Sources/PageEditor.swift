@@ -48,8 +48,12 @@ struct PageEditor: UIViewRepresentable {
         p.lineHeightMultiple = 1.35
         p.paragraphSpacing = kind.isList ? 4 : 14
         if let list = RichText.list(for: kind) { p.textLists = [list] }
-        return [.font: font, .foregroundColor: UIColor.label, .paragraphStyle: p]
+        return [.font: font, .foregroundColor: ink, .paragraphStyle: p]
     }
+
+    /// The writing's colour: a touch off-white in dark mode (88%; pure white
+    /// on black shimmers and reads heavy), the standard label colour in light.
+    static let ink = UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 1, alpha: 0.88) : .label }
 
     @MainActor
     final class Coordinator: NSObject, UITextViewDelegate, UITextFieldDelegate {
@@ -519,7 +523,7 @@ final class PageTextView: PlainPasteTextView {
         super.layoutSubviews()
         guard let title = titleField else { return }
         let width = bounds.width
-        let column = min(width - 44, 36 * PageEditor.font.pointSize)
+        let column = min(width - 44, 33 * PageEditor.font.pointSize)   // at most ~66 characters a line
         let side = max(22, (width - column) / 2)
         // The title, fields and writing share a left edge, 7 px (2⅓ pt) in from
         // `side`, where the pages list's title sits (measured on the Duo), so
