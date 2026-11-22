@@ -232,6 +232,8 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
     /// Field values by field id. A value outlives its field being removed
     /// from the type; it just isn't shown.
     public var values: [UUID: FieldValue]
+    /// When it was deleted, while it waits in Recently Deleted; nil otherwise.
+    public var deleted: Date?
 
     public init(id: UUID = UUID(), title: String = "", paragraphs: [Paragraph] = [Paragraph()], modified: Date = Date(),
                 type: UUID? = nil, values: [UUID: FieldValue] = [:]) {
@@ -243,7 +245,7 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
         self.values = values
     }
 
-    private enum CodingKeys: String, CodingKey { case id, title, paragraphs, modified, type, values }
+    private enum CodingKeys: String, CodingKey { case id, title, paragraphs, modified, type, values, deleted }
 
     /// Pages saved before types existed have no `type` or `values`.
     public init(from decoder: Decoder) throws {
@@ -255,6 +257,7 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
                   modified: try c.decode(Date.self, forKey: .modified),
                   type: try c.decodeIfPresent(UUID.self, forKey: .type),
                   values: Dictionary(uniqueKeysWithValues: values.compactMap { k, v in UUID(uuidString: k).map { ($0, v) } }))
+        deleted = try c.decodeIfPresent(Date.self, forKey: .deleted)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -267,6 +270,18 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
         if !values.isEmpty {
             try c.encode(Dictionary(uniqueKeysWithValues: values.map { ($0.key.uuidString, $0.value) }), forKey: .values)
         }
+        try c.encodeIfPresent(deleted, forKey: .deleted)
+    }
+
+    /// How long a deleted page waits in Recently Deleted, as in Notes.
+    public static let keptAfterDeleting: TimeInterval = 30 * 86_400
+
+    /// When a deleted page goes for good; nil if it isn't deleted.
+    public var goesForGood: Date? { deleted?.addingTimeInterval(Self.keptAfterDeleting) }
+
+    /// Whole days left in Recently Deleted (at least 1 until it goes).
+    public func daysLeft(now: Date = Date()) -> Int? {
+        goesForGood.map { max(0, Int(($0.timeIntervalSince(now) / 86_400).rounded(.up))) }
     }
 
     public var isEmpty: Bool {

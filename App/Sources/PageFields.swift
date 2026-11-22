@@ -47,14 +47,13 @@ struct PageFields: View {
 
     private func typeMenu(_ label: some View) -> some View {
         Menu {
-            ForEach(library.schema.types) { type in
-                Button(type.name) { library.update { $0.type = type.id } }
+            // Chooses this page's type, ticked; types are renamed and deleted
+            // in the pages list.
+            Picker("Type", selection: Binding { library.document.type } set: { new in library.update { $0.type = new } }) {
+                ForEach(library.schema.types) { Text($0.name).tag(Optional($0.id)) }
+                Text("No Type").tag(UUID?.none)
             }
             Button("New Type…", systemImage: "plus") { library.fieldsRequest = .newType }
-            if library.document.type != nil {
-                Divider()
-                Button("No Type", role: .destructive) { library.update { $0.type = nil } }
-            }
         } label: {
             label.padding(.vertical, 4).contentShape(.rect)
         }

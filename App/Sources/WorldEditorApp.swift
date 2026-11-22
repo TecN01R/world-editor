@@ -13,6 +13,7 @@ struct WorldEditorApp: App {
         }
         .onChange(of: phase) { _, phase in
             if phase != .active { library.flushAll() }   // never lose the last edits
+            else { library.removeExpired() }   // the app may stay open past a page's 30 days
         }
     }
 }
@@ -22,6 +23,9 @@ struct WorldEditorApp: App {
 final class Library {
     /// Most recently edited first.
     private(set) var pages: [WriterCore.Document] = []
+    /// Deleted pages, newest first, kept for 30 days so a delete can be undone.
+    /// Apart from `pages`, so nothing else (search, @ links, fields) sees them.
+    private(set) var recentlyDeleted: [WriterCore.Document] = []
 
     /// The open page. Leaving a page that was never written in discards it.
     var selection: UUID? {
@@ -66,6 +70,29 @@ final class Library {
         saveSchema()
         update { $0.type = type.id }
     }
+
+    func renameType(_ id: UUID, to name: String) {
+        schema.renameType(id, to: name)
+        saveSchema()
+    }
+
+    /// Deletes a type. Its pages have no type after; their field values stay
+    /// saved, so giving them a type with those fields brings them back.
+    func deleteType(_ id: UUID) {
+        for i in pages.indices where pages[i].type == id {
+            pages[i].type = nil
+            scheduleSave(pages[i])
+        }
+        // Deleted pages too, so one recovered later doesn't name a missing type.
+        for i in recentlyDeleted.indices where recentlyDeleted[i].type == id {
+            recentlyDeleted[i].type = nil
+            try? store?.save(recentlyDeleted[i])
+        }
+        schema.removeType(id)
+        saveSchema()
+    }
+
+    func pageCount(ofType id: UUID) -> Int { pages.count { $0.type == id } }
 
     /// Adds `field` to the shared list if it's new, and to the end of `type`.
     func add(_ field: FieldDefinition, to type: UUID) {
@@ -127,7 +154,10 @@ final class Library {
         let dir = URL.applicationSupportDirectory.appendingPathComponent("Documents", isDirectory: true)
         store = try? DocumentStore(directory: dir)
         schemaStore = SchemaStore(url: URL.applicationSupportDirectory.appendingPathComponent("Schema.json"))
-        pages = (try? store?.all()) ?? []
+        let saved = (try? store?.all()) ?? []
+        pages = saved.filter { $0.deleted == nil }
+        recentlyDeleted = saved.filter { $0.deleted != nil }.sorted { $0.deleted! > $1.deleted! }
+        removeExpired()
         schema = schemaStore?.load() ?? Schema()
         PageIndex.start(with: pages.map { ($0, fieldText($0)) })
         if pages.isEmpty { newPage() } else { selection = pages.first?.id }
@@ -153,12 +183,39 @@ final class Library {
         pages.filter { $0.id != id && $0.mentions(id) }
     }
 
+    /// Moves a page to Recently Deleted (an empty one just goes).
     func delete(_ id: UUID) {
-        pendingSaves.removeValue(forKey: id)?.cancel()
+        // First: leaving the open page discards it if it's empty, which
+        // changes `pages` under us.
         if selection == id { selection = nil }
-        pages.removeAll { $0.id == id }
-        try? store?.delete(id)
+        pendingSaves.removeValue(forKey: id)?.cancel()
+        guard let i = pages.firstIndex(where: { $0.id == id }) else { return }
+        var page = pages.remove(at: i)
         if store != nil { PageIndex.remove(id) }
+        guard !page.isEmpty else { try? store?.delete(id); return }
+        page.deleted = .now
+        recentlyDeleted.insert(page, at: 0)
+        try? store?.save(page)
+    }
+
+    /// Back from Recently Deleted, to its place by date among the pages.
+    func recover(_ id: UUID) {
+        guard let i = recentlyDeleted.firstIndex(where: { $0.id == id }) else { return }
+        var page = recentlyDeleted.remove(at: i)
+        page.deleted = nil
+        pages.insert(page, at: pages.firstIndex { $0.modified < page.modified } ?? pages.count)
+        try? store?.save(page)
+        if store != nil { PageIndex.update(page, fields: fieldText(page)) }
+    }
+
+    func deleteForGood(_ id: UUID) {
+        recentlyDeleted.removeAll { $0.id == id }
+        try? store?.delete(id)
+    }
+
+    /// Deletes for good the pages whose 30 days are up.
+    func removeExpired() {
+        for page in recentlyDeleted where page.goesForGood! <= .now { deleteForGood(page.id) }
     }
 
     /// Applies a user edit to the open page.

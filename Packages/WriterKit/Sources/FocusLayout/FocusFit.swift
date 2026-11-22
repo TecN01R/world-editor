@@ -1,6 +1,6 @@
 import Foundation
 
-/// The sizing rules of Focus mode, kept free of UIKit so they're tested on
+/// Focus mode's size search, kept free of UIKit so it's tested on
 /// Linux. The app supplies `fits`, which asks TextKit whether the paragraph
 /// fits the page at a size.
 public enum FocusFit {
@@ -17,12 +17,5 @@ public enum FocusFit {
             if fits(mid) { lo = mid } else { hi = mid }
         }
         return lo
-    }
-
-    /// While typing forward the text only grows for a clear win, so the page
-    /// doesn't bounce as words wrap; otherwise it takes the best size.
-    public static func settle(best: Double, current: Double, mayGrow: Bool) -> Double {
-        if current == 0 || best < current || mayGrow || best >= current * 1.045 { return best }
-        return current
     }
 }

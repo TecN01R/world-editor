@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import CoreText
 import WriterCore
 import FocusLayout
 
@@ -46,14 +45,15 @@ final class FocusTextView: PlainPasteTextView {
 @MainActor
 final class FocusViewController: UIViewController, UITextViewDelegate {
     private let library: Library
-    private let textView = FocusTextView()
+    private let textView = FocusTextView(usingTextLayoutManager: false)   // TextKit 1: see FocusHyphenation
+    private let hyphenation = FocusHyphenation()
+    private let lines = FocusLines()
     private let rail = ParagraphRail()
     private static let railResting: CGFloat = 0.35
     private let area = UILayoutGuide()
 
     private var index = 0
     private var size = 0.0   // current font size; 0 until the page is first fitted
-    private var alignment = NSTextAlignment.center
 
     init(library: Library) {
         self.library = library
@@ -78,13 +78,14 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         NSLayoutConstraint.activate([
             area.topAnchor.constraint(equalTo: view.topAnchor, constant: margin),
             area.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: margin),
-            area.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40),
+            area.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -22),   // just clear of the dots
             area.bottomAnchor.constraint(lessThanOrEqualTo: view.bottomAnchor, constant: -24),
             area.bottomAnchor.constraint(lessThanOrEqualTo: view.keyboardLayoutGuide.topAnchor, constant: -margin),
             fill,
         ])
 
         textView.delegate = self
+        textView.layoutManager.delegate = hyphenation
         textView.isScrollEnabled = false            // never scrolls: the text is sized to fit instead
         textView.contentInsetAdjustmentBehavior = .never   // placed by hand; revealed bars mustn't push it down
         textView.backgroundColor = .clear
@@ -103,7 +104,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         rail.alpha = Self.railResting
         view.addSubview(rail)
         NSLayoutConstraint.activate([
-            rail.centerXAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            rail.centerXAnchor.constraint(equalTo: view.trailingAnchor, constant: -10),
             rail.centerYAnchor.constraint(equalTo: area.centerYAnchor),
             rail.widthAnchor.constraint(equalToConstant: 32),
             rail.heightAnchor.constraint(lessThanOrEqualTo: area.heightAnchor, multiplier: 0.7),
@@ -135,11 +136,11 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        // Keyboard, rotation, fold: take the best size. Only when the page
-        // changed; typing refits on its own (and mustn't be undone mid-zoom).
+        // Keyboard, rotation, fold: refit. Only when the page changed; typing
+        // refits on its own (and mustn't be undone mid-zoom).
         guard area.layoutFrame != fittedPage else { return }
         fittedPage = area.layoutFrame
-        fit(mayGrow: true)
+        fit()
     }
 
     // MARK: Paging
@@ -152,7 +153,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         size = 0
         let p = paragraphs[index]
         textView.attributedText = RichText.attributed(p, attributes: Self.attributes(17))
-        fit(mayGrow: true)
+        fit()
         let len = (textView.text as NSString).length
         let loc: Int
         switch caret {
@@ -241,11 +242,9 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
 
     func textViewDidChange(_ tv: UITextView) {
         if controlsVisible { onControlsChange?(false) }   // writing again: out of the way
-        let before = library.document.paragraphs[index].length
         library.update { $0.setText(tv.text, runs: RichText.runs(in: tv.attributedText),
                                                  links: RichText.links(in: tv.attributedText), at: index) }
-        // Deleting may grow the size freely; typing forward only for a clear win.
-        fit(mayGrow: (tv.text as NSString).length < before, animated: true)
+        fit(animated: true)
         updateRail()
     }
 
@@ -268,76 +267,61 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         [.font: font(size), .foregroundColor: UIColor.label]
     }
 
+    /// The paragraph at `size`, styled as the text view shows it.
     private func styled(_ size: Double) -> NSAttributedString {
         let text = textView.text ?? ""
+        var attributes = Self.attributes(CGFloat(size))
+        attributes[.paragraphStyle] = paragraphStyle
         return RichText.attributed(text.isEmpty ? "M" : text, runs: RichText.runs(in: textView.attributedText),
-                                   attributes: Self.attributes(CGFloat(size)))
+                                   attributes: attributes)
     }
 
-    /// Whether the paragraph fits the page at `size`, and no word is wider
-    /// than a line (words never break). What must fit is the letters as
-    /// drawn, from the top of the tallest to the bottom of the lowest: the
-    /// empty space a line box keeps above and below them (for accents and for
-    /// tails like "g") may run off the page, and the caret is cut off at its
-    /// bottom. Text with no ink (only spaces) fits its line box instead.
+    /// Whether the paragraph fits the page at `size` with no word cut but at
+    /// a hyphen. What must fit is the letters as drawn, from the top of the
+    /// tallest to the bottom of the lowest: the empty space a line box keeps
+    /// above and below them (for accents and for tails like "g") may run off
+    /// the page, and the caret is cut off at its bottom. Text with no ink
+    /// (only spaces) fits its line box instead.
     private func fits(_ size: Double, in page: CGSize) -> Bool {
-        let s = styled(size)
-        let longestWord = Self.words.matches(in: s.string, range: NSRange(location: 0, length: s.length))
-            .map { s.attributedSubstring(from: $0.range).size().width }.max() ?? 0
-        guard longestWord <= page.width else { return false }
-        let drawn = ink(of: s, width: page.width)
-        return (drawn.isEmpty ? box(of: s, width: page.width) : drawn.height) <= page.height
+        let l = lines.layout(styled(size), width: page.width)
+        return !l.splitsWord && (l.ink.isEmpty ? l.height : l.ink.height) <= page.height
     }
-
-    private func box(of s: NSAttributedString, width: CGFloat) -> CGFloat {
-        ceil(s.boundingRect(with: CGSize(width: width, height: .greatestFiniteMagnitude),
-                            options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil).height)
-    }
-
-    /// Where the letters are actually drawn (glyph outlines), top-left origin.
-    /// UIKit's bounding rects only give line boxes, so this asks Core Text,
-    /// which lays the text out the same way.
-    private func ink(of s: NSAttributedString, width: CGFloat) -> CGRect {
-        let setter = CTFramesetterCreateWithAttributedString(s)
-        let height: CGFloat = 100_000
-        let frame = CTFramesetterCreateFrame(setter, CFRange(), CGPath(rect: CGRect(x: 0, y: 0, width: width, height: height), transform: nil), nil)
-        guard let lines = CTFrameGetLines(frame) as? [CTLine], !lines.isEmpty else { return .zero }
-        var origins = [CGPoint](repeating: .zero, count: lines.count)
-        CTFrameGetLineOrigins(frame, CFRange(), &origins)
-        return zip(lines, origins).reduce(CGRect.null) { drawn, line in
-            let b = CTLineGetBoundsWithOptions(line.0, .useGlyphPathBounds)
-            return drawn.union(CGRect(x: line.1.x + b.minX, y: height - (line.1.y + b.maxY), width: b.width, height: b.height))
-        }
-    }
-
-    private static let words = try! NSRegularExpression(pattern: "\\S+")
 
     /// Sets the paragraph as large as the page allows and centres it between
     /// the top of the screen and the keyboard.
-    private func fit(mayGrow: Bool, animated: Bool = false) {
+    private func fit(animated: Bool = false) {
         let page = area.layoutFrame
         guard page.width > 0, page.height > 0 else { return }
-        let best = FocusFit.largest { fits($0, in: page.size) }
-        let newSize = FocusFit.settle(best: best, current: size, mayGrow: mayGrow)
+        let newSize = FocusFit.largest { fits($0, in: page.size) }
         let old = (frame: textFrame, size: size, start: textStart)
 
         if newSize != size { apply(newSize) }
+        applyParagraphStyle()
         let h = measuredHeight(width: page.width)
         // One line is centred across the page too; once it wraps it's left-aligned
         // (the switch comes with the size change that wrapping brings).
-        alignment = h < Self.font(CGFloat(size)).lineHeight * 1.5 ? .center : .natural
-        textView.textAlignment = alignment
+        let centred = h < Self.font(CGFloat(size)).lineHeight * 1.5
         updateTypingAttributes()
-        let drawn = inkOfText(width: page.width)
+        let measured = lines.layout(styled(size), width: page.width), drawn = measured.ink
         // Centre the letters, keeping the lowest above the keyboard and the
         // tallest below the top of the page. (Text with no ink, only spaces,
         // goes by its line box and caret.)
         let bottom = drawn.isEmpty ? h : drawn.maxY
         let y = max(min(page.midY - drawn.midY, page.maxY - bottom), page.minY - drawn.minY)
-        // Across, centre them on the screen rather than the page (which leaves
-        // room for the dots on the right) when there's room to spare.
-        let x = drawn.isEmpty ? view.bounds.midX - page.width / 2
-            : max(min(view.bounds.midX - drawn.midX, page.maxX - drawn.maxX), page.minX - drawn.minX)
+        // One line is centred here rather than by TextKit, which leaves out
+        // spaces typed at its end, so a space wouldn't show. It's centred on
+        // the screen rather than the page (which leaves room for the dots on
+        // the right) when there's room to spare. Wrapped text keeps to the
+        // left margin.
+        let x: CGFloat
+        if !centred {
+            x = page.minX - min(0, drawn.minX)   // a letter overhanging left (italic J) stays inside
+        } else if textView.text.isEmpty {
+            x = view.bounds.midX - 1   // the caret
+        } else {
+            let left = drawn.minX, right = max(drawn.maxX, measured.end)   // no ink: .zero
+            x = max(min(view.bounds.midX - (left + right) / 2, page.maxX - right), page.minX - left)
+        }
         let frame = CGRect(x: x, y: y, width: page.width, height: h)
         textView.caretBottom = page.maxY - y
         let changed = frame != old.frame || size != old.size
@@ -405,17 +389,28 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         updateTypingAttributes()
     }
 
-    /// The letters as drawn, laid out (and aligned) as the text view lays them out.
-    private func inkOfText(width: CGFloat) -> CGRect {
-        let s = NSMutableAttributedString(attributedString: styled(size))
-        s.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: s.length))
-        return ink(of: s, width: width)
-    }
-
+    /// Hyphenation wherever it saves space (the most iOS allows), to make the
+    /// paragraph as large as it can be. Always left-aligned: `fit` centres a
+    /// single line itself.
     private var paragraphStyle: NSParagraphStyle {
         let style = NSMutableParagraphStyle()
-        style.alignment = alignment
+        style.hyphenationFactor = 1
         return style
+    }
+
+    /// Puts `paragraphStyle` on the whole paragraph, unless it's there already
+    /// (an edit mid-composition would disturb the keyboard).
+    private func applyParagraphStyle() {
+        let style = paragraphStyle, storage = textView.textStorage
+        let all = NSRange(location: 0, length: storage.length)
+        var same = true
+        storage.enumerateAttribute(.paragraphStyle, in: all) { value, _, stop in
+            if (value as? NSParagraphStyle) != style { same = false; stop.pointee = true }
+        }
+        guard !same else { return }
+        let selection = textView.selectedRange
+        storage.addAttribute(.paragraphStyle, value: style, range: all)
+        textView.selectedRange = selection
     }
 
     private func measuredHeight(width: CGFloat) -> CGFloat {

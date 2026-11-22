@@ -52,6 +52,20 @@ public struct Schema: Codable, Hashable, Sendable {
 
     public func type(_ id: UUID?) -> PageType? { id.flatMap { id in types.first { $0.id == id } } }
 
+    /// Renames a type. Its pages hold its id, so they follow.
+    public mutating func renameType(_ id: UUID, to name: String) {
+        guard let i = types.firstIndex(where: { $0.id == id }) else { return }
+        types[i].name = name
+    }
+
+    /// Removes a type. Its fields stay in the shared list (other types may use
+    /// them, and pages keep their values); fields that took only its pages
+    /// take any page.
+    public mutating func removeType(_ id: UUID) {
+        types.removeAll { $0.id == id }
+        for i in fields.indices where fields[i].pageType == id { fields[i].pageType = nil }
+    }
+
     /// The type's fields, in its order.
     public func fields(of type: PageType?) -> [FieldDefinition] {
         (type?.fields ?? []).compactMap { id in fields.first { $0.id == id } }

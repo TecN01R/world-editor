@@ -1,7 +1,8 @@
 # Focus mode behaviour
 
-TextKit measures, `FocusFit` (shared, tested) holds the two sizing rules,
-`FocusEditor` (UIKit) does the rest.
+TextKit measures; `FocusLayout` (shared, tested) holds the size search
+(`FocusFit`) and where words may break (`FocusBreaks`); `FocusEditor` and
+`FocusLines` (UIKit) do the rest.
 
 ## Layout
 
@@ -22,23 +23,30 @@ TextKit measures, `FocusFit` (shared, tested) holds the two sizing rules,
   letters may sit under the camera; avoiding just the cutout would mean
   hard-coding its shape.
 - Natural line spacing: TextKit's line boxes hold every glyph, so nothing is
-  clipped. Core Text measures the letters as TextKit lays them out (same
-  font, width and alignment).
-- Words never break mid-word unless one word can't fit at the minimum size.
+  clipped. `FocusLines` lays the text out off screen as the text view does
+  (TextKit 1, same hyphenation); Core Text gives the letters' outlines.
+- Words break across lines only at a hyphen, where the language allows one,
+  and never the paragraph's last word (usually the one being typed, which
+  would split and rejoin under the caret). A word is cut without a hyphen
+  only when it can't fit at the minimum size. (Lines still break after a
+  hyphen, dash or slash, and between the characters of scripts written
+  without spaces, such as Chinese or Thai.)
 - The block is centred on the page by its drawn letters (Core Text glyph
   outlines), not its line boxes. A single line is centred across the page;
   once it wraps it's left-aligned (the switch comes with the size change).
-  Across, letters with room to spare are centred on the screen rather than
-  the page, which keeps a strip clear on the right for the dots.
+  A centred line with room to spare is centred on the screen rather than
+  the page, which keeps a strip clear on the right for the dots; wrapped
+  text keeps to the left margin.
   The letters and the caret stay clear of the keyboard.
 - The page ignores the safe area: revealed controls draw over it, so showing
   or hiding them never reflows the text.
 
 ## Typing
 
-- While writing forward, the size only grows for a clear win (≥ 4.5%), so the
-  page doesn't bounce as words wrap. Deleting, the keyboard appearing,
-  folding/unfolding and changing pages let it grow freely.
+- Every keystroke takes the largest size that fits, growing as well as
+  shrinking. (A rule that only grew for a 4.5% win, to stop bouncing as
+  words wrap, was tried and dropped: it left the text smaller than it
+  could be.)
 - Size changes animate briefly, as a zoom: the letters scale where they
   are rather than snapping to the new size and sliding into place. The
   first letter is the fixed point, so a centred line doesn't jump sideways
