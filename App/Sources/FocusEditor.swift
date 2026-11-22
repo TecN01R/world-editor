@@ -9,8 +9,8 @@ import FocusLayout
 /// keyboard position, so there is nothing to estimate and nothing scrolls.
 ///
 /// Everything but the writing hides (the paragraph dots dim) while you write:
-/// tapping outside the text brings the controls back (`showsControls`),
-/// typing hides them again.
+/// tapping anywhere brings the controls back (`showsControls`); typing, or a
+/// few seconds, hides them again.
 struct FocusEditor: UIViewControllerRepresentable {
     @Environment(Library.self) private var library
     @Binding var showsControls: Bool
@@ -25,12 +25,21 @@ struct FocusEditor: UIViewControllerRepresentable {
     }
 }
 
-/// Text view that reports Backspace at the very start (to merge paragraphs).
+/// Text view that reports Backspace at the very start (to merge paragraphs),
+/// and cuts the caret off at the bottom of the page (`caretBottom`).
 final class FocusTextView: PlainPasteTextView {
     var onBackspaceAtStart: (() -> Void)?
+    var caretBottom = CGFloat.greatestFiniteMagnitude
+
     override func deleteBackward() {
         if selectedRange == NSRange(location: 0, length: 0) { onBackspaceAtStart?(); return }
         super.deleteBackward()
+    }
+
+    override func caretRect(for position: UITextPosition) -> CGRect {
+        var r = super.caretRect(for: position)
+        r.size.height = max(0, min(r.maxY, caretBottom) - r.minY)
+        return r
     }
 }
 
@@ -75,6 +84,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
 
         textView.delegate = self
         textView.isScrollEnabled = false            // never scrolls: the text is sized to fit instead
+        textView.contentInsetAdjustmentBehavior = .never   // placed by hand; revealed bars mustn't push it down
         textView.backgroundColor = .clear
         textView.textContainerInset = .zero
         textView.textContainer.lineFragmentPadding = 0
@@ -97,14 +107,15 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
             rail.heightAnchor.constraint(lessThanOrEqualTo: area.heightAnchor, multiplier: 0.7),
         ])
 
-        let reveal = UITapGestureRecognizer(target: self, action: #selector(tappedOutsideText(_:)))
+        let reveal = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
         reveal.delegate = self
+        reveal.cancelsTouchesInView = false   // taps on the writing still place the caret
         view.addGestureRecognizer(reveal)
 
         for dir in [UISwipeGestureRecognizer.Direction.up, .down] {
             let s = UISwipeGestureRecognizer(target: self, action: #selector(swiped(_:)))
             s.direction = dir
-            s.delegate = self   // not on the writing: drags there move the caret
+            s.delegate = self   // not on the caret or selection handles
             view.addGestureRecognizer(s)
         }
 
@@ -118,9 +129,15 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         if size > 0 { apply(size) }   // becoming first responder resets an empty view's typing font
     }
 
+    private var fittedPage = CGRect.null
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        fit(mayGrow: true)   // keyboard, rotation, fold: take the best size
+        // Keyboard, rotation, fold: take the best size. Only when the page
+        // changed; typing refits on its own (and mustn't be undone mid-zoom).
+        guard area.layoutFrame != fittedPage else { return }
+        fittedPage = area.layoutFrame
+        fit(mayGrow: true)
     }
 
     // MARK: Paging
@@ -166,16 +183,21 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         controlsVisible = visible
         UIView.animate(withDuration: 0.25) { self.rail.alpha = visible ? 1 : Self.railResting }
         hideTimer?.invalidate()
-        if visible {
-            // Shown for a moment, like video controls, unless you use them.
-            hideTimer = .scheduledTimer(withTimeInterval: Screenshots.isActive ? 30 : 4, repeats: false) { [weak self] _ in
-                MainActor.assumeIsolated { self?.onControlsChange?(false) }
-            }
+        if visible { scheduleHide() }
+    }
+
+    /// Shown for a moment, like video controls, unless you use them.
+    private func scheduleHide() {
+        hideTimer?.invalidate()
+        hideTimer = .scheduledTimer(withTimeInterval: Screenshots.isActive ? 30 : 4, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.onControlsChange?(false) }
         }
     }
 
-    @objc private func tappedOutsideText(_ g: UITapGestureRecognizer) {
-        onControlsChange?(!controlsVisible)
+    /// Any tap shows the controls (a double tap must not show then hide
+    /// them); another tap keeps them up a little longer.
+    @objc private func tapped(_ g: UITapGestureRecognizer) {
+        if controlsVisible { scheduleHide() } else { onControlsChange?(true) }
     }
 
     @objc private func swiped(_ g: UISwipeGestureRecognizer) {
@@ -252,16 +274,18 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
     }
 
     /// Whether the paragraph fits the page at `size`, and no word is wider
-    /// than a line (words never break). What must fit is from the top of the
-    /// tallest letter down to the bottom of the last line box: the caret spans
-    /// the box, and must stay clear of the keyboard, but the empty space above
-    /// lowercase letters (a lone "g") may run into the top margin.
+    /// than a line (words never break). What must fit is the letters as
+    /// drawn, from the top of the tallest to the bottom of the lowest: the
+    /// empty space a line box keeps above and below them (for accents and for
+    /// tails like "g") may run off the page, and the caret is cut off at its
+    /// bottom. An empty page fits its line box, the caret being all there is.
     private func fits(_ size: Double, in page: CGSize) -> Bool {
         let s = styled(size)
         let longestWord = Self.words.matches(in: s.string, range: NSRange(location: 0, length: s.length))
             .map { s.attributedSubstring(from: $0.range).size().width }.max() ?? 0
         guard longestWord <= page.width else { return false }
-        return box(of: s, width: page.width) - ink(of: s, width: page.width).minY <= page.height
+        let drawn = ink(of: s, width: page.width)
+        return (drawn.isEmpty ? box(of: s, width: page.width) : drawn.height) <= page.height
     }
 
     private func box(of s: NSAttributedString, width: CGFloat) -> CGFloat {
@@ -294,12 +318,14 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         guard page.width > 0, page.height > 0 else { return }
         let best = FocusFit.largest { fits($0, in: page.size) }
         let newSize = FocusFit.settle(best: best, current: size, mayGrow: mayGrow)
+        let old = (frame: textFrame, size: size, start: textStart)
+        defer { textStart = firstLetterX() }
 
         if newSize != size { apply(newSize) }
         // The text view has the final say: if its layout is ever taller than
         // the page allows, step down rather than let anything hang off it.
         var h = measuredHeight(width: page.width), drawn = inkOfText(width: page.width)
-        while h - drawn.minY > page.height, size > FocusFit.minSize {
+        while (drawn.isEmpty ? h : drawn.height) > page.height, size > FocusFit.minSize {
             apply(max(FocusFit.minSize, size * 0.97))
             h = measuredHeight(width: page.width); drawn = inkOfText(width: page.width)
         }
@@ -308,17 +334,52 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         alignment = h < Self.font(CGFloat(size)).lineHeight * 1.5 ? .center : .natural
         textView.textAlignment = alignment
         updateTypingAttributes()
-        // Centre the letters, keeping the last line box above the keyboard
-        // and the tallest letter below the top of the page.
-        let y = max(min(page.midY - drawn.midY, page.maxY - h), page.minY - drawn.minY)
+        // Centre the letters, keeping the lowest above the keyboard (or, on an
+        // empty page, the caret) and the tallest below the top of the page.
+        let bottom = drawn.isEmpty ? h : drawn.maxY
+        let y = max(min(page.midY - drawn.midY, page.maxY - bottom), page.minY - drawn.minY)
         let frame = CGRect(x: page.minX, y: y, width: page.width, height: h)
-        guard frame != textView.frame else { return }
-        if animated {
-            UIView.animate(withDuration: 0.17, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
-                self.textView.frame = frame
-            }
-        } else {
-            textView.frame = frame
+        textView.caretBottom = page.maxY - y
+        guard frame != old.frame || size != old.size else { return }
+        textFrame = frame
+        guard animated, old.size > 0 else { return }
+        // Zoom, rather than snap to the new size and then slide: draw the new
+        // layout over the letters as they are on screen right now (mid-zoom,
+        // if typing fast), then ease it into place. The first letter is the
+        // fixed point: it keeps its place while the rest scales around it,
+        // even when a centred line re-centres around a new letter.
+        let scale = old.size / size
+        let from = CGPoint(x: old.frame.minX + old.start, y: old.frame.minY)
+        let to = CGPoint(x: frame.minX + firstLetterX(), y: frame.minY)
+        let centre = CGPoint(x: frame.midX, y: frame.midY), oldCentre = CGPoint(x: old.frame.midX, y: old.frame.midY)
+        let shown = textView.layer.presentation()?.affineTransform() ?? textView.transform
+        // Where the new layout's centre lands: on the old layout, then as shown.
+        let onOld = CGPoint(x: from.x + scale * (centre.x - to.x), y: from.y + scale * (centre.y - to.y))
+        let onScreen = CGPoint(x: oldCentre.x + shown.a * (onOld.x - oldCentre.x) + shown.tx,
+                               y: oldCentre.y + shown.d * (onOld.y - oldCentre.y) + shown.ty)
+        textView.layer.removeAllAnimations()
+        textView.transform = CGAffineTransform(a: shown.a * scale, b: 0, c: 0, d: shown.d * scale,
+                                               tx: onScreen.x - centre.x, ty: onScreen.y - centre.y)
+        UIView.animate(withDuration: 0.17, delay: 0, options: [.curveEaseOut]) { self.textView.transform = .identity }
+    }
+
+    /// Where the first letter starts, across the text view, as last laid out.
+    private var textStart: CGFloat = 0
+
+    /// Where the first letter starts across the text view, at the current size.
+    private func firstLetterX() -> CGFloat {
+        textView.layoutIfNeeded()
+        return textView.caretRect(for: textView.beginningOfDocument).midX
+    }
+
+    /// The text view's untransformed frame. Set through its bounds and centre,
+    /// which a zoom (transform) doesn't affect, unlike `frame`.
+    private var textFrame: CGRect {
+        get { CGRect(x: textView.center.x - textView.bounds.width / 2, y: textView.center.y - textView.bounds.height / 2,
+                     width: textView.bounds.width, height: textView.bounds.height) }
+        set {
+            textView.bounds.size = newValue.size
+            textView.center = CGPoint(x: newValue.midX, y: newValue.midY)
         }
     }
 
@@ -424,10 +485,24 @@ final class ParagraphRail: UIView {
 }
 
 extension FocusViewController: UIGestureRecognizerDelegate {
-    /// Taps and swipes on the writing edit it as usual; only those around it
-    /// reveal the controls or change pages.
+    /// Taps anywhere reveal the controls; swipes change pages from anywhere
+    /// but the caret and selection handles, where a drag moves them. The rail
+    /// handles its own.
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         let p = touch.location(in: view)
-        return !textView.frame.insetBy(dx: -8, dy: -8).contains(p) && !rail.frame.contains(p)
+        if rail.frame.contains(p) { return false }
+        return !(g is UISwipeGestureRecognizer && nearSelectionEnds(p))
+    }
+
+    /// The reveal tap goes alongside the text view's own (placing the caret).
+    func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+        g is UITapGestureRecognizer
+    }
+
+    private func nearSelectionEnds(_ p: CGPoint) -> Bool {
+        guard let range = textView.selectedTextRange else { return false }
+        return [range.start, range.end].contains { end in
+            view.convert(textView.caretRect(for: end), from: textView).insetBy(dx: -22, dy: -22).contains(p)
+        }
     }
 }

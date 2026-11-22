@@ -223,11 +223,16 @@ struct FieldSheet: View {
                 }
                 Section(editing == nil ? "New Field" : "Field") {
                     TextField("Name", text: $name)
-                    Picker("Kind", selection: $kind) {
-                        ForEach(FieldDefinition.Kind.allCases, id: \.self) { Text($0.label).tag($0) }
-                    }
-                    .disabled(editing != nil)   // values already saved keep their kind
-                    if kind == .page {
+                }
+                // Its own section, titled Kind; each kind shows a sample of
+                // how a page shows it.
+                Picker("Kind", selection: $kind) {
+                    ForEach(FieldDefinition.Kind.allCases, id: \.self) { KindRow(kind: $0).tag($0) }
+                }
+                .pickerStyle(.inline)
+                .disabled(editing != nil)   // values already saved keep their kind
+                if kind == .page {
+                    Section {
                         Picker("Pages of Type", selection: $pageType) {
                             Text("Any").tag(UUID?.none)
                             ForEach(library.schema.types) { Text($0.name).tag(Optional($0.id)) }
@@ -274,6 +279,42 @@ struct FieldSheet: View {
     }
 
     private func trimmed(_ s: String) -> String { s.trimmingCharacters(in: .whitespaces) }
+}
+
+/// A kind in the Kind picker: its name, and a sample of how a page shows it.
+/// Text kinds show their value as lists do (grey, on the right); the others
+/// show their real control, for show only (not tappable). VoiceOver reads
+/// just the name.
+private struct KindRow: View {
+    let kind: FieldDefinition.Kind
+
+    var body: some View {
+        Group {
+            switch kind {
+            case .text: LabeledContent(kind.label, value: "A line")
+            case .longText:
+                LabeledContent(kind.label) { Text("A paragraph,\nover lines").multilineTextAlignment(.trailing) }
+            case .number: LabeledContent(kind.label, value: 42, format: .number)
+            default:
+                LabeledContent(kind.label) {
+                    FieldValueView(field: FieldDefinition(name: kind.label, kind: kind, options: ["Option"]),
+                                   value: .constant(sample))
+                        .allowsHitTesting(false)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(kind.label)
+    }
+
+    private var sample: FieldValue? {
+        switch kind {
+        case .date: .date(.now)
+        case .choice: .text("Option")
+        case .toggle: .toggle(false)
+        default: nil
+        }
+    }
 }
 
 extension FieldDefinition.Kind {

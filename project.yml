@@ -34,8 +34,6 @@ targets:
         product: Provenance
       - package: WriterKit
         product: Guardrails
-      - package: WriterKit
-        product: ModelCatalog
     entitlements:
       path: App/WorldEditor.entitlements
       properties:

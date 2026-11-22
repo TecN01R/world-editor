@@ -21,7 +21,6 @@ let package = Package(
                 .product(name: "FocusLayout", package: "WriterKit"),
                 .product(name: "Provenance", package: "WriterKit"),
                 .product(name: "Guardrails", package: "WriterKit"),
-                .product(name: "ModelCatalog", package: "WriterKit"),
             ],
             path: "App/Sources",
             swiftSettings: [.swiftLanguageMode(.v5)]

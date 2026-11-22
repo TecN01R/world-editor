@@ -64,7 +64,6 @@ struct PageList: View {
     @Environment(Library.self) private var library
     @Binding var selection: UUID?
     let newPage: () -> Void
-    @State private var showModels = false
     @State private var searching = false
 
     var body: some View {
@@ -111,13 +110,7 @@ struct PageList: View {
                 Button("New Page", systemImage: "square.and.pencil", action: newPage)
                     .keyboardShortcut("n")
             }
-            // Its own glass capsule, apart from New Page.
-            ToolbarSpacer(.fixed, placement: .primaryAction)
-            ToolbarItem(placement: .primaryAction) {
-                Button("On-device Models", systemImage: "cpu") { showModels = true }
-            }
         }
-        .sheet(isPresented: $showModels) { ModelsView() }
     }
 
     private func row(_ page: WriterCore.Document, snippet: String?) -> some View {
