@@ -461,6 +461,14 @@ final class PageView: UIView {
             bar.bottomAnchor.constraint(equalTo: keyboardLayoutGuide.topAnchor),
         ])
         showBar(textView.isFirstResponder)
+        // Tells the text view the bar floats over its bottom edge, so iOS
+        // softens the writing under it, as under a stock toolbar (scroll edge
+        // effect). "Automatic" would resolve to none without a stock toolbar.
+        let edge = UIScrollEdgeElementContainerInteraction()
+        edge.scrollView = textView
+        edge.edge = .bottom
+        bar.addInteraction(edge)
+        textView.bottomEdgeEffect.style = .soft
     }
     required init?(coder: NSCoder) { fatalError() }
 
