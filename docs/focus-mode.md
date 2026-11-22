@@ -1,7 +1,8 @@
 # Focus mode behaviour
 
 TextKit measures; `FocusLayout` (shared, tested) holds the size search
-(`FocusFit`) and where words may break (`FocusBreaks`); `FocusEditor` and
+(`FocusFit`), where words may break (`FocusBreaks`) and what makes a page
+(`FocusPages`); `FocusEditor` and
 `FocusLines` (UIKit) do the rest.
 
 ## Layout
@@ -9,7 +10,8 @@ TextKit measures; `FocusLayout` (shared, tested) holds the size search
 - **The goal:** the text takes the most screen it can, always, folded or
   open, so a blank page never feels small. Everything below serves that.
 
-- One paragraph per page. Return splits at the caret onto a new page;
+- One paragraph per page; blank lines in a row (spacing in Edit mode) make one
+  empty page, not one each. Return splits at the caret onto a new page;
   Backspace at the very start joins with the previous page.
 - The paragraph is set as large as the page allows, to half a point. What
   must fit is the letters as drawn, from the top of the tallest to the bottom

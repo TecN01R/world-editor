@@ -100,7 +100,10 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
 
         // The dots: centred on the page, always there, quiet while you write.
         rail.translatesAutoresizingMaskIntoConstraints = false
-        rail.onSelect = { [weak self] i in self?.show(i, caret: .end, direction: 0) }
+        rail.onSelect = { [weak self] page in
+            guard let self, pageStarts.indices.contains(page) else { return }
+            show(pageStarts[page], caret: .end, direction: 0)
+        }
         rail.alpha = Self.railResting
         view.addSubview(rail)
         NSLayoutConstraint.activate([
@@ -204,14 +207,19 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
 
     @objc private func swiped(_ g: UISwipeGestureRecognizer) {
         let direction = g.direction == .up ? 1 : -1
-        let next = index + direction
-        guard library.document.paragraphs.indices.contains(next) else { return }
-        show(next, caret: .end, direction: direction)
+        let starts = pageStarts
+        let next = FocusPages.page(of: index, starts: starts) + direction
+        guard starts.indices.contains(next) else { return }
+        show(starts[next], caret: .end, direction: direction)
     }
 
+    /// The paragraph each page starts at: blank lines in a row are one page.
+    private var pageStarts: [Int] { FocusPages.starts(empty: library.document.paragraphs.map { $0.text.isEmpty }) }
+
     private func updateRail() {
-        let paragraphs = library.document.paragraphs
-        rail.update(count: paragraphs.count, current: index, empty: paragraphs.map { $0.text.isEmpty })
+        let paragraphs = library.document.paragraphs, starts = pageStarts
+        rail.update(count: starts.count, current: FocusPages.page(of: index, starts: starts),
+                    empty: starts.map { paragraphs[$0].text.isEmpty })
     }
 
     private func mergeWithPrevious() {
