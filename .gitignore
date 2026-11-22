@@ -18,3 +18,5 @@ build/
 # Local Swift toolchain on Fedora (swiftly pin, VS Code build server)
 .swift-version
 .bsp/
+# xtool dev build output
+/xtool/
