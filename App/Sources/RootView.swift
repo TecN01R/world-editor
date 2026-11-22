@@ -41,7 +41,7 @@ struct RootView: View {
         // A page chosen in the system's Spotlight search opens here.
         .onContinueUserActivity(CSSearchableItemActionType) { activity in
             if let id = (activity.userInfo?[CSSearchableItemActivityIdentifier] as? String).flatMap(UUID.init) {
-                library.selection = id
+                library.open(page: id)   // switching to its world if need be
                 column = .detail
             }
         }
@@ -73,6 +73,12 @@ struct PageList: View {
     @State private var renaming: PageType?
     @State private var deleting: PageType?
     @State private var newName = ""
+    /// The world dialogs, from the title menu.
+    @State private var creatingWorld = false
+    @State private var renamingWorld = false
+    @State private var deletingWorld = false
+    @State private var worldName = ""
+    @State private var worldError: String?
 
     var body: some View {
         @Bindable var library = library
@@ -83,6 +89,14 @@ struct PageList: View {
             return (page, found.paragraph.flatMap { p in page.paragraphs.firstIndex { $0.id == p } })
         }
         List(selection: $selection) {
+            // The world's name, large, as the screen's title: tap it to switch,
+            // make or manage worlds.
+            Section {
+                TitleMenu(title: library.world.name, hint: "Switches, creates and manages worlds") { worldMenu }
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())   // where iOS puts a large title
+                    .selectionDisabled()
+            }
             if query.isEmpty {
                 // Types are managed here, as Notes manages folders; a page's
                 // own type menu only chooses its type.
@@ -106,8 +120,10 @@ struct PageList: View {
                     }
                 } else {
                     let type = if case .type(let id)? = filter { library.schema.type(id) } else { PageType?.none }
-                    Section(type?.name ?? "Pages") {
+                    Section {
                         ForEach(library.pages.filter { type == nil || $0.type == type?.id }) { row($0, snippet: nil) }
+                    } header: {
+                        if let type { Text(type.name).fontDesign(.serif) } else { Text("Pages") }
                     }
                 }
             } else {
@@ -149,7 +165,45 @@ struct PageList: View {
         .onChange(of: library.recentlyDeleted.isEmpty) { _, empty in
             if empty, filter == .deleted { filter = nil }   // its row is gone; back to all pages
         }
-        .navigationTitle("Pages")
+        .onChange(of: library.world.id) { filter = nil }   // a filter belongs to the world it was set in
+        .alert("Couldn’t Save the World", isPresented: Binding { worldError != nil } set: { if !$0 { worldError = nil } }) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(worldError ?? "")
+        }
+        .navigationTitle(library.world.name)
+        // The large title below is the world's name and its menu (Kevin's
+        // request: iOS gives only its small title a menu); the bar's own title
+        // would repeat it. Inline, so removing it leaves no large title either.
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(removing: .title)
+        .alert("New World", isPresented: $creatingWorld) {
+            TextField("Name, such as a book or a setting", text: $worldName)
+            Button("Cancel", role: .cancel) {}
+            Button("Create") {
+                let name = worldName.trimmingCharacters(in: .whitespaces)
+                guard !name.isEmpty else { return }
+                do { try library.newWorld(named: name) } catch { worldError = "“\(name)” couldn’t be created: \(error.localizedDescription)" }
+            }
+        } message: {
+            Text("A world has its own pages, types and fields.")
+        }
+        .alert("Rename World", isPresented: $renamingWorld) {
+            TextField("Name", text: $worldName)
+            Button("Cancel", role: .cancel) {}
+            Button("Rename") {
+                let name = worldName.trimmingCharacters(in: .whitespaces)
+                guard !name.isEmpty else { return }
+                do { try library.renameWorld(library.world.id, to: name) } catch { worldError = "It couldn’t be renamed: \(error.localizedDescription)" }
+            }
+        }
+        .confirmationDialog("Delete “\(library.world.name)”?", isPresented: $deletingWorld, titleVisibility: .visible) {
+            Button("Delete World", role: .destructive) { library.deleteWorld(library.world.id) }
+        } message: {
+            let count = library.pageCount(inWorld: library.world.id)
+            Text(count == 0 ? "It has no pages. This can’t be undone."
+                 : "Its \(count == 1 ? "page" : "\(count) pages") will be deleted for good, with its types and fields. This can’t be undone.")
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button("New Page", systemImage: "square.and.pencil") {
@@ -168,17 +222,17 @@ struct PageList: View {
     private func row(_ page: WriterCore.Document, snippet: String?) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(highlighted(page.heading.isEmpty ? "New Page" : page.heading))
-                .font(.headline)
+                .font(.authored(.headline))
                 .lineLimit(1)
             if let snippet {
                 // Searching: the line that matched, in place of date and preview.
                 Text(highlighted(snippet)).lineLimit(1)
-                    .font(.subheadline)
+                    .font(.authored(.subheadline))
                     .foregroundStyle(.secondary)
             } else {
                 HStack(spacing: 6) {
                     Text(page.modified, format: .relative(presentation: .named))
-                    if !page.preview.isEmpty { Text(page.preview).lineLimit(1) }
+                    if !page.preview.isEmpty { Text(page.preview).font(.authored(.subheadline)).lineLimit(1) }
                 }
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -191,6 +245,17 @@ struct PageList: View {
         }
     }
 
+    @ViewBuilder private var worldMenu: some View {
+        Picker("World", selection: Binding { library.world.id } set: { library.open(world: $0) }) {
+            ForEach(library.worlds) { Text($0.name).tag($0.id) }
+        }
+        Button("New World…", systemImage: "plus") { worldName = ""; creatingWorld = true }
+        Button("Rename World…", systemImage: "pencil") { worldName = library.world.name; renamingWorld = true }
+        if library.worlds.count > 1 {
+            Button("Delete World…", systemImage: "trash", role: .destructive) { deletingWorld = true }
+        }
+    }
+
     /// A row that shows only some pages: tap to show them (again to show
     /// all). Not a page, so never selected as one.
     private func filterRow(_ title: String, systemImage: String, count: Int, _ rowFilter: Filter) -> some View {
@@ -199,7 +264,12 @@ struct PageList: View {
             withAnimation { filter = shown ? nil : rowFilter }
         } label: {
             HStack {
-                Label(title, systemImage: systemImage)
+                Label {
+                    // A type's name is the user's; "Recently Deleted" is the app's.
+                    if case .type = rowFilter { Text(title).fontDesign(.serif) } else { Text(title) }
+                } icon: {
+                    Image(systemName: systemImage)
+                }
                 Spacer()
                 Text(count, format: .number).foregroundStyle(.secondary)
                 if shown { Image(systemName: "checkmark").foregroundStyle(.tint) }
@@ -251,7 +321,7 @@ struct PageList: View {
         let title = page.heading.isEmpty ? "New Page" : page.heading, days = page.daysLeft() ?? 0
         return Button { choosing = page } label: {
             VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.headline).lineLimit(1)
+                Text(title).font(.authored(.headline)).lineLimit(1)
                 Text(days == 1 ? "1 day left" : "\(days) days left").font(.subheadline).foregroundStyle(.secondary)
             }
             .padding(.vertical, 2)
@@ -432,9 +502,9 @@ struct MentionsView: View {
                     library.selection = page.id
                 } label: {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(page.heading.isEmpty ? "New Page" : page.heading).font(.headline)
+                        Text(page.heading.isEmpty ? "New Page" : page.heading).font(.authored(.headline))
                         if !page.preview.isEmpty {
-                            Text(page.preview).font(.subheadline).foregroundStyle(.secondary).lineLimit(2)
+                            Text(page.preview).font(.authored(.subheadline)).foregroundStyle(.secondary).lineLimit(2)
                         }
                     }
                 }

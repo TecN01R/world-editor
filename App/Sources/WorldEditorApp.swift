@@ -18,9 +18,15 @@ struct WorldEditorApp: App {
     }
 }
 
-/// All pages, the one that's open, and saving shortly after each edit.
+/// The open world: its pages, the one that's open, and saving shortly after
+/// each edit; and the other worlds, to switch to.
 @MainActor @Observable
 final class Library {
+    /// Every world, by name, and the open one. A world's pages, types and
+    /// fields are its own; search, @ links and fields stay within it.
+    private(set) var worlds: [World] = []
+    private(set) var world = World(name: World.defaultName)
+
     /// Most recently edited first.
     private(set) var pages: [WriterCore.Document] = []
     /// Deleted pages, newest first, kept for 30 days so a delete can be undone.
@@ -127,8 +133,9 @@ final class Library {
         for page in pages where page.type != nil { PageIndex.update(page, fields: fieldText(page)) }
     }
 
-    private let store: DocumentStore?
-    private let schemaStore: SchemaStore?
+    private let worldStore: WorldStore?
+    private var store: DocumentStore?
+    private var schemaStore: SchemaStore?
     /// Pending debounced saves, one per page, so editing one page never drops another's.
     private var pendingSaves: [UUID: Task<Void, Never>] = [:]
 
@@ -139,8 +146,8 @@ final class Library {
 
     init() {
         if Screenshots.isActive {
-            store = nil                        // CI runs never touch saved pages
-            schemaStore = nil
+            worldStore = nil                   // CI runs never touch saved pages
+            worlds = [world]
             (pages, schema) = Screenshots.pages()
             PageIndex.start(with: pages.map { ($0, fieldText($0)) })   // the simulator's own index
             if !Screenshots.opensList, let open = Screenshots.opensMara ? pages[1] : pages.first {
@@ -151,16 +158,80 @@ final class Library {
             }
             return
         }
-        let dir = URL.applicationSupportDirectory.appendingPathComponent("Documents", isDirectory: true)
-        store = try? DocumentStore(directory: dir)
-        schemaStore = SchemaStore(url: URL.applicationSupportDirectory.appendingPathComponent("Schema.json"))
+        let support = URL.applicationSupportDirectory
+        worldStore = try? WorldStore(root: support.appendingPathComponent("Worlds", isDirectory: true))
+        // Pages saved before worlds existed become the first world.
+        _ = try? worldStore?.adoptLegacy(documents: support.appendingPathComponent("Documents", isDirectory: true),
+                                         schema: support.appendingPathComponent("Schema.json"))
+        worlds = worldStore?.all() ?? []
+        if worlds.isEmpty {
+            try? worldStore?.save(world)
+            worlds = [world]
+        }
+        let last = UserDefaults.standard.string(forKey: Self.openWorldKey).flatMap(UUID.init)
+        load(worlds.first { $0.id == last } ?? worlds[0])
+        worldStore?.removeExpired(except: world.id)   // the open world's are removed as it loads
+    }
+
+    private static let openWorldKey = "openWorld"
+
+    /// Reads a world from disk and opens its most recent page.
+    private func load(_ world: World) {
+        self.world = world
+        UserDefaults.standard.set(world.id.uuidString, forKey: Self.openWorldKey)
+        store = worldStore.flatMap { try? DocumentStore(directory: $0.documents(world.id)) }
+        schemaStore = worldStore.map { SchemaStore(url: $0.schema(world.id)) }
         let saved = (try? store?.all()) ?? []
         pages = saved.filter { $0.deleted == nil }
         recentlyDeleted = saved.filter { $0.deleted != nil }.sorted { $0.deleted! > $1.deleted! }
         removeExpired()
         schema = schemaStore?.load() ?? Schema()
+        searchQuery = ""
         PageIndex.start(with: pages.map { ($0, fieldText($0)) })
         if pages.isEmpty { newPage() } else { selection = pages.first?.id }
+    }
+
+    /// Switches to another world, saving and leaving the open page first.
+    func open(world id: UUID) {
+        guard id != world.id, let next = worlds.first(where: { $0.id == id }) else { return }
+        selection = nil   // leaves the page (an empty one is discarded) in this world
+        flushAll()
+        load(next)
+    }
+
+    /// Opens a page from any world (the system's Spotlight search).
+    func open(page id: UUID) {
+        if !pages.contains(where: { $0.id == id }), let other = worldStore?.world(containing: id) { open(world: other) }
+        if pages.contains(where: { $0.id == id }) { selection = id }
+    }
+
+    func newWorld(named name: String) throws {
+        let new = World(name: name)
+        try worldStore?.save(new)
+        worlds = worldStore?.all() ?? worlds + [new]
+        open(world: new.id)
+    }
+
+    func renameWorld(_ id: UUID, to name: String) throws {
+        guard var renamed = worlds.first(where: { $0.id == id }) else { return }
+        renamed.name = name
+        try worldStore?.save(renamed)
+        worlds = worldStore?.all() ?? worlds
+        if world.id == id { world = renamed }
+    }
+
+    /// Deletes a world and all its pages, for good; never the last one.
+    func deleteWorld(_ id: UUID) {
+        guard worlds.count > 1, let store = worldStore else { return }
+        if world.id == id, let other = worlds.first(where: { $0.id != id }) { open(world: other.id) }
+        for page in (try? DocumentStore(directory: store.documents(id)).all()) ?? [] { PageIndex.remove(page.id) }
+        try? store.delete(id)
+        worlds = store.all()
+    }
+
+    /// How many pages a world holds, Recently Deleted included.
+    func pageCount(inWorld id: UUID) -> Int {
+        id == world.id ? pages.count { !$0.isEmpty } + recentlyDeleted.count : worldStore?.pageCount(id) ?? 0
     }
 
     func newPage() {

@@ -9,6 +9,8 @@ final class MentionMenu: UITableViewController, UIPopoverPresentationControllerD
         let title: String
         var date: Date? = nil
         var creates = false
+        /// For "Create page", the name typed after @, shown in New York.
+        var creating: String? = nil
         let action: () -> Void
     }
 
@@ -52,7 +54,16 @@ final class MentionMenu: UITableViewController, UIPopoverPresentationControllerD
         let item = sections[indexPath.section][indexPath.row]
         let cell = tableView.dequeueReusableCell(withIdentifier: "page", for: indexPath)
         var content = UIListContentConfiguration.valueCell()
-        content.text = item.title
+        // A page's name is the user's (New York); "Create page" is the app's.
+        content.textProperties.font = item.creates ? .preferredFont(forTextStyle: .body) : .authored(.body)
+        if let name = item.creating {
+            let text = NSMutableAttributedString(string: "Create page \u{201C}", attributes: [.font: UIFont.preferredFont(forTextStyle: .body)])
+            text.append(NSAttributedString(string: name, attributes: [.font: UIFont.authored(.body)]))
+            text.append(NSAttributedString(string: "\u{201D}", attributes: [.font: UIFont.preferredFont(forTextStyle: .body)]))
+            content.attributedText = text
+        } else {
+            content.text = item.title
+        }
         content.secondaryText = item.date.map(Self.format)
         content.image = item.creates ? UIImage(systemName: "plus.circle") : nil
         content.imageProperties.tintColor = .label

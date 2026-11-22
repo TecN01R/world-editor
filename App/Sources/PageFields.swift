@@ -17,7 +17,11 @@ struct PageFields: View {
         let type = library.type(of: page)
         let fields = library.fields(of: page)
         VStack(alignment: .leading, spacing: 10) {
-            typeMenu(Label(type?.name ?? "Add Type", systemImage: "square.text.square"))
+            typeMenu(Label {
+                if let type { Text(type.name).font(.authored(.subheadline)) } else { Text("Add Type") }
+            } icon: {
+                Image(systemName: "square.text.square")
+            })
             if let type {
                 ViewThatFits(in: .horizontal) {   // HIG layout: stack only where the columns don't fit
                     Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {   // each row centred on its control
@@ -50,7 +54,7 @@ struct PageFields: View {
             // Chooses this page's type, ticked; types are renamed and deleted
             // in the pages list.
             Picker("Type", selection: Binding { library.document.type } set: { new in library.update { $0.type = new } }) {
-                ForEach(library.schema.types) { Text($0.name).tag(Optional($0.id)) }
+                ForEach(library.schema.types) { Text($0.name).tag(Optional($0.id)) }   // menus keep the system font
                 Text("No Type").tag(UUID?.none)
             }
             Button("New Type…", systemImage: "plus") { library.fieldsRequest = .newType }
@@ -64,7 +68,7 @@ struct PageFields: View {
     }
 
     private func name(_ field: FieldDefinition) -> some View {
-        Text(field.name).foregroundStyle(.secondary)
+        Text(field.name).font(.authored(.body)).foregroundStyle(.secondary)
     }
 
     private func valueView(_ field: FieldDefinition) -> some View {
@@ -103,11 +107,14 @@ private struct FieldValueView: View {
     var body: some View {
         switch field.kind {
         case .text:
-            TextField(field.name, text: text, prompt: Text("Add"))
+            TextField(field.name, text: text, prompt: Text("Add").font(.body))
+                .font(.authored(.body))
         case .longText:
-            TextField(field.name, text: text, prompt: Text("Add"), axis: .vertical)
+            TextField(field.name, text: text, prompt: Text("Add").font(.body), axis: .vertical)
+                .font(.authored(.body))
         case .number:
-            TextField(field.name, value: number, format: .number, prompt: Text("Add"))
+            TextField(field.name, value: number, format: .number, prompt: Text("Add").font(.body))
+                .font(.authored(.body))
                 .keyboardType(.decimalPad)
         case .date:
             if case .date(let date)? = value {
@@ -118,7 +125,7 @@ private struct FieldValueView: View {
                 Button("Add Date") { value = .date(Date()) }
             }
         case .choice:
-            dropdown(text, current: text.wrappedValue.isEmpty ? "Choose" : text.wrappedValue) {
+            dropdown(text, current: text.wrappedValue.isEmpty ? nil : text.wrappedValue) {
                 Text("None").tag("")
                 ForEach(field.options, id: \.self) { Text($0).tag($0) }
             }
@@ -129,7 +136,7 @@ private struct FieldValueView: View {
         case .page:
             HStack(spacing: 8) {
                 let name = page.wrappedValue.flatMap { id in library.pages.first { $0.id == id }?.heading }
-                dropdown(page, current: name ?? "Choose") {
+                dropdown(page, current: name) {
                     Text("None").tag(UUID?.none)
                     ForEach(candidates) { Text($0.heading).tag(Optional($0.id)) }
                 } more: {
@@ -147,8 +154,8 @@ private struct FieldValueView: View {
 
     /// A pull-down like a menu-style Picker (value in the accent colour, per
     /// the HIG), but its value stays on one line (truncated), so a long page
-    /// name never wraps the row.
-    private func dropdown<Value: Hashable, More: View>(_ selection: Binding<Value>, current: String,
+    /// name never wraps the row. `current` is the user's value, nil for none.
+    private func dropdown<Value: Hashable, More: View>(_ selection: Binding<Value>, current: String?,
                                                       @ViewBuilder options: () -> some View,
                                                       @ViewBuilder more: () -> More = { EmptyView() }) -> some View {
         Menu {
@@ -156,13 +163,13 @@ private struct FieldValueView: View {
             more()
         } label: {
             HStack(spacing: 4) {
-                Text(current).lineLimit(1)
+                if let current { Text(current).font(.authored(.body)).lineLimit(1) } else { Text("Choose") }
                 Image(systemName: "chevron.up.chevron.down").imageScale(.small)
             }
         }
         .sensoryFeedback(.selection, trigger: selection.wrappedValue)
         .accessibilityLabel(field.name)
-        .accessibilityValue(current)
+        .accessibilityValue(current ?? "None")
     }
 
     /// Pages this field may link to: of its type, if it names one.
@@ -214,14 +221,14 @@ struct FieldSheet: View {
                     Section("Shared Fields") {
                         ForEach(shared) { field in
                             Button { add(field) } label: {
-                                LabeledContent(field.name, value: field.kind.label)
+                                LabeledContent { Text(field.kind.label) } label: { Text(field.name).font(.authored(.body)) }
                             }
                             .tint(.primary)
                         }
                     }
                 }
                 Section(editing == nil ? "New Field" : "Field") {
-                    TextField("Name", text: $name)
+                    TextField("Name", text: $name).font(.authored(.body))
                 }
                 // Its own section, titled Kind; each kind shows a sample of
                 // how a page shows it.
@@ -240,7 +247,7 @@ struct FieldSheet: View {
                 }
                 if kind == .choice {
                     Section("Choices") {
-                        ForEach(options.indices, id: \.self) { i in TextField("Choice", text: $options[i]) }
+                        ForEach(options.indices, id: \.self) { i in TextField("Choice", text: $options[i]).font(.authored(.body)) }
                         Button("Add Choice", systemImage: "plus") { options.append("") }
                     }
                 }
@@ -291,10 +298,13 @@ private struct KindRow: View {
     var body: some View {
         Group {
             switch kind {
-            case .text: LabeledContent(kind.label, value: "A line")
+            // Samples of what the user would write, so New York.
+            case .text: LabeledContent(kind.label) { Text("A line").font(.authored(.body)) }
             case .longText:
-                LabeledContent(kind.label) { Text("A paragraph,\nover lines").multilineTextAlignment(.trailing) }
-            case .number: LabeledContent(kind.label, value: 42, format: .number)
+                LabeledContent(kind.label) {
+                    Text("A paragraph,\nover lines").font(.authored(.body)).multilineTextAlignment(.trailing)
+                }
+            case .number: LabeledContent(kind.label) { Text(42, format: .number).font(.authored(.body)) }
             default:
                 LabeledContent(kind.label) {
                     FieldValueView(field: FieldDefinition(name: kind.label, kind: kind, options: [Self.option]),

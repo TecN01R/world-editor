@@ -36,8 +36,12 @@ UI frameworks. Fedora is only the xtool build machine.
 - Accessibility is not optional: Dynamic Type for all text (Focus mode
   sizes itself to the page), VoiceOver labels on every control, standard
   controls over custom ones.
-- Naming: a note is a **page**; the two ways to view one are **Edit** and
-  **Focus** mode.
+- Type: anything the user authors is New York (their writing, page titles,
+  world, type and field names, field values), wherever it's shown; all
+  other UI is San Francisco. System-drawn text (menus, alerts) keeps the
+  system font.
+- Naming: a note is a **page**; projects are **worlds**; the two ways to
+  view a page are **Edit** and **Focus** mode.
 - Push straight to `main`. Don't create branches: this environment can't
   delete them, so they pile up.
 

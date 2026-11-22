@@ -16,6 +16,7 @@ struct PageEditor: UIViewRepresentable {
         tv.backgroundColor = .systemBackground
         tv.alwaysBounceVertical = true
         tv.keyboardDismissMode = .interactive
+        tv.textContainer.lineFragmentPadding = 0   // the writing lines up under the title and fields
         tv.allowsEditingTextAttributes = true      // ⌘B, ⌘I and the Format menu
         tv.titleField = context.coordinator.titleField
         let fields = UIHostingController(rootView: PageFields { [weak tv] in tv?.fieldsHeight = $0 }.environment(library))
@@ -31,7 +32,7 @@ struct PageEditor: UIViewRepresentable {
     func updateUIView(_ view: PageView, context: Context) {}
 
     /// Bold New York, scaled with Dynamic Type.
-    static var titleFont: UIFont { newYork(30, weight: .bold, scaledAs: .title1) }
+    static var titleFont: UIFont { newYork(34, weight: .bold, scaledAs: .largeTitle) }   // the size of the world's title
 
     /// New York at 19 pt for the default text size, scaled with Dynamic Type.
     static var font: UIFont { newYork(19, weight: .regular, scaledAs: .body) }
@@ -238,7 +239,7 @@ struct PageEditor: UIViewRepresentable {
                 .map(item)
             let title = mention.query.trimmingCharacters(in: .whitespaces)
             if !title.isEmpty, !library.pages.contains(where: { $0.heading.localizedCaseInsensitiveCompare(title) == .orderedSame }) {
-                others.append(MentionMenu.Item(title: "Create page “\(title)”", creates: true) { [weak self] in
+                others.append(MentionMenu.Item(title: "Create page “\(title)”", creates: true, creating: title) { [weak self] in
                     guard let self else { return }
                     link(to: library.addPage(titled: title), title: title, replacing: mention.range, in: caret.index)
                 })
@@ -521,7 +522,9 @@ final class PageTextView: PlainPasteTextView {
         let column = min(width - 44, 36 * PageEditor.font.pointSize)
         let side = max(22, (width - column) / 2)
         let titleHeight = ceil(title.font?.lineHeight ?? 34) + 8
-        title.frame = CGRect(x: side, y: 8, width: max(0, width - 2 * side), height: titleHeight)
+        // Its letters sit exactly where the world's title sits on the pages
+        // list (measured on the Duo), so going into a page the title stays put.
+        title.frame = CGRect(x: side - 1.0 / 3, y: 8 - 20.0 / 3, width: max(0, width - 2 * side), height: titleHeight)
         var top = title.frame.maxY
         if let fields = fieldsController?.view {
             fields.frame = CGRect(x: side, y: top + 6, width: title.frame.width, height: fieldsHeight)

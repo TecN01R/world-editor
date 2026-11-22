@@ -18,14 +18,16 @@ enum PageIndex {
     private static let index = CSSearchableIndex.default()
     private static var ready: Task<Void, Never>?
 
-    /// Once at launch: readies Spotlight and indexes every page (items with
-    /// the same identifier replace the old ones; deleted pages are removed as
-    /// they're deleted).
+    /// When a world opens: the index holds its pages only, so search (in the
+    /// app and the system's) stays within the open world.
     /// `pages` come with their fields' text ("Species: Elf").
     static func start(with pages: [(WriterCore.Document, String)]) {
-        CSUserQuery.prepare()
+        if ready == nil { CSUserQuery.prepare() }
         let items = pages.flatMap { page, fields in Self.items(page, fields: fields) }
-        ready = Task { try? await index.indexSearchableItems(items) }
+        ready = Task {
+            try? await index.deleteAllSearchableItems()
+            try? await index.indexSearchableItems(items)
+        }
     }
 
     static func update(_ page: WriterCore.Document, fields: String) {
