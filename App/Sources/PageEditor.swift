@@ -524,7 +524,7 @@ final class PageTextView: PlainPasteTextView {
         let titleHeight = ceil(title.font?.lineHeight ?? 34) + 8
         // Its letters sit exactly where the world's title sits on the pages
         // list (measured on the Duo), so going into a page the title stays put.
-        title.frame = CGRect(x: side - 1.0 / 3, y: 8 - 20.0 / 3, width: max(0, width - 2 * side), height: titleHeight)
+        title.frame = CGRect(x: side + 2, y: 8 - 20.0 / 3, width: max(0, width - 2 * side), height: titleHeight)
         var top = title.frame.maxY
         if let fields = fieldsController?.view {
             fields.frame = CGRect(x: side, y: top + 6, width: title.frame.width, height: fieldsHeight)
