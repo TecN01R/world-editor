@@ -18,7 +18,9 @@ TextKit measures; `FocusLayout` (shared, tested) holds the size search
   of the lowest, so a lone "H" fills the page. The empty space a line box
   keeps above and below the letters (for accents, and for tails like "g")
   may run off the page, and the caret is cut off at the page's bottom. So the
-  first letter with a tail shrinks the text a step. An empty page is sized
+  first letter with a tail shrinks the text a step. Across, the drawn
+  letters stay on the page as well: a big serif W's ink reaches past the
+  width lines wrap by, so it's the ink that must fit. An empty page is sized
   as if it held an "M". The page runs from the top of
   the screen to the keyboard (`keyboardLayoutGuide`), with the same margin
   above, below and at the side, so there's nothing to estimate. Tall

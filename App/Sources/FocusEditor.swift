@@ -288,11 +288,15 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
     /// a hyphen. What must fit is the letters as drawn, from the top of the
     /// tallest to the bottom of the lowest: the empty space a line box keeps
     /// above and below them (for accents and for tails like "g") may run off
-    /// the page, and the caret is cut off at its bottom. Text with no ink
-    /// (only spaces) fits its line box instead.
+    /// the page, and the caret is cut off at its bottom. Across, the letters
+    /// as drawn must stay on the page too: lines wrap by each letter's
+    /// typographic width, but a big serif W's or an italic f's ink reaches
+    /// past it. Text with no ink (only spaces) fits its line box instead.
     private func fits(_ size: Double, in page: CGSize) -> Bool {
         let l = lines.layout(styled(size), width: page.width)
-        return !l.splitsWord && (l.ink.isEmpty ? l.height : l.ink.height) <= page.height
+        guard !l.splitsWord else { return false }
+        if l.ink.isEmpty { return l.height <= page.height }
+        return l.ink.height <= page.height && l.ink.width <= page.width   // placed by its ink, see `fit`
     }
 
     /// Sets the paragraph as large as the page allows and centres it between
@@ -323,7 +327,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         // left margin.
         let x: CGFloat
         if !centred {
-            x = page.minX - min(0, drawn.minX)   // a letter overhanging left (italic J) stays inside
+            x = page.minX - drawn.minX   // its letters start at the margin, even ones that overhang (a serif W)
         } else if textView.text.isEmpty {
             x = view.bounds.midX - 1   // the caret
         } else {
