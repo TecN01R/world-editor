@@ -522,8 +522,8 @@ final class PageTextView: PlainPasteTextView {
         let column = min(width - 44, 36 * PageEditor.font.pointSize)
         let side = max(22, (width - column) / 2)
         // The title, fields and writing share a left edge, 7 px (2⅓ pt) in from
-        // `side` so the title sits where the pages list's title does (measured
-        // on the Duo).
+        // `side`, where the pages list's title sits (measured on the Duo), so
+        // going into a page the title stays put.
         let lead = side + 7.0 / 3
         let titleHeight = ceil(title.font?.lineHeight ?? 34) + 8
         // Its letters sit exactly where the world's title sits on the pages
