@@ -3,6 +3,12 @@
 Target: iPhone Duo only, native Swift/SwiftUI with TextKit. No cross-platform
 UI frameworks. Fedora is only the xtool build machine.
 
+**The goal is frictionless.** It's for people like Kevin, with a head full of
+ideas and a fear of blank pages and of structure, to get it onto the page.
+Every feature, and the AI above all, is judged by whether it lowers that
+friction: no forms to fill first, no prompts to answer, no setup before
+writing. Structure grows out of the writing, never ahead of it.
+
 ## Workflow for every change
 
 1. Make the change. Keep `Packages/WriterKit` Foundation-only (it is tested on Linux).
