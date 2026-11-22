@@ -20,9 +20,11 @@ UI frameworks. Fedora is only the xtool build machine.
    the xtool package layout), and screenshots it on the iPhone Duo simulator.
    Screenshots live only on the `ci-screenshots` branch: CI force-pushes the
    latest set there as a single orphan commit (never on `main`, never as
-   artifacts). Fetch them with `ci/fetch_screenshots.sh`, look at them
-   before reporting a UI change as done, send them to the user in chat, then
-   delete local copies.
+   artifacts). Kevin tests on the Duo himself, so don't wait for CI or send
+   screenshots by default. Fetch them (`ci/fetch_screenshots.sh`, delete
+   local copies after) only when he asks or a change touches something he
+   can't see on his phone (light mode, the other fold state, large Dynamic
+   Type). Do check that CI passed before starting the next change.
 
 ## Conventions
 

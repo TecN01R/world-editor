@@ -16,9 +16,11 @@ TextKit measures, `FocusFit` (shared, tested) holds the two sizing rules,
   keeps above and below the letters (for accents, and for tails like "g")
   may run off the page, and the caret is cut off at the page's bottom. So the
   first letter with a tail shrinks the text a step. An empty page is sized
-  as if it held an "M". The page runs from near the top
-  of the screen to just above the keyboard (`keyboardLayoutGuide`), so
-  there's nothing to estimate.
+  as if it held an "M". The page runs from the top of
+  the screen to the keyboard (`keyboardLayoutGuide`), with the same margin
+  above, below and at the side, so there's nothing to estimate. Tall
+  letters may sit under the camera; avoiding just the cutout would mean
+  hard-coding its shape.
 - Natural line spacing: TextKit's line boxes hold every glyph, so nothing is
   clipped and its measurement is the layout. The text view has the final
   say: if its layout is ever taller than the page, the size steps down.
@@ -26,6 +28,8 @@ TextKit measures, `FocusFit` (shared, tested) holds the two sizing rules,
 - The block is centred on the page by its drawn letters (Core Text glyph
   outlines), not its line boxes. A single line is centred across the page;
   once it wraps it's left-aligned (the switch comes with the size change).
+  Across, letters with room to spare are centred on the screen rather than
+  the page, which keeps a strip clear on the right for the dots.
   The letters and the caret stay clear of the keyboard.
 - The page ignores the safe area: revealed controls draw over it, so showing
   or hiding them never reflows the text.

@@ -70,15 +70,17 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         // The page is laid out against the screen edges, not the safe area:
         // revealing the bars (on the Duo, the side column's button and
         // status) then draws them over the writing instead of reflowing it.
-        // It ends just above the keyboard (or the bottom of the screen).
-        let fill = area.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor, constant: -12)
+        // It ends just above the keyboard (or the bottom of the screen), with
+        // the same margin above the letters as below them and at the side.
+        let margin: CGFloat = 16
+        let fill = area.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor, constant: -margin)
         fill.priority = .defaultHigh
         NSLayoutConstraint.activate([
-            area.topAnchor.constraint(equalTo: view.topAnchor, constant: 32),
-            area.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            area.topAnchor.constraint(equalTo: view.topAnchor, constant: margin),
+            area.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: margin),
             area.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40),
             area.bottomAnchor.constraint(lessThanOrEqualTo: view.bottomAnchor, constant: -24),
-            area.bottomAnchor.constraint(lessThanOrEqualTo: view.keyboardLayoutGuide.topAnchor, constant: -12),
+            area.bottomAnchor.constraint(lessThanOrEqualTo: view.keyboardLayoutGuide.topAnchor, constant: -margin),
             fill,
         ])
 
@@ -334,11 +336,16 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         alignment = h < Self.font(CGFloat(size)).lineHeight * 1.5 ? .center : .natural
         textView.textAlignment = alignment
         updateTypingAttributes()
+        if alignment == .center { drawn = inkOfText(width: page.width, alignment: .center) }
         // Centre the letters, keeping the lowest above the keyboard (or, on an
         // empty page, the caret) and the tallest below the top of the page.
         let bottom = drawn.isEmpty ? h : drawn.maxY
         let y = max(min(page.midY - drawn.midY, page.maxY - bottom), page.minY - drawn.minY)
-        let frame = CGRect(x: page.minX, y: y, width: page.width, height: h)
+        // Across, centre them on the screen rather than the page (which leaves
+        // room for the dots on the right) when there's room to spare.
+        let x = drawn.isEmpty ? view.bounds.midX - page.width / 2   // the caret, centred
+            : max(min(view.bounds.midX - drawn.midX, page.maxX - drawn.maxX), page.minX - drawn.minX)
+        let frame = CGRect(x: x, y: y, width: page.width, height: h)
         textView.caretBottom = page.maxY - y
         guard frame != old.frame || size != old.size else { return }
         textFrame = frame
@@ -404,8 +411,13 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         updateTypingAttributes()
     }
 
-    private func inkOfText(width: CGFloat) -> CGRect {
-        ink(of: styled(size), width: width)
+    /// The letters as drawn, laid out as the text view lays them out.
+    private func inkOfText(width: CGFloat, alignment: NSTextAlignment = .natural) -> CGRect {
+        let s = NSMutableAttributedString(attributedString: styled(size))
+        let style = NSMutableParagraphStyle()
+        style.alignment = alignment
+        s.addAttribute(.paragraphStyle, value: style, range: NSRange(location: 0, length: s.length))
+        return ink(of: s, width: width)
     }
 
     private func measuredHeight(width: CGFloat) -> CGFloat {
