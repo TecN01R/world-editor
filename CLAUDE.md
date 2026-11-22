@@ -44,8 +44,9 @@ writing. Structure grows out of the writing, never ahead of it.
   controls over custom ones.
 - Type: anything the user authors is New York (their writing, page titles,
   world, type and field names, field values), wherever it's shown; all
-  other UI is San Francisco. System-drawn text (menus, alerts) keeps the
-  system font.
+  other UI is San Francisco. System-drawn text (menus, alerts, iOS's own
+  navigation titles, as the unfolded pages list's) keeps the system font:
+  iOS ignores the app's fonts there.
 - Naming: a note is a **page**; projects are **worlds**; the two ways to
   view a page are **Edit** and **Focus** mode.
 - Push straight to `main`. Don't create branches: this environment can't

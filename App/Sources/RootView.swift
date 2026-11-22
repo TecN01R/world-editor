@@ -12,6 +12,8 @@ struct RootView: View {
     @State private var focusControls = false
     @State private var columns: NavigationSplitViewVisibility = Self.startsInFocus ? .detailOnly : .all
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
+    /// Unfolded: the pages list is a sidebar beside the page.
+    @Environment(\.horizontalSizeClass) private var sizeClass
 
     private static var startsInFocus: Bool { UserDefaults.standard.bool(forKey: "startInFocus") }
 
@@ -24,7 +26,7 @@ struct RootView: View {
         @Bindable var library = library
         // Focus mode takes the whole display: the pages list steps aside when unfolded.
         NavigationSplitView(columnVisibility: $columns, preferredCompactColumn: $column) {
-            PageList(selection: $library.selection) {
+            PageList(selection: $library.selection, titleInBar: sizeClass == .regular) {
                 library.newPage()
                 column = .detail
             }
@@ -63,6 +65,9 @@ struct RootView: View {
 struct PageList: View {
     @Environment(Library.self) private var library
     @Binding var selection: UUID?
+    /// Unfolded, the sidebar's buttons share a row with the title; folded,
+    /// they move to the Duo's side column and the title heads the list.
+    var titleInBar = false
     let newPage: () -> Void
     @State private var searching = false
     /// Showing only one type's pages, or Recently Deleted.
@@ -91,11 +96,13 @@ struct PageList: View {
         List(selection: $selection) {
             // The world's name, large, as the screen's title: tap it to switch,
             // make or manage worlds.
-            Section {
-                TitleMenu(title: library.world.name, hint: "Switches, creates and manages worlds") { worldMenu }
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets())   // where iOS puts a large title
-                    .selectionDisabled()
+            if !titleInBar {
+                Section {
+                    TitleMenu(title: library.world.name, hint: "Switches, creates and manages worlds") { worldMenu }
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 0))   // room for the M's serif: rows clip at their edge
+                        .selectionDisabled()
+                }
             }
             if query.isEmpty {
                 // Types are managed here, as Notes manages folders; a page's
@@ -172,11 +179,14 @@ struct PageList: View {
             Text(worldError ?? "")
         }
         .navigationTitle(library.world.name)
-        // The large title below is the world's name and its menu (Kevin's
-        // request: iOS gives only its small title a menu); the bar's own title
-        // would repeat it. Inline, so removing it leaves no large title either.
+        // The world's name, with a menu to switch, make, rename and delete
+        // worlds. Unfolded: iOS's own small title in the bar's row, with its
+        // title menu. Folded, where the bar's buttons sit in the Duo's side
+        // column: the name large at the top of the list (TitleMenu), since iOS
+        // gives a large title no menu (Kevin asked for it large there).
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(removing: .title)
+        .toolbar(removing: titleInBar ? nil : .title)
+        .toolbarTitleMenu { if titleInBar { worldMenu } }
         .alert("New World", isPresented: $creatingWorld) {
             TextField("Name, such as a book or a setting", text: $worldName)
             Button("Cancel", role: .cancel) {}
