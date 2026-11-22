@@ -22,8 +22,8 @@ TextKit measures, `FocusFit` (shared, tested) holds the two sizing rules,
   letters may sit under the camera; avoiding just the cutout would mean
   hard-coding its shape.
 - Natural line spacing: TextKit's line boxes hold every glyph, so nothing is
-  clipped and its measurement is the layout. The text view has the final
-  say: if its layout is ever taller than the page, the size steps down.
+  clipped. Core Text measures the letters as TextKit lays them out (same
+  font, width and alignment).
 - Words never break mid-word unless one word can't fit at the minimum size.
 - The block is centred on the page by its drawn letters (Core Text glyph
   outlines), not its line boxes. A single line is centred across the page;

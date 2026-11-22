@@ -381,6 +381,11 @@ final class FormatBar: UIView {
 
     override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: barHeight + Self.gap) }
 
+    /// Only the capsule takes touches; taps beside or below it reach the page.
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        capsule.frame.contains(point)
+    }
+
     private static func button(symbol: String? = nil, title: String? = nil, label: String,
                                action: @escaping () -> Void) -> UIButton {
         var config = UIButton.Configuration.plain()
@@ -526,7 +531,9 @@ final class PageTextView: PlainPasteTextView {
         let inset = UIEdgeInsets(top: top + 14, left: side, bottom: 40, right: side)
         if textContainerInset != inset { textContainerInset = inset }
 
-        // The view runs under the keyboard and bar; keep everything scrollable above them.
+        // The format bar floats over the bottom of the page (which stops at the
+        // keyboard, though any part still under it counts); keep everything
+        // scrollable above them.
         let covered = max(0, bounds.maxY - keyboardLayoutGuide.layoutFrame.minY) + barHeight
         if contentInset.bottom != covered {
             contentInset.bottom = covered

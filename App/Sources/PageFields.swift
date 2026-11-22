@@ -287,6 +287,7 @@ struct FieldSheet: View {
 /// just the name.
 private struct KindRow: View {
     let kind: FieldDefinition.Kind
+    private static let option = "Option"
 
     var body: some View {
         Group {
@@ -297,7 +298,7 @@ private struct KindRow: View {
             case .number: LabeledContent(kind.label, value: 42, format: .number)
             default:
                 LabeledContent(kind.label) {
-                    FieldValueView(field: FieldDefinition(name: kind.label, kind: kind, options: ["Option"]),
+                    FieldValueView(field: FieldDefinition(name: kind.label, kind: kind, options: [Self.option]),
                                    value: .constant(sample))
                         .allowsHitTesting(false)
                 }
@@ -310,7 +311,7 @@ private struct KindRow: View {
     private var sample: FieldValue? {
         switch kind {
         case .date: .date(.now)
-        case .choice: .text("Option")
+        case .choice: .text(Self.option)
         case .toggle: .toggle(false)
         default: nil
         }

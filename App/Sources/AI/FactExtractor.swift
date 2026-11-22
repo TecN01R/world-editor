@@ -5,20 +5,6 @@ import Provenance
 import FoundationModels
 #endif
 
-/// Whether Apple's on-device model can run here, for the models list.
-enum FoundationModelStatus {
-    static var description: String {
-        #if canImport(FoundationModels)
-        switch SystemLanguageModel.default.availability {
-        case .available: return "Ready (built into iOS)"
-        case .unavailable(let reason): return "Unavailable: \(reason)"
-        }
-        #else
-        return "Requires iOS 26 or later"
-        #endif
-    }
-}
-
 #if canImport(FoundationModels)
 @Generable
 struct ExtractedStatement {

@@ -199,8 +199,7 @@ struct EditorView: View {
                     .ignoresSafeArea()   // the whole display; bars appear over it
                     .transition(.opacity)
             } else {
-                PageEditor()
-                    .ignoresSafeArea(.keyboard)   // text scrolls behind the glass format bar, as in Notes
+                PageEditor()   // stops at the keyboard, as iOS lays pages out
                     .transition(.opacity)
             }
         }

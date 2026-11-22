@@ -184,8 +184,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         guard visible != controlsVisible else { return }
         controlsVisible = visible
         UIView.animate(withDuration: 0.25) { self.rail.alpha = visible ? 1 : Self.railResting }
-        hideTimer?.invalidate()
-        if visible { scheduleHide() }
+        if visible { scheduleHide() } else { hideTimer?.invalidate() }
     }
 
     /// Shown for a moment, like video controls, unless you use them.
@@ -280,7 +279,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
     /// drawn, from the top of the tallest to the bottom of the lowest: the
     /// empty space a line box keeps above and below them (for accents and for
     /// tails like "g") may run off the page, and the caret is cut off at its
-    /// bottom. An empty page fits its line box, the caret being all there is.
+    /// bottom. Text with no ink (only spaces) fits its line box instead.
     private func fits(_ size: Double, in page: CGSize) -> Bool {
         let s = styled(size)
         let longestWord = Self.words.matches(in: s.string, range: NSRange(location: 0, length: s.length))
@@ -321,35 +320,30 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         let best = FocusFit.largest { fits($0, in: page.size) }
         let newSize = FocusFit.settle(best: best, current: size, mayGrow: mayGrow)
         let old = (frame: textFrame, size: size, start: textStart)
-        defer { textStart = firstLetterX() }
 
         if newSize != size { apply(newSize) }
-        // The text view has the final say: if its layout is ever taller than
-        // the page allows, step down rather than let anything hang off it.
-        var h = measuredHeight(width: page.width), drawn = inkOfText(width: page.width)
-        while (drawn.isEmpty ? h : drawn.height) > page.height, size > FocusFit.minSize {
-            apply(max(FocusFit.minSize, size * 0.97))
-            h = measuredHeight(width: page.width); drawn = inkOfText(width: page.width)
-        }
+        let h = measuredHeight(width: page.width)
         // One line is centred across the page too; once it wraps it's left-aligned
         // (the switch comes with the size change that wrapping brings).
         alignment = h < Self.font(CGFloat(size)).lineHeight * 1.5 ? .center : .natural
         textView.textAlignment = alignment
         updateTypingAttributes()
-        if alignment == .center { drawn = inkOfText(width: page.width, alignment: .center) }
-        // Centre the letters, keeping the lowest above the keyboard (or, on an
-        // empty page, the caret) and the tallest below the top of the page.
+        let drawn = inkOfText(width: page.width)
+        // Centre the letters, keeping the lowest above the keyboard and the
+        // tallest below the top of the page. (Text with no ink, only spaces,
+        // goes by its line box and caret.)
         let bottom = drawn.isEmpty ? h : drawn.maxY
         let y = max(min(page.midY - drawn.midY, page.maxY - bottom), page.minY - drawn.minY)
         // Across, centre them on the screen rather than the page (which leaves
         // room for the dots on the right) when there's room to spare.
-        let x = drawn.isEmpty ? view.bounds.midX - page.width / 2   // the caret, centred
+        let x = drawn.isEmpty ? view.bounds.midX - page.width / 2
             : max(min(view.bounds.midX - drawn.midX, page.maxX - drawn.maxX), page.minX - drawn.minX)
         let frame = CGRect(x: x, y: y, width: page.width, height: h)
         textView.caretBottom = page.maxY - y
-        guard frame != old.frame || size != old.size else { return }
-        textFrame = frame
-        guard animated, old.size > 0 else { return }
+        let changed = frame != old.frame || size != old.size
+        if changed { textFrame = frame }
+        textStart = firstLetterX()
+        guard changed, animated, old.size > 0 else { return }
         // Zoom, rather than snap to the new size and then slide: draw the new
         // layout over the letters as they are on screen right now (mid-zoom,
         // if typing fast), then ease it into place. The first letter is the
@@ -357,7 +351,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         // even when a centred line re-centres around a new letter.
         let scale = old.size / size
         let from = CGPoint(x: old.frame.minX + old.start, y: old.frame.minY)
-        let to = CGPoint(x: frame.minX + firstLetterX(), y: frame.minY)
+        let to = CGPoint(x: frame.minX + textStart, y: frame.minY)
         let centre = CGPoint(x: frame.midX, y: frame.midY), oldCentre = CGPoint(x: old.frame.midX, y: old.frame.midY)
         let shown = textView.layer.presentation()?.affineTransform() ?? textView.transform
         // Where the new layout's centre lands: on the old layout, then as shown.
@@ -411,13 +405,17 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         updateTypingAttributes()
     }
 
-    /// The letters as drawn, laid out as the text view lays them out.
-    private func inkOfText(width: CGFloat, alignment: NSTextAlignment = .natural) -> CGRect {
+    /// The letters as drawn, laid out (and aligned) as the text view lays them out.
+    private func inkOfText(width: CGFloat) -> CGRect {
         let s = NSMutableAttributedString(attributedString: styled(size))
+        s.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: s.length))
+        return ink(of: s, width: width)
+    }
+
+    private var paragraphStyle: NSParagraphStyle {
         let style = NSMutableParagraphStyle()
         style.alignment = alignment
-        s.addAttribute(.paragraphStyle, value: style, range: NSRange(location: 0, length: s.length))
-        return ink(of: s, width: width)
+        return style
     }
 
     private func measuredHeight(width: CGFloat) -> CGFloat {
@@ -430,9 +428,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
     private func updateTypingAttributes() {
         let p = Paragraph(text: textView.text ?? "", runs: RichText.runs(in: textView.attributedText))
         var typing = Self.attributes(CGFloat(max(size, 17)))
-        let style = NSMutableParagraphStyle()
-        style.alignment = alignment
-        typing[.paragraphStyle] = style
+        typing[.paragraphStyle] = paragraphStyle
         if let base = typing[.font] as? UIFont {
             typing[.font] = RichText.font(base, p.style(at: textView.selectedRange.location))
         }
@@ -502,8 +498,7 @@ extension FocusViewController: UIGestureRecognizerDelegate {
     /// handles its own.
     func gestureRecognizer(_ g: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         let p = touch.location(in: view)
-        if rail.frame.contains(p) { return false }
-        return !(g is UISwipeGestureRecognizer && nearSelectionEnds(p))
+        return !rail.frame.contains(p) && !(g is UISwipeGestureRecognizer && nearSelectionEnds(p))
     }
 
     /// The reveal tap goes alongside the text view's own (placing the caret).
