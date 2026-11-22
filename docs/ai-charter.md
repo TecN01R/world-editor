@@ -13,6 +13,7 @@ behaviour that only lives in a prompt isn't guaranteed.
 | The AI never modifies the author's writing. | AI code receives `Document` *values* (copies); only the editors call `Library.update`. |
 | Inferred information is never presented as established. | `KnowledgeBase` has only `established` (author stated it) and `speculative` (author wrote it as uncertain). Anything else is `unknown`. |
 | Where non-invention can't be guaranteed, prefer incomplete output. | Rejected candidates are dropped and logged, never repaired by guessing (`ProvenanceValidator`, `CompanionGuard`, `IllustrationPlan`). |
+| Structure isn't writing: the AI may propose types and field names ("Wants", "Home"), as questions the author answers. Every field *value* is the author's own words; the AI never fills one in itself. (Kevin's ruling, 2026-11-22.) | Values are filed only from the author's words, with a source (`ProvenanceValidator`); the author approves every proposed type, field and value. |
 | Models download on demand and unload when idle. | `ModelCatalog` (licence + pinned checksum required before download), `ModelResidency` (memory budget, LRU unload). |
 
 ## Search and curation
