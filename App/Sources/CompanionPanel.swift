@@ -19,10 +19,28 @@ struct CompanionPanel: View {
     @ScaledMetric(relativeTo: .body) private var barHeight: CGFloat = 44
     /// The system's standard margin, for the conversation and the message bar.
     private static let margin: CGFloat = 20
-    // No toolbar or NavigationStack: on the Duo any toolbar, even a sheet's,
-    // joins the app's own in the side column (tried 2026-11-23), and a nested
-    // stack's title leaked into the pages list's bar when folded.
+    /// A stock sheet (and inspector): a navigation bar with the title, Close,
+    /// and the menu. On the folded Duo a sheet's bar would otherwise go into the
+    /// side column (tried 2026-11-23); with a couple of controls Apple's advice
+    /// is to keep it horizontal (iOS 27.1, `toolbarVerticalBehavior`).
     var body: some View {
+        NavigationStack {
+            conversation
+                .navigationTitle("Companion")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    if companion.folded {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Close", systemImage: "xmark") { companion.isOpen = false }
+                        }
+                    }
+                    ToolbarItem(placement: .primaryAction) { more }
+                }
+        }
+        .toolbarVerticalBehavior(.disabled)
+    }
+
+    private var conversation: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
                 ForEach(companion.conversation.turns) { turn in
@@ -33,10 +51,8 @@ struct CompanionPanel: View {
                 }
                 status
             }
-            // The system's standard 20 pt margins, and as much room at the top:
-            // at 16 the first line sat against the grab handle (folded) or the
-            // display's top edge (unfolded), against the left edge too.
-            .padding(Self.margin)
+            .padding(.horizontal, Self.margin)   // the system's standard margin
+            .padding(.vertical)
         }
         .scrollEdgeEffectStyle(.soft, for: [.top, .bottom])   // softened under the bar and the grab handle, as the page is
         .defaultScrollAnchor(.bottom)
@@ -246,12 +262,11 @@ struct CompanionPanel: View {
 
     private func retry() { companion.retry(page: library.document, in: library) }
 
-    /// The message field in Liquid Glass: more, the field and send, all one
-    /// height (the stock glass button styles each come in a different one).
+    /// The message field in Liquid Glass: the field and send, one height
+    /// (the stock glass button styles each come in a different one).
     private var composer: some View {
         GlassEffectContainer {
             HStack(alignment: .bottom, spacing: 8) {
-                more
                 // What they type is theirs (New York); the placeholder is the app's.
                 TextField("Message", text: $message, prompt: Text("Message").font(.body), axis: .vertical)
                     .font(.authored(.body))
@@ -300,12 +315,8 @@ struct CompanionPanel: View {
                 .disabled(true)
             }
         } label: {
-            Image(systemName: "ellipsis")
-                .frame(width: barHeight, height: barHeight)
-                .glassEffect(.regular.interactive(), in: .circle)
+            Label("More", systemImage: "ellipsis")
         }
-        .tint(.primary)   // a menu's label takes the tint, not a foreground style
-        .accessibilityLabel("More")
     }
 
     /// "World Editor 0.1.0 (1)".
