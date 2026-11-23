@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     container: swift:6.2
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Test WriterKit
         run: swift test --package-path Packages/WriterKit
 
@@ -33,7 +33,7 @@ jobs:
       APPLE_TEAM_ID: ""
       BUNDLE_ID: com.tecn01r.worldeditor
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: What changed?
@@ -100,7 +100,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: What changed?
