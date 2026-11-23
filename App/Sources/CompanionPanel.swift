@@ -24,6 +24,7 @@ struct CompanionPanel: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
                 ForEach(companion.conversation.turns) { turn in
+                    if let thought = companion.thoughts[turn.id] { reasoning(thought, done: true) }
                     // Its latest reply, still unanswered, can be tried again (hold it).
                     reply(turn.question, canRetry: turn.id == companion.conversation.waiting?.id && companion.state == .idle)
                     if let answer = turn.answer { mine(answer) }
@@ -124,7 +125,7 @@ struct CompanionPanel: View {
         case .unavailable(let reason):
             ContentUnavailableView("Companion Unavailable", systemImage: "bubble.left", description: Text(reason))
         case .thinking:
-            if partialReply == nil {   // its words appear in the conversation as they're written
+            if partialReply == nil, partialReasoning == nil {   // then its thoughts and words appear in the conversation
                 ContentUnavailableView {
                     Label {
                         Text("Thinking")
@@ -139,12 +140,25 @@ struct CompanionPanel: View {
     /// Once there's a conversation, what the companion is doing shows at its end.
     @ViewBuilder private var status: some View {
         switch companion.state {
-        case _ where companion.conversation.turns.isEmpty && (companion.state != .thinking || partialReply == nil):
+        case _ where companion.conversation.turns.isEmpty
+            && (companion.state != .thinking || (partialReply == nil && partialReasoning == nil)):
             EmptyView()   // centred instead (`empty`)
         case .thinking:
+            if let thought = partialReasoning { reasoning(thought, done: partialReply != nil) }
             if let writing = partialReply {
-                reply(writing)   // as it's written
-            } else if companion.download == nil {
+                // As it's written: new words fade in, and a pulsing dot shows it
+                // isn't done yet (as the AI apps show it).
+                VStack(alignment: .leading, spacing: 8) {
+                    reply(writing)
+                        .contentTransition(.opacity)
+                        .animation(.easeOut(duration: 0.2), value: writing)
+                    Image(systemName: "circle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .symbolEffect(.pulse, options: .repeating)
+                        .accessibilityLabel("Writing")
+                }
+            } else if partialReasoning == nil, companion.download == nil {
                 thinking
             }
         case .unavailable(let reason):
@@ -161,6 +175,29 @@ struct CompanionPanel: View {
         case .idle:
             EmptyView()
         }
+    }
+
+    /// Its reasoning so far, while it thinks before replying.
+    private var partialReasoning: String? {
+        guard let reasoning = companion.reasoning, !reasoning.isEmpty else { return nil }
+        return reasoning
+    }
+
+    /// What it thought before a reply: collapsed, like the AI apps' "Thinking"
+    /// (a stock disclosure group); open it to read the reasoning.
+    private func reasoning(_ text: String, done: Bool) -> some View {
+        DisclosureGroup {
+            Text(text)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } label: {
+            Label(done ? "Thought" : "Thinking…", systemImage: "lightbulb")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .symbolEffect(.pulse, options: .repeating, isActive: !done)
+        }
+        .tint(.secondary)
     }
 
     /// The reply so far, once it has any words.

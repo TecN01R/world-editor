@@ -10,15 +10,17 @@ import FoundationModels
 protocol QuestionModel: Sendable {
     /// Why it can't run here, or nil if it can.
     var unavailableReason: String? { get async }
-    /// The reply so far, growing as the model writes it; the last is the whole reply.
-    func stream(_ prompt: Interviewer.Prompt) -> AsyncThrowingStream<String, Error>
+    /// The reply so far, growing as the model writes it, with any reasoning
+    /// before it; the last is the whole reply. `thinking`: reason first, if the
+    /// model can.
+    func stream(_ prompt: Interviewer.Prompt, thinking: Bool) -> AsyncThrowingStream<Reasoned, Error>
 }
 
 extension QuestionModel {
-    /// The whole reply at once.
+    /// The whole reply at once, without thinking first.
     func propose(_ prompt: Interviewer.Prompt) async throws -> String {
         var reply = ""
-        for try await text in stream(prompt) { reply = text }
+        for try await partial in stream(prompt, thinking: false) { reply = partial.reply }
         return reply
     }
 }
@@ -33,8 +35,8 @@ struct Download: Equatable, Sendable {
 
 /// Runs `body`, which yields the reply so far, as a stream; ending the stream
 /// cancels it.
-func streaming(_ body: @escaping @Sendable (AsyncThrowingStream<String, Error>.Continuation) async throws -> Void)
-    -> AsyncThrowingStream<String, Error> {
+func streaming(_ body: @escaping @Sendable (AsyncThrowingStream<Reasoned, Error>.Continuation) async throws -> Void)
+    -> AsyncThrowingStream<Reasoned, Error> {
     AsyncThrowingStream { continuation in
         let task = Task {
             do { try await body(continuation); continuation.finish() } catch { continuation.finish(throwing: error) }
@@ -62,12 +64,12 @@ struct AppleModel: QuestionModel {
         }
     }
 
-    func stream(_ prompt: Interviewer.Prompt) -> AsyncThrowingStream<String, Error> {
-        streaming { continuation in
+    func stream(_ prompt: Interviewer.Prompt, thinking: Bool) -> AsyncThrowingStream<Reasoned, Error> {
+        streaming { continuation in   // Apple's model has no thinking step
             #if canImport(FoundationModels)
             let session = LanguageModelSession(model: .default, instructions: prompt.system)
             for try await snapshot in session.streamResponse(to: prompt.flattened, options: GenerationOptions(temperature: 0.7)) {
-                continuation.yield(snapshot.content)
+                continuation.yield(Reasoned(reply: snapshot.content))
             }
             #else
             throw CancellationError()

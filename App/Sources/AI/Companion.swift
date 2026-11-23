@@ -22,6 +22,11 @@ final class Companion {
     private(set) var state = State.idle
     /// The reply so far, while the model is writing it (the guard off).
     private(set) var writing: String?
+    /// What it's thinking, while it thinks before replying.
+    private(set) var reasoning: String?
+    /// What it thought before each of its replies, for this session only: shown
+    /// collapsed, never saved or sent back to the model (its makers' advice).
+    private(set) var thoughts: [UUID: String] = [:]
     /// The panel is showing: beside the page unfolded, a sheet folded.
     var isOpen = false
     /// The Duo is folded (compact width): the companion is a sheet, not a column.
@@ -102,7 +107,7 @@ final class Companion {
         guard conversation.waiting == nil, conversation.page == page.id else { return }
         if let reason = await model.unavailableReason { state = .unavailable(reason); return }
         state = .thinking
-        defer { self.writing = nil }
+        defer { self.writing = nil; self.reasoning = nil }
         let page = library.pages.first { $0.id == page.id } ?? page   // as it is now, not when it opened
         let writing = page.paragraphs.map(\.text).joined(separator: "\n")
         let fields = library.fieldText(page)
@@ -129,10 +134,12 @@ final class Companion {
                     question = Interviewer.screen(reply, authorText: authorText, asked: asked)
                 } else {
                     var text = ""
-                    for try await partial in model.stream(prompt) {
+                    // Always thinks first (Kevin: thinking on, no switch).
+                    for try await partial in model.stream(prompt, thinking: true) {
                         guard !Task.isCancelled else { break }
-                        text = partial
-                        self.writing = partial.trimmingCharacters(in: .whitespacesAndNewlines)
+                        text = partial.reply
+                        self.reasoning = partial.reasoning
+                        self.writing = partial.reply
                     }
                     reply = text
                     let whole = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -158,6 +165,7 @@ final class Companion {
         guard !Task.isCancelled, conversation.page == page.id else { state = .idle; return }
         guard let question else { state = .quiet; return }
         conversation.ask(question)
+        if let reasoning, !reasoning.isEmpty, let turn = conversation.turns.last { thoughts[turn.id] = reasoning }
         save()
         state = .idle
     }

@@ -24,9 +24,10 @@ final class GemmaModel: QuestionModel, @unchecked Sendable {
 
     init(onProgress: @escaping @Sendable (Download?) -> Void) { self.onProgress = onProgress }
 
-    /// Gemma's recommended sampling (its model card): temperature 1, top-p 0.95, top-k 64.
-    private static var options: GenerationOptions {
-        var options = GenerationOptions(temperature: 1.0, maximumResponseTokens: 600)
+    /// Gemma's recommended sampling (its model card): temperature 1, top-p 0.95,
+    /// top-k 64; thinking needs room for its reasoning as well as the reply.
+    private static func options(thinking: Bool) -> GenerationOptions {
+        var options = GenerationOptions(temperature: 1.0, maximumResponseTokens: thinking ? 3000 : 600)
         options[custom: LlamaLanguageModel.self] = .init(contextSize: 8192, topK: 64, topP: 0.95)
         return options
     }
@@ -67,13 +68,15 @@ final class GemmaModel: QuestionModel, @unchecked Sendable {
         return model
     }
 
-    func stream(_ prompt: Interviewer.Prompt) -> AsyncThrowingStream<String, Error> {
+    func stream(_ prompt: Interviewer.Prompt, thinking: Bool) -> AsyncThrowingStream<Reasoned, Error> {
         streaming { continuation in
             let model = try await self.model()
+            // Gemma thinks when its system turn opens with this (its chat template).
+            let system = thinking ? "<|think|>\n" + prompt.system : prompt.system
             // The conversation so far as a transcript: the instructions, then the
             // turns before the author's last, which is the prompt being answered.
             var entries: [Transcript.Entry] = [
-                .instructions(.init(segments: [.text(.init(content: prompt.system))], toolDefinitions: []))
+                .instructions(.init(segments: [.text(.init(content: system))], toolDefinitions: []))
             ]
             for turn in prompt.turns.dropLast() {
                 let segments: [Transcript.Segment] = [.text(.init(content: turn.text))]
@@ -84,12 +87,13 @@ final class GemmaModel: QuestionModel, @unchecked Sendable {
             let session = LanguageModelSession(model: model, transcript: Transcript(entries: entries))
             let began = ContinuousClock.now   // TRIAL: speed on the phone
             var first: Duration?, text = ""
-            for try await snapshot in session.streamResponse(to: prompt.turns.last?.text ?? "", options: Self.options) {
-                if first == nil { first = ContinuousClock.now - began }
-                text = snapshot.content
-                continuation.yield(text)
+            for try await snapshot in session.streamResponse(to: prompt.turns.last?.text ?? "", options: Self.options(thinking: thinking)) {
+                let partial = Reasoned.gemma(snapshot.content)
+                if first == nil, !partial.reply.isEmpty { first = ContinuousClock.now - began }
+                text = partial.reply
+                continuation.yield(partial)
             }
-            trialLog("SPEED \(Self.name): first words after \(first ?? .zero), whole reply (\(text.split(separator: " ").count) words) in \(ContinuousClock.now - began); memory left \(String(format: "%.2f GB", Double(os_proc_available_memory()) / 1e9))")   // TRIAL
+            trialLog("SPEED \(Self.name)\(thinking ? " thinking" : ""): first words after \(first ?? .zero), whole reply (\(text.split(separator: " ").count) words) in \(ContinuousClock.now - began); memory left \(String(format: "%.2f GB", Double(os_proc_available_memory()) / 1e9))")   // TRIAL
         }
     }
 }
