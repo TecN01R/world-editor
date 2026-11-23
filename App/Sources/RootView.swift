@@ -86,6 +86,13 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, companion.download != nil, !companion.isOpen, !focusMode { companion.isOpen = true }
         }
+        // Unfolded, the pages list and the companion are never out together: with
+        // both, the page between them was squeezed to a sliver and the companion
+        // looked like a sheet over it (Kevin, 2026-11-23). Showing the list closes
+        // the companion; opening the companion puts the list away (its button).
+        .onChange(of: columns) { _, visible in
+            if sizeClass == .regular, visible != .detailOnly, companion.isOpen { companion.isOpen = false }
+        }
         .onChange(of: sizeClass, initial: true) { _, size in
             companion.folded = size == .compact
             // Unfolding with the companion open: the page and the companion side by
