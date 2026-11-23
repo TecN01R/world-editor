@@ -535,7 +535,7 @@ struct EditorView: View {
         .toolbar {
             if focusMode {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close Focus", systemImage: "xmark") {
+                    Button("Exit Focus", systemImage: "arrow.down.right.and.arrow.up.left") {
                         withAnimation(.smooth(duration: 0.3)) { focusMode = false }
                     }
                     .keyboardShortcut(.cancelAction)

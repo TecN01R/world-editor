@@ -63,7 +63,7 @@ TextKit measures; `FocusLayout` (shared, tested) holds the size search
   Shown whenever the page has more than one paragraph, dimmed while writing. Current page is a pill; empty pages are
   hollow.
 - Everything else (bars, status, home indicator, pages list) hides while
-  writing. A tap anywhere shows them, with a close button, for a few
+  writing. A tap anywhere shows them, with an Exit Focus button, for a few
   seconds (a tap on the writing still places the caret); typing hides them.
   VoiceOver users always keep them.
 - Swipe up/down anywhere to move between pages, except on the caret or a

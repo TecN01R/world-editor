@@ -562,6 +562,31 @@ final class PageTextView: PlainPasteTextView {
     }
     var fieldsHeight: CGFloat = 0 { didSet { if fieldsHeight != oldValue { setNeedsLayout() } } }
 
+    /// The page never moves sideways. While the companion's column opens beside
+    /// it the page is briefly wider than its view, and iOS, keeping the caret in
+    /// sight, could leave it shifted left by its own margin: the writing then sat
+    /// flush against the display's edge (seen on the Duo, 2026-11-23).
+    override var contentOffset: CGPoint {
+        get { super.contentOffset }
+        set { super.contentOffset = CGPoint(x: -adjustedContentInset.left, y: newValue.y) }
+    }
+
+    // TRIAL: where the page really is on the display, whenever that changes: beside
+    // the companion its writing was flush against the display's left edge (Kevin,
+    // 2026-11-23), which nothing in this layout explains.
+    private var loggedGeometry = ""
+    private func logGeometry(lead: CGFloat) {
+        guard let window else { return }
+        func r(_ v: CGFloat) -> Int { Int(v.rounded()) }
+        func box(_ f: CGRect) -> String { "\(r(f.minX)),\(r(f.minY)) \(r(f.width))x\(r(f.height))" }
+        func edges(_ i: UIEdgeInsets) -> String { "t\(r(i.top)) l\(r(i.left)) b\(r(i.bottom)) r\(r(i.right))" }
+        let line = "PAGE window \(box(window.bounds)); in window \(box(convert(bounds, to: window))); lead \(r(lead)); "
+            + "offset \(r(contentOffset.x)),\(r(contentOffset.y)); content \(r(contentSize.width))x\(r(contentSize.height)); "
+            + "inset \(edges(adjustedContentInset)); safe \(edges(safeAreaInsets)); "
+            + "container safe \(edges(superview?.safeAreaInsets ?? .zero)); window safe \(edges(window.safeAreaInsets))"
+        if line != loggedGeometry { loggedGeometry = line; trialLog(line) }
+    }
+
     /// The format bar's height while it floats over the bottom of the page.
     var barHeight: CGFloat = 0 { didSet { setNeedsLayout() } }
 
@@ -588,6 +613,7 @@ final class PageTextView: PlainPasteTextView {
 
         let inset = UIEdgeInsets(top: top + 14, left: lead, bottom: 40, right: side)
         if textContainerInset != inset { textContainerInset = inset }
+        logGeometry(lead: lead)
 
         // The format bar floats over the bottom of the page (which stops at the
         // keyboard, though any part still under it counts); keep everything
