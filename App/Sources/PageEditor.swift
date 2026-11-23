@@ -375,13 +375,14 @@ final class FormatBar: UIView {
         let pad: CGFloat = 8
         let fit = capsule.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: 2 * pad)
         fit.priority = .defaultHigh   // as wide as its buttons, until the column's width runs out
-        let centred = capsule.centerXAnchor.constraint(equalTo: centerXAnchor)
-        centred.priority = .defaultHigh - 1   // centred, unless that would run into Focus
+        let row = UILayoutGuide()   // formatting and Focus, centred together
+        addLayoutGuide(row)
         NSLayoutConstraint.activate([
-            centred,
-            capsule.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 12),
-            capsule.trailingAnchor.constraint(lessThanOrEqualTo: focus.leadingAnchor, constant: -Self.gap),
-            focus.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            row.leadingAnchor.constraint(equalTo: capsule.leadingAnchor),
+            row.trailingAnchor.constraint(equalTo: focus.trailingAnchor),
+            row.centerXAnchor.constraint(equalTo: centerXAnchor),
+            row.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 12),
+            capsule.trailingAnchor.constraint(equalTo: focus.leadingAnchor, constant: -Self.gap),
             focus.topAnchor.constraint(equalTo: topAnchor),
             focus.heightAnchor.constraint(equalTo: capsule.heightAnchor),
             focusSize,
