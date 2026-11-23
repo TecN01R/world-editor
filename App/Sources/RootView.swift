@@ -13,6 +13,7 @@ struct RootView: View {
     @State private var column: NavigationSplitViewColumn = Screenshots.opensList ? .sidebar : .detail
     @State private var focusMode = Self.startsInFocus
     @State private var focusControls = false
+    @Environment(\.scenePhase) private var scenePhase
     @State private var columns: NavigationSplitViewVisibility = Self.startsInFocus ? .detailOnly : .all
     /// Folded, the companion's sheet keeps the height it was left at, half or full,
     /// across folding, reopening and relaunching (iOS's scene state restoration).
@@ -79,6 +80,11 @@ struct RootView: View {
                     companionFullHeight ? .large : .medium
                 } set: { companionFullHeight = $0 == .large })
                 .presentationDragIndicator(.visible)
+        }
+        // Back in the app while the companion's download runs (from its Live
+        // Activity, say): show the download, as the companion it belongs to.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active, companion.download != nil, !companion.isOpen, !focusMode { companion.isOpen = true }
         }
         .onChange(of: sizeClass, initial: true) { _, size in
             companion.folded = size == .compact
