@@ -361,7 +361,7 @@ final class FormatBar: UIView {
         capsule.clipsToBounds = true
         focus.cornerConfiguration = .capsule()
         focus.clipsToBounds = true
-        let focusButton = Self.button(symbol: "text.viewfinder", label: "Focus", slot: false, action: onFocus)
+        let focusButton = Self.button(symbol: "text.viewfinder", label: "Focus Mode", slot: false, action: onFocus)
         focusButton.translatesAutoresizingMaskIntoConstraints = false
         focus.contentView.addSubview(focusButton)
         scroll.showsHorizontalScrollIndicator = false
@@ -530,7 +530,7 @@ final class PageTextView: PlainPasteTextView {
     /// ⇧⌘F steps into Focus mode while writing (listed when ⌘ is held).
     var onFocus: (() -> Void)?
     override var keyCommands: [UIKeyCommand]? {
-        let focus = UIKeyCommand(title: "Focus", action: #selector(enterFocus), input: "f", modifierFlags: [.command, .shift])
+        let focus = UIKeyCommand(title: "Focus Mode", action: #selector(enterFocus), input: "f", modifierFlags: [.command, .shift])
         return (super.keyCommands ?? []) + [focus]
     }
     @objc private func enterFocus() { onFocus?() }

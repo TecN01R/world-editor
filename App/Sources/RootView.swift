@@ -532,7 +532,6 @@ struct EditorView: View {
                         companion.isOpen.toggle()
                     }
                     .keyboardShortcut("i", modifiers: [.command, .option])
-                    .badge(companion.conversation.waiting != nil && !companion.isOpen ? 1 : 0)
                 }
                 // In "•••": the side column keeps back and the companion.
                 ToolbarItem(placement: .secondaryAction) {
