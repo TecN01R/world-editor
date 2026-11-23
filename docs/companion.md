@@ -31,9 +31,12 @@ Exploration sound. Short, specific, and it knows his world.
 
 system turn, in this order, then the conversation:
 
-1. **Who it is** (`CompanionPrompt.instructions`, about 220 words). A friend
-   the writer talks to; the world comes only from the writer; it brings
-   interest, honesty and what it knows of the real world. Then how to reply to
+1. **Who it is** (`CompanionPrompt.instructions`, about 240 words). A friend
+   the writer talks to about what they're writing, which may be an invented
+   world, a story, notes or real life (it takes the page for what it is, a
+   correction of Kevin's: the first wording said "fictional world"); what
+   belongs in it comes only from the writer; it brings interest, honesty and
+   what it knows of the real world. Then how to reply to
    their last message, as a few plain cases: a real-world question (answer,
    say when unsure, and don't defend an answer they doubt), a request for its
    opinion or for something written (do it, briefly), a correction, anything

@@ -75,6 +75,9 @@ struct RootView: View {
             if !open, companion.folded, sizeClass == .compact { companion.isOpen = false }
         }) {
             CompanionPanel()
+                // The sheet covers the Duo's side column, whose space it would
+                // otherwise keep down its trailing edge (as the Mentions sheet).
+                .ignoresSafeArea(.container, edges: .horizontal)
                 .presentationDetents([.medium, .large], selection: Binding {
                     companionFullHeight ? .large : .medium
                 } set: { companionFullHeight = $0 == .large })

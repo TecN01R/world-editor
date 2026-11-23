@@ -22,7 +22,7 @@ final class CompanionPromptTests: XCTestCase {
             CompanionPrompt.instructions,
             CompanionPrompt.examples,
             """
-            What the app shows you of the writer's world (for reference; the writer didn't just say this):
+            What the app shows you of the writer's pages (for reference; the writer didn't just say this):
 
             Their other pages:
             - Verran (Place): A seafaring nation of rowers and traders
