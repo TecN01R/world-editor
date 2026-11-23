@@ -19,25 +19,33 @@ struct CompanionPanel: View {
     @ScaledMetric(relativeTo: .body) private var barHeight: CGFloat = 44
     /// The system's standard margin, for the conversation and the message bar.
     private static let margin: CGFloat = 20
-    /// A stock sheet (and inspector): a navigation bar with the title, Close,
-    /// and the menu. On the folded Duo a sheet's bar would otherwise go into the
-    /// side column (tried 2026-11-23); with a couple of controls Apple's advice
-    /// is to keep it horizontal (iOS 27.1, `toolbarVerticalBehavior`).
+    /// Folded, a sheet; unfolded, the inspector column beside the page.
+    let inSheet: Bool
+
+    /// Folded, a stock sheet: a navigation bar with the title, Close and the
+    /// menu. On the folded Duo a sheet's bar would otherwise go into the side
+    /// column (tried 2026-11-23); with a couple of controls Apple's advice is to
+    /// keep it horizontal (iOS 27.1, `toolbarVerticalBehavior`). Unfolded, the
+    /// inspector's own toolbar holds the menu: a navigation stack nested in the
+    /// split view's column destabilised its layout while folding.
     var body: some View {
-        NavigationStack {
-            conversation
-                .navigationTitle("Companion")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    if companion.folded {
+        if inSheet {
+            NavigationStack {
+                conversation
+                    .navigationTitle("Companion")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
                             Button("Close", systemImage: "xmark") { companion.isOpen = false }
                         }
+                        ToolbarItem(placement: .primaryAction) { more }
                     }
-                    ToolbarItem(placement: .primaryAction) { more }
-                }
+            }
+            .toolbarVerticalBehavior(.disabled)
+        } else {
+            conversation
+                .toolbar { ToolbarItem(placement: .primaryAction) { more } }
         }
-        .toolbarVerticalBehavior(.disabled)
     }
 
     private var conversation: some View {

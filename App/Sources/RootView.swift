@@ -28,6 +28,9 @@ struct RootView: View {
     /// indicator, pages list) until a tap outside the text brings it back.
     /// VoiceOver users keep the controls: hidden ones would be unreachable.
     private var chromeHidden: Bool { focusMode && !focusControls && !voiceOver }
+    /// The companion is on screen: folded, whenever it's open; unfolded, only
+    /// while the pages list is put away.
+    private var companionShown: Bool { companion.isOpen && (sizeClass == .compact || columns == .detailOnly) }
 
     var body: some View {
         @Bindable var library = library
@@ -42,7 +45,8 @@ struct RootView: View {
                 // Unfolded, tapping the companion's button sets the page beside it:
                 // opening puts the pages list away, closing brings it back. Only the
                 // author's taps do this; unfolding with it open is handled below.
-                EditorView(focusMode: $focusMode, focusControls: $focusControls, chromeHidden: chromeHidden) { open in
+                EditorView(focusMode: $focusMode, focusControls: $focusControls, chromeHidden: chromeHidden,
+                           companionShown: companionShown) { open in
                     if sizeClass == .regular { withAnimation { columns = open ? .detailOnly : .all } }
                 }
                 .id(id)
@@ -63,10 +67,15 @@ struct RootView: View {
         // The column has no gesture of its own to close it, and iOS reports it closing
         // and reopening as the Duo folds and unfolds (logged 2026-11-23), so what iOS
         // reports here is ignored.
-        .inspector(isPresented: Binding { companion.isOpen && sizeClass == .regular } set: { open in
+        // Unfolded, the pages list and the companion are never out together: with
+        // both, the page between them was squeezed to a sliver and the companion
+        // looked like a sheet over it (Kevin, 2026-11-23). Showing the list hides
+        // the companion's column; this is worked out, never set from code while
+        // iOS folds and unfolds (closing it in the middle of that crashed UIKit).
+        .inspector(isPresented: Binding { companionShown && sizeClass == .regular } set: { open in
             trialLog("INSPECTOR set \(open) folded=\(companion.folded)")   // TRIAL: fold/unfold diagnosis
         }) {
-            CompanionPanel()
+            CompanionPanel(inSheet: false)
                 .inspectorColumnWidth(min: 320, ideal: max(320, width / 2), max: max(320, width / 2))
         }
         // Swiping the sheet down closes the companion, but only while folded (by both
@@ -75,7 +84,7 @@ struct RootView: View {
             trialLog("SHEET set \(open) folded=\(companion.folded) size=\(String(describing: sizeClass))")   // TRIAL
             if !open, companion.folded, sizeClass == .compact { companion.isOpen = false }
         }) {
-            CompanionPanel()
+            CompanionPanel(inSheet: true)
                 .presentationDetents([.medium, .large], selection: Binding {
                     companionFullHeight ? .large : .medium
                 } set: { companionFullHeight = $0 == .large })
@@ -85,13 +94,6 @@ struct RootView: View {
         // Activity, say): show the download, as the companion it belongs to.
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, companion.download != nil, !companion.isOpen, !focusMode { companion.isOpen = true }
-        }
-        // Unfolded, the pages list and the companion are never out together: with
-        // both, the page between them was squeezed to a sliver and the companion
-        // looked like a sheet over it (Kevin, 2026-11-23). Showing the list closes
-        // the companion; opening the companion puts the list away (its button).
-        .onChange(of: columns) { _, visible in
-            if sizeClass == .regular, visible != .detailOnly, companion.isOpen { companion.isOpen = false }
         }
         .onChange(of: sizeClass, initial: true) { _, size in
             companion.folded = size == .compact
@@ -448,6 +450,8 @@ struct EditorView: View {
     @Binding var focusMode: Bool
     @Binding var focusControls: Bool
     let chromeHidden: Bool
+    /// The companion is on screen (unfolded, the pages list hides it).
+    let companionShown: Bool
     /// The author opened (true) or closed the companion with its button.
     let onCompanionToggled: (Bool) -> Void
 
@@ -555,11 +559,11 @@ struct EditorView: View {
                 // the Duo the side column, which stays in reach above the keyboard.
                 // ⌥⌘I is the system's shortcut for an inspector.
                 ToolbarItem(placement: .primaryAction) {
-                    Button(companion.isOpen ? "Hide Companion" : "Companion", systemImage: "bubble.left.and.text.bubble.right") {
-                        if folded, !companion.isOpen {   // the sheet would open behind the keyboard
+                    Button(companionShown ? "Hide Companion" : "Companion", systemImage: "bubble.left.and.text.bubble.right") {
+                        if folded, !companionShown {   // the sheet would open behind the keyboard
                             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                         }
-                        companion.isOpen.toggle()
+                        companion.isOpen = !companionShown
                         onCompanionToggled(companion.isOpen)
                     }
                     .keyboardShortcut("i", modifiers: [.command, .option])
