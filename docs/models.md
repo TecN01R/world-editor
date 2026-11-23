@@ -7,7 +7,7 @@ function uses the best-fitting openly licensed model that runs on an iPhone.
 |---|---|---|---|---|---|
 | Search by meaning | **Qwen3-Embedding-0.6B** (Q8_0 GGUF) | Apache-2.0 | llama.cpp (MIT) | ~640 MB | EmbeddingGemma 300M |
 | Re-ranking (optional) | Qwen3-Reranker-0.6B | Apache-2.0 | llama.cpp | ~640 MB | — |
-| Writing companion | **Gemma 4 E2B** (Q4_K_M), through AnyLanguageModel | Apache-2.0 | llama.cpp | ~3.1 GB (+1 GB vision) | "Qwen3-1.7B Socratic" |
+| Writing companion | **Gemma 4 E2B** (Q4_K_M), through AnyLanguageModel | Apache-2.0 | llama.cpp | ~3.1 GB (+0.6 GB for images, later) | "Qwen3-1.7B Socratic" |
 | Facts & continuity | **Apple Foundation Models** (on-device) | System framework | iOS 26+ | 0 (built in) | same |
 | Illustration | **Stable Diffusion 1.5** + **ControlNet 1.1** (Core ML) | CreativeML OpenRAIL-M | apple/ml-stable-diffusion | ~2.1 GB + ~0.7 GB | same |
 
@@ -23,14 +23,24 @@ and §3.2 lets Google "restrict (remotely or otherwise)" use. The cost is size
 more than quality.
 
 **Gemma 4 E2B for the companion** (chosen 2026-11-23 by test, replacing
-unasked, no pointless questions). Of the models that fit the phone with vision,
-Gemma 4 E2B scored best (4.6/10; 5.2 with thinking on, a significant gain);
-Qwen3.5-4B scored 3.5 and invented something in half its replies. Gemma 4 26B
-(MoE, ~14 GB) scored best overall (6.5) but doesn't fit in the phone's memory.
-On the Duo, E2B replies start in ~0.2 s after a ~12 s first load. It runs
-through Hugging Face's AnyLanguageModel (Foundation Models' session API over
-llama.cpp), with Gemma's recommended sampling (temperature 1, top-p 0.95,
-top-k 64).
+Qwen3.5-4B). A first test put 14 models through 91 moments of conversation,
+pointless questions). Of the models that fit the phone with vision, Gemma 4
+E2B scored best; Qwen3.5-4B invented something in half its replies. Gemma 4
+26B (MoE, ~14 GB) scored best overall but doesn't fit in the phone's memory.
+On the Duo, E2B writes about 50 tokens a second after a ~12 s first load. It
+runs through Hugging Face's AnyLanguageModel (Foundation Models' session API
+over llama.cpp), with Gemma's recommended sampling (temperature 1, top-p
+0.95, top-k 64, no repetition penalty).
+
+**Gemma 4 E4B is the one to try next.** With the current prompt
+(`docs/companion.md`) the 4.2 GB build (`unsloth/gemma-4-E4B-it-qat-GGUF`,
+UD-Q4_K_XL) scores 5.2 out of 10 where E2B scores 4.5, and breaks one of
+Kevin's rules in 9% of replies where E2B does in 24%. What isn't known is
+whether the Duo holds it in memory and how fast it runs there (about half
+E2B's speed is the guess). The app can be pointed at another build without a
+new install, to find out (`GemmaModel`: a line in
+`Documents/companion-trial.txt`). The 3.2 GB "mobile" 2-bit build of E4B and
+is.
 
 **Apple Foundation Models for extraction.** Built into iOS (no download),
 guided generation returns typed structures, and it runs on the Neural Engine.

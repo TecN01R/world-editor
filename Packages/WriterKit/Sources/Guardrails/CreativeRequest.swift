@@ -32,26 +32,3 @@ public enum CreativeRequest {
     /// Fixed, model-free reply. Kept short and not preachy.
     public static let decline = "That part is yours to write, so I won't supply it. I can help you work it out, though."
 }
-
-/// Questions the companion can always fall back on. They contain only
-/// open-ended words plus, optionally, a phrase quoted verbatim from the author.
-public enum FallbackQuestion {
-    public static func make(about phrase: String?, seed: Int = 0) -> String {
-        guard let p = phrase?.trimmingCharacters(in: .whitespacesAndNewlines), !p.isEmpty else {
-            let generic = [
-                "What do you already know about this that you haven't written down yet?",
-                "What would need to be true for this to feel right to you?",
-                "Where does this sit with what you wrote earlier?",
-                "What are you most unsure about here?",
-            ]
-            return generic[abs(seed) % generic.count]
-        }
-        let templates = [
-            "What do you mean by \u{201C}\(p)\u{201D}?",
-            "Why does \u{201C}\(p)\u{201D} matter to you here?",
-            "What have you already decided about \u{201C}\(p)\u{201D}, and what is still open?",
-            "Is \u{201C}\(p)\u{201D} consistent with what you wrote before?",
-        ]
-        return templates[abs(seed) % templates.count]
-    }
-}

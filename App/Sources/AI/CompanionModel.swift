@@ -4,26 +4,18 @@ import Guardrails
 import FoundationModels
 #endif
 
-/// Something that can write the companion's next reply. With the guard on,
-/// `Companion` screens each whole reply (`Interviewer.screen`); with it off,
-/// the reply shows as it's written.
-protocol QuestionModel: Sendable {
+/// Something that can write the companion's next reply.
+protocol CompanionModel: Sendable {
     /// Why it can't run here, or nil if it can.
     var unavailableReason: String? { get async }
     /// The reply so far, growing as the model writes it, with any reasoning
-    /// before it; the last is the whole reply. `thinking`: reason first, if the
-    /// model can.
-    func stream(_ prompt: Interviewer.Prompt, thinking: Bool) -> AsyncThrowingStream<Reasoned, Error>
+    /// before it; the last is the whole reply. Throws `PromptTooLong` when the
+    /// prompt doesn't fit the model.
+    func stream(_ prompt: CompanionPrompt) -> AsyncThrowingStream<Reasoned, Error>
 }
 
-extension QuestionModel {
-    /// The whole reply at once, without thinking first.
-    func propose(_ prompt: Interviewer.Prompt) async throws -> String {
-        var reply = ""
-        for try await partial in stream(prompt, thinking: false) { reply = partial.reply }
-        return reply
-    }
-}
+/// The prompt is more than the model can read at once.
+struct PromptTooLong: Error {}
 
 /// A model's first download: bytes so far and in all, and Foundation's
 /// description of it (sizes, speed, time left).
@@ -48,7 +40,7 @@ func streaming(_ body: @escaping @Sendable (AsyncThrowingStream<Reasoned, Error>
 /// Apple's on-device model (never its server ones: `SystemLanguageModel.default`).
 /// Used only where llama.cpp isn't (the simulator); otherwise kept for comparing it
 /// with the companion's model on the phone.
-struct AppleModel: QuestionModel {
+struct AppleModel: CompanionModel {
     var unavailableReason: String? {
         get async {
             #if canImport(FoundationModels)
@@ -64,7 +56,7 @@ struct AppleModel: QuestionModel {
         }
     }
 
-    func stream(_ prompt: Interviewer.Prompt, thinking: Bool) -> AsyncThrowingStream<Reasoned, Error> {
+    func stream(_ prompt: CompanionPrompt) -> AsyncThrowingStream<Reasoned, Error> {
         streaming { continuation in   // Apple's model has no thinking step
             #if canImport(FoundationModels)
             let session = LanguageModelSession(model: .default, instructions: prompt.system)

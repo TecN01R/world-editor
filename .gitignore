@@ -24,3 +24,4 @@ build/
 # llama.cpp framework, fetched by scripts/fetch-llama.sh
 /Vendor/
 
+__pycache__/

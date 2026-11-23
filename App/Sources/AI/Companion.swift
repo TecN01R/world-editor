@@ -4,23 +4,20 @@ import OSLog
 import WriterCore
 
 /// The companion: talks with the author about the open page like a friend
-/// they think out loud with, to draw out what they know but haven't written.
-/// With `guarded` on, its replies pass `Interviewer.screen` (no prose,
-/// suggestions or inventions) or are replaced by nothing at all; it never
-/// writes into the page (docs/ai-charter.md).
+/// they think out loud with. What it says comes from its instructions alone
+/// (`CompanionPrompt`): nothing checks or filters a reply afterwards (Kevin's
+/// ruling, 2026-11-23). It never writes into the page (docs/ai-charter.md).
 @MainActor @Observable
 final class Companion {
     enum State: Equatable {
         case idle, thinking, unavailable(String), failed
-        /// No reply passed the guard: it says nothing rather than something stock.
-        case quiet
         /// The model's download lost its connection; trying again resumes it.
         case downloadPaused
     }
 
     private(set) var conversation = Conversation(page: UUID())
     private(set) var state = State.idle
-    /// The reply so far, while the model is writing it (the guard off).
+    /// The reply so far, while the model is writing it.
     private(set) var writing: String?
     /// What it's thinking, while it thinks before replying.
     private(set) var reasoning: String?
@@ -43,7 +40,7 @@ final class Companion {
     #else
     static let modelName = "Apple's on-device model"   // the simulator: no llama.cpp there
     #endif
-    private var model: any QuestionModel = AppleModel()
+    private var model: any CompanionModel = AppleModel()
     private var store: ConversationStore?
     private var preparing: Task<Void, Never>?
     private static let log = Logger(subsystem: "com.tecn01r.worldeditor", category: "companion")
@@ -60,7 +57,7 @@ final class Companion {
     }
 
     /// The open page changed: load its conversation and, after a pause,
-    /// prepare a question quietly.
+    /// prepare a reply quietly.
     func open(_ page: WriterCore.Document, in library: Library) {
         preparing?.cancel()
         store = library.conversationsDirectory.flatMap { try? ConversationStore(directory: $0) }
@@ -88,7 +85,7 @@ final class Companion {
         askNow(about: page, in: library)
     }
 
-    /// The author's answer, in their words; then the next question.
+    /// The author's answer, in their words; then the companion's reply.
     func answer(_ text: String, page: WriterCore.Document, in library: Library) {
         conversation.answer(text)
         save()
@@ -101,103 +98,58 @@ final class Companion {
         preparing = Task { await ask(about: page, in: library) }
     }
 
-    /// Asks the model for a reply about `page`: up to five tries, each
-    /// screened; if none passes, it stays quiet.
+    /// Asks the model for a reply about `page`, shown as it's written.
     private func ask(about page: WriterCore.Document, in library: Library) async {
         guard conversation.waiting == nil, conversation.page == page.id else { return }
         if let reason = await model.unavailableReason { state = .unavailable(reason); return }
         state = .thinking
         defer { self.writing = nil; self.reasoning = nil }
         let page = library.pages.first { $0.id == page.id } ?? page   // as it is now, not when it opened
-        let writing = page.paragraphs.map(\.text).joined(separator: "\n")
-        let fields = library.fieldText(page)
-        let focus = [page.title, fields, writing, conversation.authorText].joined(separator: "\n")
-        let world = library.worldSummary(except: page.id, focus: focus)
-        let others = (store?.all() ?? []).filter { $0.page != page.id }
-        let memory = Interviewer.memory(others.map { talk in
-            (library.pages.first { $0.id == talk.page }?.heading ?? "", talk)
-        }, focus: focus)
-        // Everything the author wrote that the model sees: other pages and answers included.
-        let authorText = ([page.title, fields, writing, world, conversation.authorText] + others.map(\.authorText))
-            .joined(separator: "\n")
-        var prompt = Interviewer.prompt(title: page.title, type: library.type(of: page)?.name, fields: fields,
-                                        writing: writing, world: world, memory: memory, conversation: conversation)
-        if !guarded { prompt.system = Self.plainInstructions }   // TRIAL
-        let asked = conversation.turns.map(\.question)
-        var question: String?
-        for attempt in 1...(guarded ? 5 : 1) where question == nil {
-            guard !Task.isCancelled else { state = .idle; return }
-            do {
-                let reply: String
-                if guarded {   // the guard needs the whole reply before any of it shows
-                    reply = try await model.propose(prompt)
-                    question = Interviewer.screen(reply, authorText: authorText, asked: asked)
-                } else {
-                    var text = ""
-                    // Always thinks first (Kevin: thinking on, no switch).
-                    for try await partial in model.stream(prompt, thinking: true) {
+        let others = library.pages.filter { $0.id != page.id }
+        let earlier = (store?.all() ?? []).filter { $0.page != page.id }.map { talk in
+            (page: others.first { $0.id == talk.page }?.heading ?? "", conversation: talk)
+        }
+        var reply = Reasoned(reply: "")
+        do {
+            // Unusual text takes more of the model's context than its length
+            // suggests: a prompt that doesn't fit is rebuilt with less background.
+            for room in [1, 2, 4] {
+                let prompt = CompanionPrompt(page: library.companionPage(page, open: true),
+                                             others: others.map { library.companionPage($0) },
+                                             earlier: earlier, conversation: conversation,
+                                             maxCharacters: 6000 / room, maxTurnCharacters: 6000 / room)
+                do {
+                    for try await partial in model.stream(prompt) {
                         guard !Task.isCancelled else { break }
-                        text = partial.reply
+                        reply = partial
                         self.reasoning = partial.reasoning
                         self.writing = partial.reply
                     }
-                    reply = text
-                    let whole = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                    question = whole.isEmpty ? nil : whole
+                    break
+                } catch is PromptTooLong where room < 4 {
+                    continue
                 }
-                if question == nil { Self.log.info("Rejected (try \(attempt)): \(reply, privacy: .private)") }
-                let verdict: String
-                if question == nil {
-                    verdict = "REJECTED"
-                } else if CompanionGuard.offersChoices(reply) {
-                    verdict = "KEPT, FLAG either-or"
-                } else {
-                    verdict = "KEPT"
-                }
-                trialLog("\(verdict) \(page.title): \(reply)")   // TRIAL
-            } catch {
-                Self.log.error("Model failed: \(String(describing: error), privacy: .public)")
-                trialLog("ERROR \(page.title): \(String(describing: error))")   // TRIAL
-                state = error is URLError ? .downloadPaused : .failed
-                return
             }
+        } catch {
+            Self.log.error("Model failed: \(String(describing: error), privacy: .public)")
+            trialLog("ERROR \(page.title): \(String(describing: error))")   // TRIAL
+            state = error is URLError ? .downloadPaused : .failed
+            return
         }
         guard !Task.isCancelled, conversation.page == page.id else { state = .idle; return }
-        guard let question else { state = .quiet; return }
-        conversation.ask(question)
-        if let reasoning, !reasoning.isEmpty, let turn = conversation.turns.last { thoughts[turn.id] = reasoning }
+        trialLog("REPLY \(page.title): \(reply.reply)")   // TRIAL
+        guard !reply.reply.isEmpty else { state = .failed; return }   // ran out of room while thinking
+        conversation.ask(reply.reply)
+        if !reply.reasoning.isEmpty, let turn = conversation.turns.last { thoughts[turn.id] = reply.reasoning }
         save()
         state = .idle
     }
 
     private func save() { try? store?.save(conversation) }
-
-    // TRIAL (Kevin, 2026-11-23): no guard while we find out which model is a good
-    // companion; only his rules, in the instructions. Same text as
-    var guarded = UserDefaults.standard.bool(forKey: "companionGuarded") {
-        didSet { UserDefaults.standard.set(guarded, forKey: "companionGuarded") }
-    }
-
-    static let plainInstructions = """
-    You're a friend the writer talks to and bounces ideas off while they build their world. Talk \
-    with them like a person in a chat: react to what they say, think it through with them, answer \
-    their questions, give your honest opinion when it helps, and ask about what you're curious \
-    about. You don't have to be the expert.
-
-    Three rules, and only three:
-    - Never invent anything about their world. No names, places, events, details, motives or \
-    ideas they haven't given you. Everything about their world comes from them.
-    - Never write their story for them unless they ask you to.
-    - Never ask a pointless question: don't repeat what they just said back to them as a \
-    question, and don't ask something they've already answered or you've already asked.
-
-    You'll see their other pages, what they've told you before, and the page they're on (help \
-    them start if it's blank).
-    """
 }
 
-// TRIAL: every candidate and the guard's verdict, and the models' speed and
-// memory, pulled off the phone to compare models.
+// TRIAL: every reply, and the model's speed and memory, pulled off the phone
+// to see how it does there.
 func trialLog(_ line: String) {
     let url = URL.documentsDirectory.appendingPathComponent("candidates.log")
     let data = Data((line.replacingOccurrences(of: "\n", with: " ") + "\n").utf8)

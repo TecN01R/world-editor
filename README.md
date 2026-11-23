@@ -7,8 +7,8 @@ building them natively.
 - **Edit mode:** the whole page, ordinary editing.
 - **Focus mode:** one paragraph per page, set as large as the screen allows,
   resizing as you write. See [docs/focus-mode.md](docs/focus-mode.md).
-- **On-device AI that never authors:** search by meaning, a writing
-  companion that questions and critiques but never supplies content,
+- **On-device AI that never authors:** search by meaning, a companion to
+  think out loud with that never supplies content,
   source-traceable continuity, and illustrations that leave unknowns
   unknown. See [docs/ai-charter.md](docs/ai-charter.md) and
   [docs/models.md](docs/models.md).
@@ -21,7 +21,7 @@ Packages/WriterKit/     Shared, Foundation-only logic; tested on Linux
   WriterCore            documents and paragraphs, storage
   FocusLayout           Focus-mode sizing rules
   Provenance            facts with verified sources; unknown stays unknown
-  Guardrails            companion checks, creative-request handling, illustration plans
+  Guardrails            the companion's prompt, creative-request handling, illustration plans
   ModelCatalog          models, licences, download/unload policy
 docs/                   behaviour specs, AI rules, model choices, setup
 ci/                     CI helpers: what changed, simulator screenshots

@@ -12,7 +12,7 @@ behaviour that only lives in a prompt isn't guaranteed.
 | All inference runs on the device. No cloud, subscriptions or external AI APIs. | No network AI clients exist in the codebase. Apple's framework is pinned to `SystemLanguageModel` (on-device), never its server models (`FactExtractor`). |
 | The AI never modifies the author's writing. | AI code receives `Document` *values* (copies); only the editors call `Library.update`. |
 | Inferred information is never presented as established. | `KnowledgeBase` has only `established` (author stated it) and `speculative` (author wrote it as uncertain). Anything else is `unknown`. |
-| Where non-invention can't be guaranteed, prefer incomplete output. | Rejected candidates are dropped and logged, never repaired by guessing (`ProvenanceValidator`, `CompanionGuard`, `IllustrationPlan`). |
+| Where non-invention can't be guaranteed, prefer incomplete output. | Rejected candidates are dropped and logged, never repaired by guessing (`ProvenanceValidator`, `IllustrationPlan`). |
 | Structure isn't writing: the AI may propose types and field names ("Wants", "Home"), as questions the author answers. Every field *value* is the author's own words; the AI never fills one in itself. (Kevin's ruling, 2026-11-22.) | Values are filed only from the author's words, with a source (`ProvenanceValidator`); the author approves every proposed type, field and value. |
 | Models download on demand and unload when idle. | `ModelCatalog` (licence + pinned checksum required before download), `ModelResidency` (memory budget, LRU unload). |
 
@@ -25,13 +25,21 @@ Core Spotlight's on-device semantic search over the author's pages
 
 ## Writing companion
 
-A partner for thinking: it reflects back what the author wrote, asks
-questions, challenges assumptions, points out contradictions and gaps,
-critiques, summarises the author's own ideas, and helps them brainstorm by
-drawing ideas *out of them*.
+A friend to think out loud with: it reacts to what the author wrote and said,
+answers questions about the real world, gives its honest opinion when asked,
+points out where two things the author said don't fit, and asks when it needs
+to understand something.
 
 It does not supply content: no prose, plot developments, characters, names,
 places, world details or "ideas" of its own, even when asked.
+
+*Open since 2026-11-23, for Kevin to settle:* his three rules (below) say it
+"won't write for me unprompted", and the prompt as shipped follows that
+wording: it never offers content of its own, but asked outright for a name or
+a line it gives one, briefly, as his to take or leave. The stricter "even
+`hand-back` variant). With no filter behind it, the model holds to it only
+part of the time: in a whole conversation it declined twice, then gave in on
+the third request. Until he chooses, neither is promised here.
 
 **Who it is (Kevin, 2026-11-22):** someone to talk to and bounce ideas off,
 who doesn't think they're the smartest person in the room and won't write
@@ -54,25 +62,21 @@ like a person, not a novelist.
   literary critic's questions (themes, symbolism, what something stands
   for): too loaded to help; it pokes at the story, not its meaning.
 
-- `CreativeRequest.isCreative` catches requests for the companion to produce
-  content. They get a fixed decline plus an offer to help the author work it
-  out. They are never sent to a model as a task. Requests for *help* ("help me
-  brainstorm the ending") are allowed.
-- `CompanionGuard.checkReply` inspects every reply before it's shown. It rejects:
-  - prose: similes and imagery markers ("like a…", "as if", "heavier than…")
-  - a critic's words ("theme", "symbolism", "stands for", "metaphor")
-  - suggestions ("what if…", "have you considered…", "maybe she…", "you
-    could…", "for example…")
-  - names the author never wrote, and genders they never gave
-  - replies longer than three short sentences
-- Either-or questions ("does she have a captain, or row for someone else?")
-  are allowed for now and flagged for review (`CompanionGuard.offersChoices`;
-  Kevin, 2026-11-22: open it up, flag it, tighten later if they feed the author
-  ideas).
-- A rejected reply is regenerated; if none passes, the companion says nothing
-  (no stock questions: Kevin's call, 2026-11-22) and offers to try again.
-- (`CompanionGuard.check`, stricter, also rejects any content word that isn't
-  the author's; it's kept for one-shot questions, where that's affordable.)
+**Three rules (Kevin, 2026-11-23):** it won't invent things, won't write for
+him unprompted, and won't reply with a stupid repeated question.
+
+**Either-or questions** ("does she have a captain, or row for someone else?")
+are allowed for now (Kevin, 2026-11-22: open it up, flag it, tighten later if
+they feed the author ideas). Asking which of two readings the author meant is
+
+**How it's held to this (Kevin's ruling, 2026-11-23):** by its instructions
+alone. Nothing screens or filters a reply after the model writes it: a filter
+after the fact can only reject, and what's unwanted is to be prevented up
+front, in the prompt. So this section, unlike the rest of the charter, is not
+guaranteed by code. What code does guarantee: the companion is handed copies
+of pages and has no way to change one, and it runs on the device. How well
+the instructions hold is measured before any change to them ships
+numbers and what it still gets wrong).
 
 ## Knowledge and continuity
 

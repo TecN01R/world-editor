@@ -29,4 +29,18 @@ public struct Reasoned: Equatable, Sendable {
     private static func tidy(_ text: some StringProtocol) -> String {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
+
+    /// `text` as Gemma 4 reads plain words. Its prompt is tokenized with its
+    /// control tokens recognised anywhere, so one typed on a page (`<turn|>`,
+    /// say, in notes about chat formats) would end the turn it sits in: a
+    /// zero-width space inside each keeps them words. Every one of its control
+    /// tokens has `<|` or `|>` in it, but for the few listed here.
+    public static func gemmaPlain(_ text: String) -> String {
+        guard text.contains("<") || text.contains("|>") else { return text }
+        var text = text.replacingOccurrences(of: "<|", with: "<\u{200B}|").replacingOccurrences(of: "|>", with: "|\u{200B}>")
+        for token in ["<bos>", "<eos>", "<pad>", "<unk>", "<mask>", "<__media__>"] {   // the last is llama.cpp's image marker
+            text = text.replacingOccurrences(of: token, with: "<\u{200B}" + token.dropFirst())
+        }
+        return text
+    }
 }

@@ -126,12 +126,12 @@ final class Library {
         saveSchema()
     }
 
-    /// The world's other pages, for the companion's background: those related
-    /// to `focus` first, then the rest by name.
-    func worldSummary(except page: UUID, focus: String) -> String {
-        Interviewer.worldSummary(pages.filter { $0.id != page }.map {
-            ($0.heading, type(of: $0)?.name, $0.paragraphs.map(\.text).joined(separator: "\n"))
-        }, focus: focus)
+    /// A page as the companion is shown it: the `open` one by its title (which
+    /// may be empty) and with its fields, the others by their heading.
+    func companionPage(_ page: WriterCore.Document, open: Bool = false) -> CompanionPrompt.Page {
+        CompanionPrompt.Page(name: open ? page.title : page.heading, type: type(of: page)?.name,
+                             fields: open ? fieldText(page) : "",
+                             writing: page.paragraphs.map(\.text).joined(separator: "\n"))
     }
 
     /// "Name: value" lines for a page's fields, for search.

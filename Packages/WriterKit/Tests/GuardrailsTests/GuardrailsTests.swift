@@ -3,54 +3,6 @@ import WriterCore
 import Provenance
 @testable import Guardrails
 
-final class CompanionGuardTests: XCTestCase {
-    let author = "Mara keeps the lighthouse alone. She never leaves the island, even when her brother Tomas writes."
-    let guardrail = CompanionGuard()
-
-    func testAcceptsOpenQuestionsInTheAuthorsTerms() {
-        XCTAssertEqual(guardrail.check("Why does Mara never leave the island?", authorText: author), [])
-        XCTAssertEqual(guardrail.check("What does Tomas want from her? What does she believe he wants?", authorText: author), [])
-    }
-
-    func testAcceptsVerbatimRestatementFollowedByQuestion() {
-        let r = "You wrote \u{201C}She never leaves the island\u{201D}. What keeps her there?"
-        XCTAssertEqual(guardrail.check(r, authorText: author), [])
-    }
-
-    func testAllowsReflectionAndCritiqueOfTheAuthorsOwnMaterial() {
-        let r = "You wrote that Mara never leaves the island, but Tomas writes to her. Those two threads haven't met yet. Which matters more to you?"
-        XCTAssertEqual(guardrail.check(r, authorText: author), [])
-    }
-
-    func testRejectsStatementsThatAddContent() {
-        XCTAssertTrue(guardrail.check("Mara is lonely.", authorText: author).contains(.inventedConcept("lonely")))
-    }
-
-    func testRejectsSuggestionsDisguisedAsQuestions() {
-        XCTAssertFalse(guardrail.isAcceptable("What if Mara found a letter in the lamp room?", authorText: author))
-        XCTAssertFalse(guardrail.isAcceptable("Have you considered giving Tomas a secret?", authorText: author))
-        XCTAssertFalse(guardrail.isAcceptable("Could she be hiding from someone?", authorText: author))
-    }
-
-    func testRejectsInventedNamesAndDetails() {
-        XCTAssertTrue(guardrail.check("Does Mara trust Elias?", authorText: author).contains(.inventedName("Elias")))
-        XCTAssertFalse(guardrail.isAcceptable("Is the lighthouse haunted?", authorText: author))
-    }
-
-    func testRejectsEmptyAndOverlong() {
-        XCTAssertEqual(guardrail.check("   ", authorText: author), [.empty])
-        let long = Array(repeating: "Why does Mara stay?", count: 80).joined(separator: " ")
-        XCTAssertTrue(guardrail.check(long, authorText: author).contains(.tooLong))
-    }
-
-    func testFallbackQuestionsAlwaysPass() {
-        for seed in 0..<8 {
-            XCTAssertTrue(guardrail.isAcceptable(FallbackQuestion.make(about: nil, seed: seed), authorText: author))
-            XCTAssertTrue(guardrail.isAcceptable(FallbackQuestion.make(about: "the island", seed: seed), authorText: author))
-        }
-    }
-}
-
 final class CreativeRequestTests: XCTestCase {
     func testDetectsCreativeRequests() {
         for m in ["Write the next scene", "Can you suggest a name for her brother?", "brainstorm some magic systems",

@@ -118,10 +118,6 @@ struct CompanionPanel: View {
             ContentUnavailableView {
                 Label("The Companion Couldn’t Reply", systemImage: "exclamationmark.bubble")
             } actions: { tryAgain }
-        case .quiet:
-            ContentUnavailableView {
-                Label("Nothing Worth Saying Yet", systemImage: "bubble.left")
-            } actions: { tryAgain }
         case .unavailable(let reason):
             ContentUnavailableView("Companion Unavailable", systemImage: "bubble.left", description: Text(reason))
         case .thinking:
@@ -165,9 +161,6 @@ struct CompanionPanel: View {
             Text(reason).foregroundStyle(.secondary)
         case .failed:
             Text("The companion couldn't reply.").foregroundStyle(.secondary)
-            tryAgain
-        case .quiet:
-            Text("Nothing worth saying yet.").foregroundStyle(.secondary)
             tryAgain
         case .downloadPaused:
             Text("The download’s connection dropped.").foregroundStyle(.secondary)
@@ -277,10 +270,6 @@ struct CompanionPanel: View {
                 .disabled(companion.conversation.turns.isEmpty)
             ShareLink("Share Conversation", item: transcript)
                 .disabled(companion.conversation.turns.isEmpty)
-            Section("Trial") {   // TRIAL: with and without the guard
-                Toggle("Check Replies", systemImage: "checkmark.shield",
-                       isOn: Binding { companion.guarded } set: { companion.guarded = $0 })
-            }
         } label: {
             Image(systemName: "ellipsis")
                 .frame(width: barHeight, height: barHeight)
@@ -294,8 +283,7 @@ struct CompanionPanel: View {
     /// which model replied (to compare how it's going).
     private var transcript: String {
         let title = library.document.title.isEmpty ? "Untitled page" : library.document.title
-        let header = "World Editor companion on “\(title)” (\(Companion.modelName), "
-            + "Check Replies \(companion.guarded ? "on" : "off"))"
+        let header = "World Editor companion on “\(title)” (\(Companion.modelName))"
         let turns = companion.conversation.turns.flatMap { turn in
             ["Companion: \(turn.question)"] + (turn.answer.map { ["Me: \($0)"] } ?? [])
         }
