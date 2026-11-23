@@ -48,6 +48,7 @@ struct CompanionPanel: View {
             }
             .padding()
         }
+        .scrollEdgeEffectStyle(.soft, for: [.top, .bottom])   // softened under the bar and the grab handle, as the page is
         .defaultScrollAnchor(.bottom)
         .defaultScrollAnchor(.top, for: .alignment)          // a short conversation starts at the top
         .defaultScrollAnchor(.bottom, for: .sizeChanges)     // follows new messages
