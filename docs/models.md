@@ -7,7 +7,7 @@ function uses the best-fitting openly licensed model that runs on an iPhone.
 |---|---|---|---|---|---|
 | Search by meaning | **Qwen3-Embedding-0.6B** (Q8_0 GGUF) | Apache-2.0 | llama.cpp (MIT) | ~640 MB | EmbeddingGemma 300M |
 | Re-ranking (optional) | Qwen3-Reranker-0.6B | Apache-2.0 | llama.cpp | ~640 MB | — |
-| Writing companion | **Qwen3.5-4B** (Q4_K_M); fallback Qwen3.5-2B | Apache-2.0 | llama.cpp | ~2.7 GB | "Qwen3-1.7B Socratic" |
+| Writing companion | **Gemma 4 E2B** (Q4_K_M), through AnyLanguageModel | Apache-2.0 | llama.cpp | ~3.1 GB (+1 GB vision) | "Qwen3-1.7B Socratic" |
 | Facts & continuity | **Apple Foundation Models** (on-device) | System framework | iOS 26+ | 0 (built in) | same |
 | Illustration | **Stable Diffusion 1.5** + **ControlNet 1.1** (Core ML) | CreativeML OpenRAIL-M | apple/ml-stable-diffusion | ~2.1 GB + ~0.7 GB | same |
 
@@ -22,13 +22,15 @@ and §3.2 lets Google "restrict (remotely or otherwise)" use. The cost is size
 (~640 MB vs ~300 MB). EmbeddingGemma remains a drop-in alternative if space matters
 more than quality.
 
-**Qwen3.5-4B for the companion.** No published "Qwen3-1.7B Socratic" model
-exists. The Socratic models on Hugging Face are classroom tutors with unclear
-data provenance. For this role instruction-following matters most;
-Qwen3.5-4B (March 2026, Apache-2.0) reports IFEval 89.8. Behaviour is set by
-instructions and enforced by `CompanionGuard`, not by a fine-tune. Gemma 4
-E4B (Apache-2.0 since Gemma 4) is the alternative if Qwen3.5's hybrid
-architecture underperforms on device.
+**Gemma 4 E2B for the companion** (chosen 2026-11-23 by test, replacing
+unasked, no pointless questions). Of the models that fit the phone with vision,
+Gemma 4 E2B scored best (4.6/10; 5.2 with thinking on, a significant gain);
+Qwen3.5-4B scored 3.5 and invented something in half its replies. Gemma 4 26B
+(MoE, ~14 GB) scored best overall (6.5) but doesn't fit in the phone's memory.
+On the Duo, E2B replies start in ~0.2 s after a ~12 s first load. It runs
+through Hugging Face's AnyLanguageModel (Foundation Models' session API over
+llama.cpp), with Gemma's recommended sampling (temperature 1, top-p 0.95,
+top-k 64).
 
 **Apple Foundation Models for extraction.** Built into iOS (no download),
 guided generation returns typed structures, and it runs on the Neural Engine.

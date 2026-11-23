@@ -2,41 +2,25 @@ import SwiftUI
 import UIKit
 import WriterCore
 
-/// The companion beside the page, laid out like the AI chat apps people know:
-/// the author's messages in bubbles on the right (New York, their words), the
-/// companion's replies as plain text across the panel (San Francisco), newest at
-/// the bottom, and a message field below (typed, or dictated with the keyboard's
-/// microphone). iOS has no chat view, so the bubbles are the one custom part.
+/// The companion, beside the page (a sheet when folded), laid out like the AI
+/// chat apps people know: the author's messages in bubbles on the right (New
+/// York, their words), the companion's replies as plain text across the panel
+/// (San Francisco), newest at the bottom, and a message field below (typed, or
+/// dictated with the keyboard's microphone). iOS has no chat view, so the
+/// bubbles are the one custom part.
 struct CompanionPanel: View {
     @Environment(Library.self) private var library
     @Environment(Companion.self) private var companion
+    @Environment(\.scenePhase) private var scenePhase
     @State private var message = ""
     @State private var confirmingNew = false
     /// One height for the whole message bar: the HIG's minimum touch size,
     /// growing with Dynamic Type.
     @ScaledMetric(relativeTo: .body) private var barHeight: CGFloat = 44
-    /// Folded and resting at the bottom: just the latest line.
-    var resting = false
-
     // No toolbar or NavigationStack: on the Duo any toolbar, even a sheet's,
     // joins the app's own in the side column (tried 2026-11-23), and a nested
     // stack's title leaked into the pages list's bar when folded.
     var body: some View {
-        if resting { latest } else { conversation }
-    }
-
-    /// What the companion last said (or is doing), a glance without opening it.
-    private var latest: some View {
-        Text(Self.markdown(companion.glance))
-            .lineLimit(2)
-            .foregroundStyle(companion.conversation.waiting == nil ? .secondary : .primary)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(.horizontal)
-            .padding(.top, 20)   // below the drag indicator
-            .accessibilityHint("Swipe up to open the conversation")
-    }
-
-    private var conversation: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
                 ForEach(companion.conversation.turns) { turn in
@@ -54,12 +38,20 @@ struct CompanionPanel: View {
         .defaultScrollAnchor(.bottom, for: .sizeChanges)     // follows new messages
         .scrollDismissesKeyboard(.interactively)
         .overlay {
-            if companion.conversation.turns.isEmpty, companion.state == .idle {
-                ContentUnavailableView("Talk About This Page", systemImage: "bubble.left.and.text.bubble.right",
-                                       description: Text("Write a little on this page, and the companion will talk with you about it."))
+            if let download = companion.download {
+                downloading(download)
+            } else if companion.conversation.turns.isEmpty {
+                empty
             }
         }
-        .safeAreaBar(edge: .bottom) { composer }
+        .safeAreaBar(edge: .bottom) {
+            // Nothing to say until the model is here.
+            if companion.download == nil, companion.state != .downloadPaused { composer }
+        }
+        // Back in the app after the download dropped: it picks up where it stopped.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active, companion.state == .downloadPaused { retry() }
+        }
         .confirmationDialog("Start a new conversation about this page?", isPresented: $confirmingNew,
                             titleVisibility: .visible) {
             Button("New Conversation", role: .destructive) {
@@ -108,12 +100,51 @@ struct CompanionPanel: View {
             .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
+    /// No conversation yet: what the companion is doing, centred like iOS's own
+    /// waiting and empty states (the download's too).
+    @ViewBuilder private var empty: some View {
+        switch companion.state {
+        case .idle:
+            ContentUnavailableView("Talk About This Page", systemImage: "bubble.left.and.text.bubble.right",
+                                   description: Text("Write a little on this page, and the companion will talk with you about it."))
+        case .downloadPaused:
+            ContentUnavailableView {
+                Label("Download Paused", systemImage: "arrow.down.circle")
+            } description: {
+                Text("The connection dropped. It picks up where it left off.")
+            } actions: { resumeDownload }
+        case .failed:
+            ContentUnavailableView {
+                Label("The Companion Couldn’t Reply", systemImage: "exclamationmark.bubble")
+            } actions: { tryAgain }
+        case .quiet:
+            ContentUnavailableView {
+                Label("Nothing Worth Saying Yet", systemImage: "bubble.left")
+            } actions: { tryAgain }
+        case .unavailable(let reason):
+            ContentUnavailableView("Companion Unavailable", systemImage: "bubble.left", description: Text(reason))
+        case .thinking:
+            if partialReply == nil {   // its words appear in the conversation as they're written
+                ContentUnavailableView {
+                    Label {
+                        Text("Thinking")
+                    } icon: {
+                        Image(systemName: "ellipsis").symbolEffect(.variableColor.iterative, options: .repeating)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Once there's a conversation, what the companion is doing shows at its end.
     @ViewBuilder private var status: some View {
         switch companion.state {
+        case _ where companion.conversation.turns.isEmpty && (companion.state != .thinking || partialReply == nil):
+            EmptyView()   // centred instead (`empty`)
         case .thinking:
-            if let writing = companion.writing, !writing.isEmpty {
+            if let writing = partialReply {
                 reply(writing)   // as it's written
-            } else {
+            } else if companion.download == nil {
                 thinking
             }
         case .unavailable(let reason):
@@ -124,9 +155,18 @@ struct CompanionPanel: View {
         case .quiet:
             Text("Nothing worth saying yet.").foregroundStyle(.secondary)
             tryAgain
+        case .downloadPaused:
+            Text("The download’s connection dropped.").foregroundStyle(.secondary)
+            resumeDownload
         case .idle:
             EmptyView()
         }
+    }
+
+    /// The reply so far, once it has any words.
+    private var partialReply: String? {
+        guard let writing = companion.writing, !writing.isEmpty else { return nil }
+        return writing
     }
 
     private var thinking: some View {
@@ -137,8 +177,28 @@ struct CompanionPanel: View {
             .accessibilityLabel("Thinking")
     }
 
+    /// The model's one-time download, centred like any of iOS's waiting states.
+    private func downloading(_ download: Download) -> some View {
+        ContentUnavailableView {
+            Label("Downloading the Companion", systemImage: "arrow.down.circle")
+        } description: {
+            Text("A one-time download. It keeps going if you leave the app.")
+        } actions: {
+            ProgressView(value: Double(download.done), total: Double(max(download.total, 1))) {
+            } currentValueLabel: {
+                Text(download.detail)
+            }
+            .frame(maxWidth: 280)
+        }
+    }
+
     private var tryAgain: some View {
         Button("Try Again", systemImage: "arrow.clockwise", action: retry)
+            .buttonStyle(.bordered)
+    }
+
+    private var resumeDownload: some View {
+        Button("Resume Download", systemImage: "arrow.clockwise", action: retry)
             .buttonStyle(.bordered)
     }
 
@@ -197,7 +257,7 @@ struct CompanionPanel: View {
     /// which model replied (to compare how it's going).
     private var transcript: String {
         let title = library.document.title.isEmpty ? "Untitled page" : library.document.title
-        let header = "World Editor companion on “\(title)” (\(Companion.modelFile.replacingOccurrences(of: ".gguf", with: "")), "
+        let header = "World Editor companion on “\(title)” (\(Companion.modelName), "
             + "Check Replies \(companion.guarded ? "on" : "off"))"
         let turns = companion.conversation.turns.flatMap { turn in
             ["Companion: \(turn.question)"] + (turn.answer.map { ["Me: \($0)"] } ?? [])

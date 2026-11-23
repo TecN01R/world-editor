@@ -46,11 +46,13 @@ public enum ModelCatalog {
             licenseURL: URL(string: "https://www.apache.org/licenses/LICENSE-2.0")!,
             obligations: ["Include Apache-2.0 notice in Acknowledgements"]),
         ModelDescriptor(
-            id: "qwen3.5-4b-q4km",
-            displayName: "Qwen3.5 4B",
+            id: "gemma-4-e2b-it-q4km",
+            displayName: "Gemma 4 E2B",
             role: .conversation, runtime: .llamaCpp,
-            downloadURL: nil, sha256: nil,       // pinned once a GGUF build is verified on device
-            approximateBytes: 2_700_000_000,
+            // Downloaded by the app from Hugging Face (unsloth/gemma-4-E2B-it-GGUF).
+            downloadURL: URL(string: "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q4_K_M.gguf"),
+            sha256: nil,
+            approximateBytes: 3_106_000_000,
             license: "Apache-2.0",
             licenseURL: URL(string: "https://www.apache.org/licenses/LICENSE-2.0")!,
             obligations: ["Include Apache-2.0 notice in Acknowledgements"]),

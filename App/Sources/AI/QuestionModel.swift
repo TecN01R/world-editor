@@ -23,9 +23,17 @@ extension QuestionModel {
     }
 }
 
+/// A model's first download: bytes so far and in all, and Foundation's
+/// description of it (sizes, speed, time left).
+struct Download: Equatable, Sendable {
+    var done: Int64
+    var total: Int64
+    var detail: String
+}
+
 /// Runs `body`, which yields the reply so far, as a stream; ending the stream
 /// cancels it.
-private func streaming(_ body: @escaping @Sendable (AsyncThrowingStream<String, Error>.Continuation) async throws -> Void)
+func streaming(_ body: @escaping @Sendable (AsyncThrowingStream<String, Error>.Continuation) async throws -> Void)
     -> AsyncThrowingStream<String, Error> {
     AsyncThrowingStream { continuation in
         let task = Task {
@@ -34,21 +42,6 @@ private func streaming(_ body: @escaping @Sendable (AsyncThrowingStream<String, 
         continuation.onTermination = { _ in task.cancel() }
     }
 }
-
-#if canImport(llama)
-extension LlamaModel: QuestionModel {
-    nonisolated var unavailableReason: String? {
-        get async { url == nil ? "The companion's model isn't on this phone yet." : nil }
-    }
-
-    nonisolated func stream(_ prompt: Interviewer.Prompt) -> AsyncThrowingStream<String, Error> {
-        streaming { continuation in
-            let reply = try await self.reply(to: prompt.chatML) { continuation.yield($0) }   // the turns as turns
-            continuation.yield(reply)
-        }
-    }
-}
-#endif
 
 /// Apple's on-device model (never its server ones: `SystemLanguageModel.default`).
 /// Used only where llama.cpp isn't (the simulator); otherwise kept for comparing it

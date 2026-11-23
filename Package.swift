@@ -12,6 +12,11 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "Packages/WriterKit"),
+        // The companion's model: llama.cpp through Hugging Face's AnyLanguageModel,
+        // Foundation Models' session API on top (tools, streaming, images).
+        .package(url: "https://github.com/huggingface/AnyLanguageModel", .upToNextMinor(from: "1.4.1"), traits: ["Llama"]),
+        // Its Hugging Face client, to download the model with progress shown.
+        .package(url: "https://github.com/huggingface/swift-huggingface", from: "1.0.0"),
     ],
     targets: [
         .target(
@@ -21,12 +26,13 @@ let package = Package(
                 .product(name: "FocusLayout", package: "WriterKit"),
                 .product(name: "Provenance", package: "WriterKit"),
                 .product(name: "Guardrails", package: "WriterKit"),
-                "llama",
+                .product(name: "AnyLanguageModel", package: "AnyLanguageModel"),
+                .product(name: "HuggingFace", package: "swift-huggingface"),
             ],
             path: "App/Sources",
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            // Each file sees only the modules it imports: Apple's Foundation Models and
+            // AnyLanguageModel name their types alike (SE-0444).
+            swiftSettings: [.swiftLanguageMode(.v5), .enableUpcomingFeature("MemberImportVisibility")]
         ),
-        // llama.cpp, for the companion's on-device model (scripts/fetch-llama.sh).
-        .binaryTarget(name: "llama", path: "Vendor/llama.xcframework"),
     ]
 )

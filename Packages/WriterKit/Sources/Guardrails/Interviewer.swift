@@ -5,7 +5,7 @@ import WriterCore
 /// what of its reply may reach the author. It talks like a friend the author
 /// bounces ideas off, not a novelist or an expert: it listens, reacts and
 /// asks, but never supplies content of its own (docs/ai-charter.md).
-/// Model-agnostic apart from `Prompt.chatML`, Qwen's format.
+/// Model-agnostic: each model puts `Prompt` into its own chat format.
 public enum Interviewer {
     public static let instructions = """
     You're a friend the writer bounces ideas off while they build the world in their head. \
@@ -41,13 +41,6 @@ public enum Interviewer {
 
         public static func == (a: Prompt, b: Prompt) -> Bool {
             a.system == b.system && a.turns.elementsEqual(b.turns) { $0.speaker == $1.speaker && $0.text == $1.text }
-        }
-
-        /// Qwen's chat format, answering without its thinking step.
-        public var chatML: String {
-            "<|im_start|>system\n\(system)<|im_end|>\n" + turns.map {
-                "<|im_start|>\($0.speaker == .author ? "user" : "assistant")\n\($0.text)<|im_end|>\n"
-            }.joined() + "<|im_start|>assistant\n<think>\n\n</think>\n\n"
         }
 
         /// The turns as one message, for models that take a single prompt.

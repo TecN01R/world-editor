@@ -138,7 +138,6 @@ final class InterviewerTests: XCTestCase {
         XCTAssertEqual(prompt.turns[0].text, "I\u{2019}m on a Character page titled \u{201C}Ilsa\u{201D}.\n\nWhat I\u{2019}ve written there:\nA maritime adventurer"
             .replacingOccurrences(of: "\u{2019}", with: "'"))
         XCTAssertEqual(prompt.turns.last?.text, "To find the drowned city")
-        XCTAssertTrue(prompt.chatML.hasSuffix("<|im_start|>user\nTo find the drowned city<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"))
         XCTAssertTrue(prompt.flattened.hasSuffix("You: What does Ilsa want?\nThem: To find the drowned city\n\nReply to their last message."))
         let long = Interviewer.prompt(title: "", fields: "", writing: String(repeating: "x", count: 10_000) + "END",
                                       conversation: Conversation(page: UUID()), maxCharacters: 500)

@@ -14,6 +14,9 @@ struct RootView: View {
     @State private var focusMode = Self.startsInFocus
     @State private var focusControls = false
     @State private var columns: NavigationSplitViewVisibility = Self.startsInFocus ? .detailOnly : .all
+    /// Folded, the companion's sheet keeps the height it was left at, half or full,
+    /// across folding, reopening and relaunching (iOS's scene state restoration).
+    @SceneStorage("companionFullHeight") private var companionFullHeight = false
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
     /// Unfolded: the pages list is a sidebar beside the page.
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -35,12 +38,53 @@ struct RootView: View {
             }
         } detail: {
             if let id = library.selection {
-                EditorView(focusMode: $focusMode, focusControls: $focusControls, chromeHidden: chromeHidden,
-                           companionWidth: width / 2).id(id)
+                // Unfolded, tapping the companion's button sets the page beside it:
+                // opening puts the pages list away, closing brings it back. Only the
+                // author's taps do this; unfolding with it open is handled below.
+                EditorView(focusMode: $focusMode, focusControls: $focusControls, chromeHidden: chromeHidden) { open in
+                    if sizeClass == .regular { withAnimation { columns = open ? .detailOnly : .all } }
+                }
+                .id(id)
             } else {
                 ContentUnavailableView("No Page Open", systemImage: "doc.text",
                                        description: Text("Choose a page or start a new one."))
             }
+        }
+        // The companion, on the split view itself (folding and unfolding rebuild
+        // the page inside it): unfolded, the stock inspector beside the page at half
+        // the display; folded, a stock sheet, half or full height. Each shows only
+        // in its own posture, decided here, not by the inspector (whose own sheet
+        // could outlive an unfold), and from the size class this very update draws
+        // with (the posture flag follows a beat later: in between, a still-presented
+        // inspector turned itself into a sheet of its own, without the handle or
+        // heights). Switching posture swaps them and keeps the companion open; only
+        // its button, or swiping the folded sheet down, closes it.
+        // The column has no gesture of its own to close it, and iOS reports it closing
+        // and reopening as the Duo folds and unfolds (logged 2026-11-23), so what iOS
+        // reports here is ignored.
+        .inspector(isPresented: Binding { companion.isOpen && sizeClass == .regular } set: { open in
+            trialLog("INSPECTOR set \(open) folded=\(companion.folded)")   // TRIAL: fold/unfold diagnosis
+        }) {
+            CompanionPanel()
+                .inspectorColumnWidth(min: 320, ideal: max(320, width / 2), max: max(320, width / 2))
+        }
+        // Swiping the sheet down closes the companion, but only while folded (by both
+        // this update's size class and the posture flag): unfolding dismisses it too.
+        .sheet(isPresented: Binding { companion.isOpen && sizeClass == .compact } set: { open in
+            trialLog("SHEET set \(open) folded=\(companion.folded) size=\(String(describing: sizeClass))")   // TRIAL
+            if !open, companion.folded, sizeClass == .compact { companion.isOpen = false }
+        }) {
+            CompanionPanel()
+                .presentationDetents([.medium, .large], selection: Binding {
+                    companionFullHeight ? .large : .medium
+                } set: { companionFullHeight = $0 == .large })
+                .presentationDragIndicator(.visible)
+        }
+        .onChange(of: sizeClass, initial: true) { _, size in
+            companion.folded = size == .compact
+            // Unfolding with the companion open: the page and the companion side by
+            // side, the pages list put away (as opening it unfolded does).
+            if size == .regular, companion.isOpen, !focusMode { columns = .detailOnly }
         }
         // Applied at the root: status bar visibility is decided by the top controller.
         .statusBarHidden(chromeHidden)
@@ -64,16 +108,6 @@ struct RootView: View {
             focusControls = false
             if focus { companion.isOpen = false }   // never in Focus mode
             withAnimation { columns = focus ? .detailOnly : .all }   // unfolded: list beside the page
-        }
-        // Unfolded, the page has one side panel at a time, like facing pages:
-        // opening the companion puts the pages list away, and opening the list
-        // closes the companion (its conversation is kept).
-        .onChange(of: companion.isOpen) { _, open in
-            guard sizeClass == .regular, !focusMode else { return }
-            withAnimation { columns = open ? .detailOnly : .all }
-        }
-        .onChange(of: columns) { _, shown in
-            if shown != .detailOnly, sizeClass == .regular, companion.isOpen { companion.isOpen = false }
         }
     }
 }
@@ -396,36 +430,19 @@ struct EditorView: View {
     @Environment(Companion.self) private var companion
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var showMentions = false
-    /// Folded, the companion is a sheet resting at the bottom (its latest
-    /// line), swiped up to talk (Maps' pattern); open is half or full height.
-    @State private var openDetent: PresentationDetent = .medium
-    @ScaledMetric(relativeTo: .body) private var restingHeight: CGFloat = 84
-    @State private var keyboardUp = false
     @State private var typeName = ""
     @State private var pageName = ""
     @Binding var focusMode: Bool
     @Binding var focusControls: Bool
     let chromeHidden: Bool
-    /// Unfolded, half the display.
-    let companionWidth: CGFloat
+    /// The author opened (true) or closed the companion with its button.
+    let onCompanionToggled: (Bool) -> Void
 
     private var newType: Binding<Bool> {
         Binding { library.fieldsRequest == .newType } set: { if !$0 { library.fieldsRequest = nil } }
     }
 
     private var folded: Bool { sizeClass == .compact }
-    private var resting: PresentationDetent { .height(restingHeight) }
-    private var showsCompanionSheet: Bool {
-        folded && !focusMode && !showMentions && library.fieldsRequest == nil
-            && !(keyboardUp && !companion.isOpen)   // typing on the page
-    }
-    /// Resting unless open; open at half or full height, as last left.
-    private var companionDetent: Binding<PresentationDetent> {
-        Binding { companion.isOpen ? openDetent : resting } set: { detent in
-            if detent != resting { openDetent = detent }
-            companion.isOpen = detent != resting
-        }
-    }
 
     /// A page field's "New Place…": the field it fills.
     private var newPageField: FieldDefinition? {
@@ -530,33 +547,17 @@ struct EditorView: View {
                             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                         }
                         companion.isOpen.toggle()
+                        onCompanionToggled(companion.isOpen)
                     }
                     .keyboardShortcut("i", modifiers: [.command, .option])
                 }
-                // In "•••": the side column keeps back and the companion.
-                ToolbarItem(placement: .secondaryAction) {
+                // Shown when there's room; first into "•••" when there isn't.
+                ToolbarItem(placement: .primaryAction) {
                     Button("Mentions", systemImage: "at") { showMentions = true }
                 }
+                .visibilityPriority(.low)
             }
         }
-        // Unfolded: beside the page, half the display (stock inspector).
-        .inspector(isPresented: Binding { !folded && companion.isOpen } set: { companion.isOpen = $0 }) {
-            CompanionPanel().inspectorColumnWidth(min: 320, ideal: max(320, companionWidth), max: max(320, companionWidth))
-        }
-        // Folded: resting at the bottom, swiped up to half or full height; the
-        // page stays usable behind it up to half. It steps aside while you
-        // type on the page, in Focus mode, and for the page's own sheets and
-        // alerts (one presentation at a time).
-        .sheet(isPresented: Binding { showsCompanionSheet } set: { _ in }) {
-            CompanionPanel(resting: !companion.isOpen)
-                .presentationDetents([resting, .medium, .large], selection: companionDetent)
-                .presentationBackgroundInteraction(.enabled(upThrough: .medium))
-                .presentationDragIndicator(.visible)
-                .interactiveDismissDisabled()   // swiping down rests it
-        }
-        .safeAreaPadding(.bottom, showsCompanionSheet && !companion.isOpen ? restingHeight : 0)
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in keyboardUp = true }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in keyboardUp = false }
         .task {
             companion.open(library.document, in: library)
         }

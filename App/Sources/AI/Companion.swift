@@ -14,26 +14,45 @@ final class Companion {
         case idle, thinking, unavailable(String), failed
         /// No reply passed the guard: it says nothing rather than something stock.
         case quiet
+        /// The model's download lost its connection; trying again resumes it.
+        case downloadPaused
     }
 
     private(set) var conversation = Conversation(page: UUID())
     private(set) var state = State.idle
     /// The reply so far, while the model is writing it (the guard off).
     private(set) var writing: String?
-    /// The panel is showing beside the page (a sheet when folded).
+    /// The panel is showing: beside the page unfolded, a sheet folded.
     var isOpen = false
+    /// The Duo is folded (compact width): the companion is a sheet, not a column.
+    var folded = true
 
-    /// The one model the companion uses: the test's leader that runs on the
-    /// phone today (Kevin: one model, no choosing, as when it ships).
-    static let modelFile = "Qwen3.5-4B-Q4_K_M.gguf"
-    #if canImport(llama)
-    private let model: any QuestionModel = LlamaModel(fileName: modelFile)
+    /// The model's first download, while it runs.
+    private(set) var download: Download?
+
+    // The one model the companion uses: the test's leader that runs on the
+    // phone today (Kevin: one model, no choosing, as when it ships). Gemma,
+    // set in `init`, wherever llama.cpp is; Apple's model elsewhere.
+    #if canImport(AnyLanguageModel)
+    static let modelName = GemmaModel.name
     #else
-    private let model: any QuestionModel = AppleModel()   // the simulator: no llama.cpp there
+    static let modelName = "Apple's on-device model"   // the simulator: no llama.cpp there
     #endif
+    private var model: any QuestionModel = AppleModel()
     private var store: ConversationStore?
     private var preparing: Task<Void, Never>?
     private static let log = Logger(subsystem: "com.tecn01r.worldeditor", category: "companion")
+
+    init() {
+        #if canImport(AnyLanguageModel)
+        model = GemmaModel { [weak self] download in
+            Task { @MainActor in
+                self?.download = download
+                BackgroundDownload.update(download)   // keeps going if the author leaves the app
+            }
+        }
+        #endif
+    }
 
     /// The open page changed: load its conversation and, after a pause,
     /// prepare a question quietly.
@@ -48,16 +67,6 @@ final class Companion {
             guard !Task.isCancelled else { return }
             await ask(about: page, in: library)
         }
-    }
-
-    /// A glance at the conversation: what it's doing, or its last word.
-    var glance: String {
-        if state == .thinking {
-            if let writing, !writing.isEmpty { return writing }
-            return "Thinking…"
-        }
-        guard let last = conversation.turns.last else { return "Talk about this page" }
-        return last.answer == nil ? last.question : "Keep talking"
     }
 
     /// Asks again now, in place of any waiting reply.
@@ -142,7 +151,7 @@ final class Companion {
             } catch {
                 Self.log.error("Model failed: \(String(describing: error), privacy: .public)")
                 trialLog("ERROR \(page.title): \(String(describing: error))")   // TRIAL
-                state = .failed
+                state = error is URLError ? .downloadPaused : .failed
                 return
             }
         }

@@ -4,3 +4,9 @@ bundleID: com.tecn01r.worldeditor
 product: WorldEditor
 iconPath: App/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-light.png   # xtool takes one icon, the default; Xcode builds also get dark and tinted
 entitlementsPath: App/WorldEditor.entitlements
+infoPath: App/Info-xtool.plist   # extra Info.plist keys, merged into xtool's
+# llama.cpp's framework, copied in: AnyLanguageModel's llama.swift names its binary
+# target "llama-cpp" and xtool embeds a binary framework only when the names match,
+# so the app launched without it. Same build (scripts/fetch-llama.sh fetches it).
+resources:
+  - Vendor/Frameworks   # becomes the app's Frameworks folder
