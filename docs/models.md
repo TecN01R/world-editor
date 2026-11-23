@@ -32,14 +32,15 @@ runs through Hugging Face's AnyLanguageModel (Foundation Models' session API
 over llama.cpp), with Gemma's recommended sampling (temperature 1, top-p
 0.95, top-k 64, no repetition penalty).
 
-**Gemma 4 E4B is the one to try next.** With the current prompt
+**Gemma 4 E4B is on trial on the Duo** (from 2026-11-23, Kevin's decision). With the current prompt
 (`docs/companion.md`) the 4.2 GB build (`unsloth/gemma-4-E4B-it-qat-GGUF`,
 UD-Q4_K_XL) scores 5.2 out of 10 where E2B scores 4.5, and breaks one of
-Kevin's rules in 9% of replies where E2B does in 24%. What isn't known is
-whether the Duo holds it in memory and how fast it runs there (about half
-E2B's speed is the guess). The app can be pointed at another build without a
-new install, to find out (`GemmaModel`: a line in
-`Documents/companion-trial.txt`). The 3.2 GB "mobile" 2-bit build of E4B and
+Kevin's rules in 9% of replies where E2B does in 24%. What isn't known yet
+is whether the Duo holds it in memory and how fast it runs there (about half
+E2B's speed is the guess). The phone is pointed at it by a line in
+`Documents/companion-trial.txt` (`GemmaModel`), with no change to the app, and
+goes back to E2B if that line is removed or loading it ends the app. Once
+it's settled, the build moves into `GemmaModel` and the trial line goes. The 3.2 GB "mobile" 2-bit build of E4B and
 is.
 
 **Apple Foundation Models for extraction.** Built into iOS (no download),

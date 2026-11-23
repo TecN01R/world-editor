@@ -60,8 +60,9 @@ The conversation follows as real turns. It begins with the writer's
 model's conversation has to begin with the other side.
 
 Sampling is Google's for Gemma 4: temperature 1.0, top-p 0.95, top-k 64, no
-repetition penalty. It thinks before it replies (Gemma's `<|think|>`), and its
-earlier thinking is never sent back to it. On the phone the thinking is the
+repetition penalty. It thinks before it replies (Gemma's `<|think|>`) unless
+the author switches that off in the companion's menu, and its earlier thinking
+is never sent back to it. On the phone the thinking is the
 wait before a reply (4 to 8 seconds on E2B, measured), and it can't be shown:
 AnyLanguageModel removes Gemma's thought channel from what it hands the app. Anything in the writer's text that
 Gemma would read as one of its control tokens is defused first
@@ -214,7 +215,7 @@ Tried and dropped, so it needn't be tried again without a new idea:
 - Handing a request to invent back ("that part is yours"). It scored lower,
   and in conversation it held for a request or two and then gave in, which
   the writer found arbitrary. The app follows Kevin's "won't write for me
-  unprompted": asked outright, it does it, briefly. The stricter version is
+  unprompted": asked outright, it does it, briefly (his decision, 2026-11-23;
 - Telling it that it's a small offline model, unreliable on names and numbers.
   It got vaguer, not more accurate, and still said the rowers were slaves.
 - Asking for fuller replies. The extra words were the page said back.

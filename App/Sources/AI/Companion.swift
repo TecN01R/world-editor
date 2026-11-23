@@ -32,6 +32,13 @@ final class Companion {
     /// The model's first download, while it runs.
     private(set) var download: Download?
 
+    /// It thinks before it replies, unless the author turns that off: replies
+    /// then start sooner. (Measured, thinking made no difference to how good
+    /// its replies are; it broke the rules a little less often with it.)
+    var thinks = UserDefaults.standard.object(forKey: "companionThinks") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(thinks, forKey: "companionThinks") }
+    }
+
     // The one model the companion uses: the test's leader that runs on the
     // phone today (Kevin: one model, no choosing, as when it ships). Gemma,
     // set in `init`, wherever llama.cpp is; Apple's model elsewhere.
@@ -119,7 +126,7 @@ final class Companion {
                                              earlier: earlier, conversation: conversation,
                                              maxCharacters: 6000 / room, maxTurnCharacters: 6000 / room)
                 do {
-                    for try await partial in model.stream(prompt) {
+                    for try await partial in model.stream(prompt, thinking: thinks) {
                         guard !Task.isCancelled else { break }
                         reply = partial
                         self.reasoning = partial.reasoning

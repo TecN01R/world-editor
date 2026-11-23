@@ -270,6 +270,8 @@ struct CompanionPanel: View {
                 .disabled(companion.conversation.turns.isEmpty)
             ShareLink("Share Conversation", item: transcript)
                 .disabled(companion.conversation.turns.isEmpty)
+            Toggle("Think Before Replying", systemImage: "lightbulb",
+                   isOn: Binding { companion.thinks } set: { companion.thinks = $0 })
         } label: {
             Image(systemName: "ellipsis")
                 .frame(width: barHeight, height: barHeight)
@@ -283,7 +285,7 @@ struct CompanionPanel: View {
     /// which model replied (to compare how it's going).
     private var transcript: String {
         let title = library.document.title.isEmpty ? "Untitled page" : library.document.title
-        let header = "World Editor companion on “\(title)” (\(Companion.modelName))"
+        let header = "World Editor companion on “\(title)” (\(Companion.modelName), thinking \(companion.thinks ? "on" : "off"))"
         let turns = companion.conversation.turns.flatMap { turn in
             ["Companion: \(turn.question)"] + (turn.answer.map { ["Me: \($0)"] } ?? [])
         }

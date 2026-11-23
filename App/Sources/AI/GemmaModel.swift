@@ -104,19 +104,19 @@ final class GemmaModel: CompanionModel, @unchecked Sendable {
         if build.isTrial { FileManager.default.createFile(atPath: trialLoading.path, contents: nil) }
     }
 
-    func stream(_ prompt: CompanionPrompt) -> AsyncThrowingStream<Reasoned, Error> {
+    func stream(_ prompt: CompanionPrompt, thinking thinks: Bool) -> AsyncThrowingStream<Reasoned, Error> {
         streaming { continuation in
             let model = try await self.model()
             Self.markTrial()
             defer { try? FileManager.default.removeItem(at: Self.trialLoading) }   // TRIAL: it got through this reply
             // The conversation so far as a transcript: the instructions, then the
             // turns before the author's last, which is the prompt being answered.
-            // Its earlier reasoning is never among them (its makers' advice). It
-            // always thinks first (Kevin: no switch): its makers' format is
-            // `<|think|>` opening the system turn. AnyLanguageModel takes the
-            // thoughts out of what it streams, so for now they can't be shown: the
-            // wait before the first words is the thinking.
-            let system = "<|think|>\n" + Reasoned.gemmaPlain(prompt.system)
+            // Its earlier reasoning is never among them (its makers' advice). To
+            // have it think first, its makers' format is `<|think|>` opening the
+            // system turn. AnyLanguageModel takes the thoughts out of what it
+            // streams, so for now they can't be shown: the wait before the first
+            // words is the thinking.
+            let system = (thinks ? "<|think|>\n" : "") + Reasoned.gemmaPlain(prompt.system)
             var entries: [Transcript.Entry] = [
                 .instructions(.init(segments: [.text(.init(content: system))], toolDefinitions: []))
             ]
@@ -146,11 +146,12 @@ final class GemmaModel: CompanionModel, @unchecked Sendable {
                 throw PromptTooLong()
             }
             func count(_ text: String) -> Int { text.split(whereSeparator: \.isWhitespace).count }
-            trialLog("SPEED \(Self.name): read \(prompt.system.count) characters and began after \(thinking ?? .zero), "
+            let memory = String(format: "%.2f GB", Double(os_proc_available_memory()) / 1e9)
+            let timing = "read \(prompt.system.count) characters and began after \(thinking ?? .zero), "
                 + "first words after \(words ?? .zero) (\(count(reply.reasoning)) words of thinking), "
-                + "whole reply (\(count(reply.reply)) words) in \(ContinuousClock.now - began); "
-                + "memory left \(String(format: "%.2f GB", Double(os_proc_available_memory()) / 1e9)); "
-                + "its output (\(raw.count) characters) began \(String(reflecting: String(raw.prefix(48))))")   // TRIAL
+                + "whole reply (\(count(reply.reply)) words) in \(ContinuousClock.now - began)"
+            let output = "its output (\(raw.count) characters) began \(String(reflecting: String(raw.prefix(48))))"
+            trialLog("SPEED \(Self.name)\(thinks ? ", thinking" : ""): \(timing); memory left \(memory); \(output)")   // TRIAL
         }
     }
 }

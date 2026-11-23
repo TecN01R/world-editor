@@ -9,9 +9,9 @@ protocol CompanionModel: Sendable {
     /// Why it can't run here, or nil if it can.
     var unavailableReason: String? { get async }
     /// The reply so far, growing as the model writes it, with any reasoning
-    /// before it; the last is the whole reply. Throws `PromptTooLong` when the
-    /// prompt doesn't fit the model.
-    func stream(_ prompt: CompanionPrompt) -> AsyncThrowingStream<Reasoned, Error>
+    /// before it; the last is the whole reply. `thinking`: reason first, if the
+    /// model can. Throws `PromptTooLong` when the prompt doesn't fit the model.
+    func stream(_ prompt: CompanionPrompt, thinking: Bool) -> AsyncThrowingStream<Reasoned, Error>
 }
 
 /// The prompt is more than the model can read at once.
@@ -56,7 +56,7 @@ struct AppleModel: CompanionModel {
         }
     }
 
-    func stream(_ prompt: CompanionPrompt) -> AsyncThrowingStream<Reasoned, Error> {
+    func stream(_ prompt: CompanionPrompt, thinking: Bool) -> AsyncThrowingStream<Reasoned, Error> {
         streaming { continuation in   // Apple's model has no thinking step
             #if canImport(FoundationModels)
             let session = LanguageModelSession(model: .default, instructions: prompt.system)
