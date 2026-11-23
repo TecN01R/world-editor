@@ -32,6 +32,14 @@ final class Companion {
     /// The model's first download, while it runs.
     private(set) var download: Download?
 
+    /// When the model on the phone was downloaded, for the menu.
+    private(set) var modelVersion: String?
+    /// A newer file of the model, if its maker has published one: offered in
+    /// the menu, never fetched unasked (it's gigabytes, and it may not behave
+    /// as the one the instructions were measured on).
+    private(set) var modelUpdate: ModelUpdate?
+    private var lookedForUpdate = false
+
     /// It thinks before it replies, unless the author turns that off: replies
     /// then start sooner. (Measured, thinking made no difference to how good
     /// its replies are; it broke the rules a little less often with it.)
@@ -75,6 +83,28 @@ final class Companion {
             try? await Task.sleep(for: .seconds(2))   // settle: the author may be passing through
             guard !Task.isCancelled else { return }
             await ask(about: page, in: library)
+        }
+    }
+
+    /// Reads what's on the phone and, once per launch, asks whether there's a newer file.
+    func checkModel() {
+        modelVersion = model.version
+        guard !lookedForUpdate else { return }
+        lookedForUpdate = true
+        Task { modelUpdate = await model.availableUpdate() }
+    }
+
+    /// Downloads the newer file (the download shows as the first one did) and uses it from the next reply.
+    func updateModel() {
+        guard let update = modelUpdate, state != .thinking else { return }
+        Task {
+            do {
+                try await model.install(update)
+                modelUpdate = nil
+                modelVersion = model.version
+            } catch {
+                Self.log.error("Model update failed: \(String(describing: error), privacy: .public)")
+            }
         }
     }
 
@@ -146,6 +176,7 @@ final class Companion {
         guard !Task.isCancelled, conversation.page == page.id else { state = .idle; return }
         trialLog("REPLY \(page.title): \(reply.reply)")   // TRIAL
         guard !reply.reply.isEmpty else { state = .failed; return }   // ran out of room while thinking
+        if modelVersion == nil { modelVersion = model.version }   // just downloaded
         conversation.ask(reply.reply)
         if !reply.reasoning.isEmpty, let turn = conversation.turns.last { thoughts[turn.id] = reply.reasoning }
         save()

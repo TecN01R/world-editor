@@ -43,6 +43,17 @@ goes back to E2B if that line is removed or loading it ends the app. Once
 it's settled, the build moves into `GemmaModel` and the trial line goes. The 3.2 GB "mobile" 2-bit build of E4B and
 is.
 
+**Updates to the companion's model.** Its makers re-upload a file now and
+then (a tokenizer fix, a better quantization). The app downloads the file
+once and keeps it; when the companion opens it asks the repository, in one
+small request, whether the file has changed, and if so the companion's menu
+offers **Update Available**. It is never fetched unasked: it is gigabytes, and
+a new file may not behave as the one the instructions were measured on
+(`docs/companion.md`). The menu also shows which model is running, when it
+was downloaded, and the app's version. Before the app goes to anyone else,
+the file should be pinned to a checked revision in `ModelCatalog`, as the
+charter asks, and new ones should arrive with app updates.
+
 **Apple Foundation Models for extraction.** Built into iOS (no download),
 guided generation returns typed structures, and it runs on the Neural Engine.
 iOS 27 can also route the same API to server models (Private Cloud Compute,

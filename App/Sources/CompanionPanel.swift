@@ -49,6 +49,7 @@ struct CompanionPanel: View {
             // Nothing to say until the model is here.
             if companion.download == nil, companion.state != .downloadPaused { composer }
         }
+        .task { companion.checkModel() }
         // Back in the app after the download dropped: it picks up where it stopped.
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, companion.state == .downloadPaused { retry() }
@@ -272,6 +273,20 @@ struct CompanionPanel: View {
                 .disabled(companion.conversation.turns.isEmpty)
             Toggle("Think Before Replying", systemImage: "lightbulb",
                    isOn: Binding { companion.thinks } set: { companion.thinks = $0 })
+            Section {
+                if let update = companion.modelUpdate {
+                    Button(action: companion.updateModel) {
+                        Label("Update Available", systemImage: "arrow.down.circle")
+                        Text("A newer \(Companion.modelName), \(update.bytes.formatted(.byteCount(style: .file)))")
+                    }
+                }
+                // What it's running, as a line to read (a menu has no plain text).
+                Button {} label: {
+                    Text(Companion.modelName)
+                    Text([companion.modelVersion, Self.appVersion].compactMap { $0 }.joined(separator: " · "))
+                }
+                .disabled(true)
+            }
         } label: {
             Image(systemName: "ellipsis")
                 .frame(width: barHeight, height: barHeight)
@@ -280,6 +295,13 @@ struct CompanionPanel: View {
         .tint(.primary)   // a menu's label takes the tint, not a foreground style
         .accessibilityLabel("More")
     }
+
+    /// "World Editor 0.1.0 (1)".
+    private static let appVersion: String? = {
+        guard let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String else { return nil }
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+        return "World Editor \(version)" + (build.map { " (\($0))" } ?? "")
+    }()
 
     /// The conversation as plain text, to paste anywhere: who said what, and
     /// which model replied (to compare how it's going).

@@ -14,8 +14,23 @@ protocol CompanionModel: Sendable {
     func stream(_ prompt: CompanionPrompt, thinking: Bool) -> AsyncThrowingStream<Reasoned, Error>
 }
 
+extension CompanionModel {
+    /// When the model on the phone was downloaded, in words; nil if it hasn't been, or it's part of iOS.
+    var version: String? { nil }
+    /// A newer file than the one on the phone, if its maker has published one. Downloads nothing.
+    func availableUpdate() async -> ModelUpdate? { nil }
+    /// Downloads `update` and uses it from the next reply on.
+    func install(_ update: ModelUpdate) async throws {}
+}
+
 /// The prompt is more than the model can read at once.
 struct PromptTooLong: Error {}
+
+/// A newer file of the companion's model: which revision of its repository, and how big.
+struct ModelUpdate: Equatable, Sendable {
+    var revision: String
+    var bytes: Int64
+}
 
 /// A model's first download: bytes so far and in all, and Foundation's
 /// description of it (sizes, speed, time left).

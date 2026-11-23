@@ -47,6 +47,67 @@ final class GemmaModel: CompanionModel, @unchecked Sendable {
 
     static var name: String { build.name }
 
+    /// Which revision of the build's repository is in use: the one an update
+    /// moved to, else its main branch as it was when first downloaded (the cache
+    /// keeps that, and never looks again by itself).
+    private static var revision: String {
+        get { UserDefaults.standard.string(forKey: "companionRevision." + build.file) ?? "main" }
+        set { UserDefaults.standard.set(newValue, forKey: "companionRevision." + build.file) }
+    }
+
+    /// The model file on the phone, once it's been downloaded.
+    private static var installed: URL? {
+        HubClient.default.cache?.cachedFilePath(repo: build.repo, kind: .model, revision: revision, filename: build.file)
+    }
+
+    /// The file `path` stands for: the cache keeps each file once, under its
+    /// checksum, with a link to it from the revision's folder.
+    private static func stored(_ path: URL) -> URL { path.resolvingSymlinksInPath() }
+
+    var version: String? {
+        guard let file = Self.installed.map(Self.stored),
+              let downloaded = (try? FileManager.default.attributesOfItem(atPath: file.path))?[.creationDate] as? Date
+        else { return nil }
+        return "Downloaded \(downloaded.formatted(date: .abbreviated, time: .omitted))"
+    }
+
+    /// One small request asks the repository for the file's checksum as it is
+    /// now; a different one from the file on the phone is an update. (The
+    /// answer is in the headers of the redirect to the file itself, so the
+    /// redirect isn't followed.)
+    func availableUpdate() async -> ModelUpdate? {
+        // Only where the cache linked the file to its checksum can the two be compared.
+        guard let cache = HubClient.default.cache, let local = Self.installed,
+              (try? FileManager.default.destinationOfSymbolicLink(atPath: local.path)) != nil else { return nil }
+        let build = Self.build
+        var request = URLRequest(url: HubClient.defaultHost.appending(path: "\(build.repo.namespace)/\(build.repo.name)/resolve/main/\(build.file)"))
+        request.httpMethod = "HEAD"
+        guard let (_, response) = try? await URLSession.shared.data(for: request, delegate: StayingPut()),
+              let headers = response as? HTTPURLResponse,
+              let checksum = headers.value(forHTTPHeaderField: "X-Linked-Etag"),
+              let revision = headers.value(forHTTPHeaderField: "X-Repo-Commit")
+        else { return nil }
+        guard Self.stored(local).lastPathComponent != cache.normalizeEtag(checksum) else { return nil }
+        return ModelUpdate(revision: revision, bytes: headers.value(forHTTPHeaderField: "X-Linked-Size").flatMap(Int64.init) ?? 0)
+    }
+
+    /// Takes a redirect's own response as the answer.
+    private final class StayingPut: NSObject, URLSessionTaskDelegate {
+        func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                        newRequest request: URLRequest) async -> URLRequest? { nil }
+    }
+
+    func install(_ update: ModelUpdate) async throws {
+        let old = Self.installed
+        let new = try await download(revision: update.revision)
+        Self.revision = update.revision
+        loaded.withLock { $0 = nil }   // the next reply loads the new file
+        if let old, Self.stored(old) != Self.stored(new) {
+            try? FileManager.default.removeItem(at: Self.stored(old))
+            try? FileManager.default.removeItem(at: old)
+        }
+    }
+
     /// The download's bytes so far and in all, while it runs; nil when it ends.
     private let onProgress: @Sendable (Download?) -> Void
     private let loaded = OSAllocatedUnfairLock<LlamaLanguageModel?>(initialState: nil)
@@ -67,6 +128,15 @@ final class GemmaModel: CompanionModel, @unchecked Sendable {
     /// The model, downloading it first if it isn't on the phone yet.
     private func model() async throws -> LlamaLanguageModel {
         if let model = loaded.withLock({ $0 }) { return model }
+        let path = try await download(revision: Self.revision)
+        Self.markTrial()   // from here on (loading it, then replying) is what might end the app
+        let model = LlamaLanguageModel(modelPath: path.path)
+        loaded.withLock { $0 = model }
+        return model
+    }
+
+    /// The build's file at `revision`, from the cache if it's there, reporting the download's progress if not.
+    private func download(revision: String) async throws -> URL {
         // A file download, so Foundation words its progress the way Apple's apps do
         // ("1.5 GB of 3.1 GB (12 MB/sec) — About 2 minutes remaining").
         let progress = Progress()
@@ -92,11 +162,8 @@ final class GemmaModel: CompanionModel, @unchecked Sendable {
         defer { watch.invalidate(); report(nil) }
         // A plain HTTPS download (LFS): Hugging Face's newer Xet transfer rebuilds the
         // file from chunks on the phone, which was slow here.
-        let path = try await HubClient.default.downloadFile(at: Self.build.file, from: Self.build.repo, progress: progress, transport: .lfs)
-        Self.markTrial()   // from here on (loading it, then replying) is what might end the app
-        let model = LlamaLanguageModel(modelPath: path.path)
-        loaded.withLock { $0 = model }
-        return model
+        return try await HubClient.default.downloadFile(at: Self.build.file, from: Self.build.repo, revision: revision,
+                                                        progress: progress, transport: .lfs)
     }
 
     /// TRIAL: sets the marker that says a trial build is at work.
