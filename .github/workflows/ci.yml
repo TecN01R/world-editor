@@ -24,7 +24,10 @@ jobs:
   # The iOS build and the simulator run on two Macs at once: a cold Duo boot
   # takes 1-2 min and, on the same 3-core runner, slows the build to match.
   # The build hands the app over as an artifact as soon as it exists.
+  # On demand only (Run workflow): the repo is private, and Mac minutes count
+  # tenfold against its allowance; Kevin tests on the Duo itself.
   ios-build:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: xcode-27
     env:
       APPLE_TEAM_ID: ""
@@ -76,10 +79,12 @@ jobs:
       # compiles. Runs after the app is handed over, so it never delays it.
       - name: Check the xtool package layout builds
         if: steps.ui.outputs.layout == 'true'
-        # Without the generated .xcodeproj, so xcodebuild builds Package.swift.
+        # Without the generated .xcodeproj, so xcodebuild builds Package.swift;
+        # for a device, as xtool does (llama.cpp has no simulator slice).
         run: |
+          scripts/fetch-llama.sh
           rm -rf WorldEditor.xcodeproj
-          xcodebuild build -scheme WorldEditor -destination 'generic/platform=iOS Simulator' \
+          xcodebuild build -scheme WorldEditor -destination 'generic/platform=iOS' \
             -derivedDataPath build-spm -skipPackagePluginValidation -skipMacroValidation \
             ARCHS=arm64 ONLY_ACTIVE_ARCH=YES COMPILER_INDEX_STORE_ENABLE=NO \
             CODE_SIGNING_ALLOWED=NO > spm.log || { tail -40 spm.log; exit 1; }
@@ -87,7 +92,7 @@ jobs:
   # Boots the Duo while the other Mac builds, then installs the app and
   # publishes dark-mode screenshots as the only commit on ci-screenshots.
   screenshots:
-    if: github.event_name == 'push'   # pull requests (Dependabot) would replace main's shots
+    if: github.event_name == 'workflow_dispatch'   # with the build, on demand
     runs-on: xcode-27
     permissions:
       actions: read

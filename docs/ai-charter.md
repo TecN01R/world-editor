@@ -33,18 +33,46 @@ drawing ideas *out of them*.
 It does not supply content: no prose, plot developments, characters, names,
 places, world details or "ideas" of its own, even when asked.
 
+**Who it is (Kevin, 2026-11-22):** someone to talk to and bounce ideas off,
+who doesn't think they're the smartest person in the room and won't write
+their own content. A curious friend, not an expert: it doesn't grade ideas,
+lecture or tell the author what the story needs.
+
+**Where the line is (Kevin's ruling, 2026-11-22, from real replies):** it talks
+like a person, not a novelist.
+- *Fine:* reacting and reflecting back; reasoning from the author's facts and
+  everyday knowledge ("a trade vessel can't want anything; it needs labor");
+  pointing out tensions and gaps, tentatively ("isolation seems absolute,
+  yet…"); pushing back; asking about anything, including what isn't written
+  yet ("who commands the trireme?"), since the answer stays the author's;
+  its own opinions ("I think…", "I feel…" and why), so long as they invent
+  nothing. A guess at why someone acts is an invention, even as an opinion
+  ("I think Mara stays because she's afraid"); it asks instead.
+- *Not fine:* prose. Imagery, metaphor and mood ("a cage she built for
+  herself", "silence heavier than the water", "feels almost physical");
+  stating what happens or why someone acts as fact; suggestions. Nor a
+  literary critic's questions (themes, symbolism, what something stands
+  for): too loaded to help; it pokes at the story, not its meaning.
+
 - `CreativeRequest.isCreative` catches requests for the companion to produce
   content. They get a fixed decline plus an offer to help the author work it
   out. They are never sent to a model as a task. Requests for *help* ("help me
   brainstorm the ending") are allowed.
-- `CompanionGuard.check` inspects every reply before it's shown. It rejects:
-  - names the author never wrote
-  - content words that aren't the author's and aren't open-ended
-    reflection/critique vocabulary (so "Is the lighthouse *haunted*?" fails)
-  - suggestion patterns dressed as questions ("what if…", "have you
-    considered…", "could she…", "for example…")
-- A rejected reply is regenerated; if it still fails, the companion uses a
-  `FallbackQuestion` built only from fixed wording and the author's quoted words.
+- `CompanionGuard.checkReply` inspects every reply before it's shown. It rejects:
+  - prose: similes and imagery markers ("like a…", "as if", "heavier than…")
+  - a critic's words ("theme", "symbolism", "stands for", "metaphor")
+  - suggestions ("what if…", "have you considered…", "maybe she…", "you
+    could…", "for example…")
+  - names the author never wrote, and genders they never gave
+  - replies longer than three short sentences
+- Either-or questions ("does she have a captain, or row for someone else?")
+  are allowed for now and flagged for review (`CompanionGuard.offersChoices`;
+  Kevin, 2026-11-22: open it up, flag it, tighten later if they feed the author
+  ideas).
+- A rejected reply is regenerated; if none passes, the companion says nothing
+  (no stock questions: Kevin's call, 2026-11-22) and offers to try again.
+- (`CompanionGuard.check`, stricter, also rejects any content word that isn't
+  the author's; it's kept for one-shot questions, where that's affordable.)
 
 ## Knowledge and continuity
 

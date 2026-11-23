@@ -7,8 +7,12 @@ import WriterCore
 /// autocorrect, dictation, selection all behave as iOS users expect).
 struct PageEditor: UIViewRepresentable {
     @Environment(Library.self) private var library
+    /// Steps into Focus mode: the button beside the format bar, or ⇧⌘F.
+    private let onFocus: () -> Void
 
-    func makeCoordinator() -> Coordinator { Coordinator(library: library) }
+    init(onFocus: @escaping () -> Void) { self.onFocus = onFocus }
+
+    func makeCoordinator() -> Coordinator { Coordinator(library: library, onFocus: onFocus) }
 
     func makeUIView(context: Context) -> PageView {
         let tv = PageTextView(usingTextLayoutManager: true)
@@ -19,6 +23,7 @@ struct PageEditor: UIViewRepresentable {
         tv.textContainer.lineFragmentPadding = 0   // the writing lines up under the title and fields
         tv.allowsEditingTextAttributes = true      // ⌘B, ⌘I and the Format menu
         tv.titleField = context.coordinator.titleField
+        tv.onFocus = { [weak coordinator = context.coordinator] in coordinator?.onFocus() }
         let fields = UIHostingController(rootView: PageFields { [weak tv] in tv?.fieldsHeight = $0 }.environment(library))
         fields.view.backgroundColor = .clear
         fields.safeAreaRegions = []
@@ -29,7 +34,7 @@ struct PageEditor: UIViewRepresentable {
         return PageView(textView: tv, bar: context.coordinator.formatBar)
     }
 
-    func updateUIView(_ view: PageView, context: Context) {}
+    func updateUIView(_ view: PageView, context: Context) { context.coordinator.onFocus = onFocus }
 
     /// Bold New York, scaled with Dynamic Type.
     static var titleFont: UIFont { newYork(34, weight: .bold, scaledAs: .largeTitle) }   // the size of the world's title
@@ -61,7 +66,9 @@ struct PageEditor: UIViewRepresentable {
         weak var textView: UITextView?
         /// Replacing the text moves the selection; that isn't the user moving the caret.
         private var isRendering = false
-        lazy var formatBar = FormatBar { [weak self] action in self?.perform(action) }
+        var onFocus: () -> Void
+        lazy var formatBar = FormatBar(onAction: { [weak self] action in self?.perform(action) },
+                                       onFocus: { [weak self] in self?.onFocus() })
 
         lazy var titleField: UITextField = {
             let f = UITextField()
@@ -87,8 +94,9 @@ struct PageEditor: UIViewRepresentable {
             return false
         }
 
-        init(library: Library) {
+        init(library: Library, onFocus: @escaping () -> Void) {
             self.library = library
+            self.onFocus = onFocus
             super.init()
             // Text size changed in Settings: show the page at the new size.
             NotificationCenter.default.addObserver(forName: UIContentSizeCategory.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
@@ -335,11 +343,14 @@ final class FormatBar: UIView {
     private var barHeight: CGFloat { UIFontMetrics.default.scaledValue(for: 44, compatibleWith: traitCollection) }
     private lazy var heightConstraint = capsule.heightAnchor.constraint(equalToConstant: barHeight)
     private let capsule = UIVisualEffectView(effect: UIGlassEffect())
+    /// Focus mode, its own glass circle at the row's end: as tall as the bar, as wide as it's tall.
+    private let focus = UIVisualEffectView(effect: UIGlassEffect())
+    private lazy var focusSize = focus.widthAnchor.constraint(equalToConstant: barHeight)
     private let scroll = UIScrollView()
     private let stack = UIStackView()
     private var buttons: [UIButton] = []
 
-    init(onAction: @escaping (Action) -> Void) {
+    init(onAction: @escaping (Action) -> Void, onFocus: @escaping () -> Void) {
         super.init(frame: CGRect(x: 0, y: 0, width: 320, height: 44 + Self.gap))
         buttons = [Self.button(symbol: "bold", label: "Bold") { onAction(.style(.bold)) },
                    Self.button(symbol: "italic", label: "Italic") { onAction(.style(.italic)) },
@@ -348,19 +359,36 @@ final class FormatBar: UIView {
 
         capsule.cornerConfiguration = .capsule()
         capsule.clipsToBounds = true
+        focus.cornerConfiguration = .capsule()
+        focus.clipsToBounds = true
+        let focusButton = Self.button(symbol: "text.viewfinder", label: "Focus", slot: false, action: onFocus)
+        focusButton.translatesAutoresizingMaskIntoConstraints = false
+        focus.contentView.addSubview(focusButton)
         scroll.showsHorizontalScrollIndicator = false
         stack.axis = .horizontal
-        for v in [capsule, scroll, stack] as [UIView] { v.translatesAutoresizingMaskIntoConstraints = false }
+        for v in [capsule, focus, scroll, stack] as [UIView] { v.translatesAutoresizingMaskIntoConstraints = false }
         scroll.addSubview(stack)
         capsule.contentView.addSubview(scroll)
         addSubview(capsule)
+        addSubview(focus)
 
         let pad: CGFloat = 8
         let fit = capsule.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: 2 * pad)
         fit.priority = .defaultHigh   // as wide as its buttons, until the column's width runs out
+        let centred = capsule.centerXAnchor.constraint(equalTo: centerXAnchor)
+        centred.priority = .defaultHigh - 1   // centred, unless that would run into Focus
         NSLayoutConstraint.activate([
-            capsule.centerXAnchor.constraint(equalTo: centerXAnchor),
+            centred,
             capsule.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 12),
+            capsule.trailingAnchor.constraint(lessThanOrEqualTo: focus.leadingAnchor, constant: -Self.gap),
+            focus.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            focus.topAnchor.constraint(equalTo: topAnchor),
+            focus.heightAnchor.constraint(equalTo: capsule.heightAnchor),
+            focusSize,
+            focusButton.leadingAnchor.constraint(equalTo: focus.contentView.leadingAnchor),
+            focusButton.trailingAnchor.constraint(equalTo: focus.contentView.trailingAnchor),
+            focusButton.topAnchor.constraint(equalTo: focus.contentView.topAnchor),
+            focusButton.bottomAnchor.constraint(equalTo: focus.contentView.bottomAnchor),
             capsule.topAnchor.constraint(equalTo: topAnchor),
             heightConstraint,
             fit,
@@ -379,6 +407,7 @@ final class FormatBar: UIView {
         addInteraction(UILargeContentViewerInteraction())   // press and hold at large text sizes
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (bar: FormatBar, _: UITraitCollection) in
             bar.heightConstraint.constant = bar.barHeight
+            bar.focusSize.constant = bar.barHeight
             bar.invalidateIntrinsicContentSize()
         }
     }
@@ -386,12 +415,12 @@ final class FormatBar: UIView {
 
     override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: barHeight + Self.gap) }
 
-    /// Only the capsule takes touches; taps beside or below it reach the page.
+    /// Only the capsule and Focus take touches; taps beside or below them reach the page.
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        capsule.frame.contains(point)
+        capsule.frame.contains(point) || focus.frame.contains(point)
     }
 
-    private static func button(symbol: String? = nil, title: String? = nil, label: String,
+    private static func button(symbol: String? = nil, title: String? = nil, label: String, slot: Bool = true,
                                action: @escaping () -> Void) -> UIButton {
         var config = UIButton.Configuration.plain()
         config.image = symbol.flatMap { UIImage(systemName: $0) }
@@ -406,7 +435,7 @@ final class FormatBar: UIView {
         b.showsLargeContentViewer = true
         b.largeContentTitle = label
         b.largeContentImage = config.image
-        b.widthAnchor.constraint(greaterThanOrEqualToConstant: 56).isActive = true   // even slots, as in Notes
+        if slot { b.widthAnchor.constraint(greaterThanOrEqualToConstant: 56).isActive = true }   // even slots, as in Notes
         b.setContentCompressionResistancePriority(.required, for: .horizontal)   // scroll, never squeeze
         b.configurationUpdateHandler = { b in
             b.configuration?.background.backgroundColor = b.isSelected ? .tertiarySystemFill : .clear
@@ -496,6 +525,14 @@ final class PageTextView: PlainPasteTextView {
         UITextField.appearance(whenContainedInInstancesOf: [PageTextView.self]).clearButtonMode = .whileEditing
     }
     required init?(coder: NSCoder) { fatalError() }
+
+    /// ⇧⌘F steps into Focus mode while writing (listed when ⌘ is held).
+    var onFocus: (() -> Void)?
+    override var keyCommands: [UIKeyCommand]? {
+        let focus = UIKeyCommand(title: "Focus", action: #selector(enterFocus), input: "f", modifierFlags: [.command, .shift])
+        return (super.keyCommands ?? []) + [focus]
+    }
+    @objc private func enterFocus() { onFocus?() }
 
     var titleField: UITextField? {
         didSet { oldValue?.removeFromSuperview(); titleField.map(addSubview) }   // scrolls with the page

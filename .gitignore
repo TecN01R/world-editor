@@ -20,3 +20,7 @@ build/
 .bsp/
 # xtool dev build output
 /xtool/
+
+# llama.cpp framework, fetched by scripts/fetch-llama.sh
+/Vendor/
+

@@ -21,9 +21,12 @@ let package = Package(
                 .product(name: "FocusLayout", package: "WriterKit"),
                 .product(name: "Provenance", package: "WriterKit"),
                 .product(name: "Guardrails", package: "WriterKit"),
+                "llama",
             ],
             path: "App/Sources",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        // llama.cpp, for the companion's on-device model (scripts/fetch-llama.sh).
+        .binaryTarget(name: "llama", path: "Vendor/llama.xcframework"),
     ]
 )

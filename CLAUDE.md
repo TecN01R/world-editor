@@ -22,15 +22,18 @@ writing. Structure grows out of the writing, never ahead of it.
    `swift test --package-path Packages/WriterKit`, then `scripts/run-on-phone.sh`
    builds, installs and launches the app (seconds when little changed). Kevin
    tries it on the phone; iterate here, then push.
-5. Push to `main`. CI runs the WriterKit tests on Linux, builds the app (XcodeGen and
-   the xtool package layout), and screenshots it on the iPhone Duo simulator.
-   Screenshots live only on the `ci-screenshots` branch: CI force-pushes the
-   latest set there as a single orphan commit (never on `main`, never as
-   artifacts). Kevin tests on the Duo himself, so don't wait for CI or send
-   screenshots by default. Fetch them (`ci/fetch_screenshots.sh`, delete
-   local copies after) only when he asks or a change touches something he
-   can't see on his phone (light mode, the other fold state, large Dynamic
-   Type). Do check that CI passed before starting the next change.
+5. Push to `main`. CI runs the WriterKit tests on Linux on every push; check
+   they passed before starting the next change. The Mac jobs (building the app
+   with XcodeGen and the xtool package layout, and screenshots on the iPhone Duo
+   simulator) run only on demand (`gh workflow run CI`), since the repo is
+   private and Mac minutes are expensive. The simulator build uses Apple's
+   model: llama.cpp has no simulator slice. Screenshots live only on the
+   `ci-screenshots` branch: CI force-pushes the latest set there as a single
+   orphan commit (never on `main`, never as artifacts). Kevin tests on the Duo
+   himself, so don't run them or send screenshots by default; run them (then
+   `ci/fetch_screenshots.sh`, delete local copies after) only when he asks or a
+   change touches something he can't see on his phone (light mode, the other
+   fold state, large Dynamic Type).
 
 ## Conventions
 

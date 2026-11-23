@@ -3,3 +3,4 @@ version: 1
 bundleID: com.tecn01r.worldeditor
 product: WorldEditor
 iconPath: App/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-light.png   # xtool takes one icon, the default; Xcode builds also get dark and tinted
+entitlementsPath: App/WorldEditor.entitlements

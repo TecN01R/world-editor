@@ -1,15 +1,18 @@
 import SwiftUI
+import Guardrails
 import WriterCore
 
 @main
 struct WorldEditorApp: App {
     @State private var library = Library()
+    @State private var companion = Companion()
     @Environment(\.scenePhase) private var phase
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(library)
+                .environment(companion)
         }
         .onChange(of: phase) { _, phase in
             if phase != .active { library.flushAll() }   // never lose the last edits
@@ -123,6 +126,14 @@ final class Library {
         saveSchema()
     }
 
+    /// The world's other pages, for the companion's background: those related
+    /// to `focus` first, then the rest by name.
+    func worldSummary(except page: UUID, focus: String) -> String {
+        Interviewer.worldSummary(pages.filter { $0.id != page }.map {
+            ($0.heading, type(of: $0)?.name, $0.paragraphs.map(\.text).joined(separator: "\n"))
+        }, focus: focus)
+    }
+
     /// "Name: value" lines for a page's fields, for search.
     func fieldText(_ page: WriterCore.Document) -> String {
         page.fieldText(fields(of: page)) { id in pages.first { $0.id == id }?.heading }
@@ -143,6 +154,9 @@ final class Library {
     var document: WriterCore.Document {
         pages.first { $0.id == selection } ?? WriterCore.Document()
     }
+
+    /// Where the open world keeps the companion's conversations; nil in CI.
+    var conversationsDirectory: URL? { worldStore?.conversations(world.id) }
 
     init() {
         if Screenshots.isActive {
@@ -306,6 +320,11 @@ final class Library {
 
     private func discardIfEmpty(_ id: UUID) {
         guard let page = pages.first(where: { $0.id == id }), page.isEmpty else { return }
+        // A blank page you've talked through with the companion is kept; its
+        // unanswered question goes with it otherwise.
+        let talk = conversationsDirectory.flatMap { try? ConversationStore(directory: $0) }
+        if let talk, !talk.load(id).authorText.isEmpty { return }
+        talk?.delete(id)
         pendingSaves.removeValue(forKey: id)?.cancel()
         pages.removeAll { $0.id == id }
         try? store?.delete(id)

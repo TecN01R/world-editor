@@ -8,12 +8,16 @@ import Foundation
 /// no names, places, events, details or prose the author didn't write.
 /// The model is instructed to behave; this is what makes the rule hold when it
 /// doesn't. A reply that fails is never shown: the companion retries, then
-/// falls back to a fixed question built only from the author's own words.
+/// says nothing rather than something stock.
 public struct CompanionGuard: Sendable {
     public enum Violation: Equatable, Sendable {
         case disguisedSuggestion(String)     // "what if…", "maybe she…", "have you considered…"
         case inventedName(String)            // a proper noun the author never wrote
         case inventedConcept(String)         // a content word that isn't the author's and isn't open-ended
+        case assumedPronoun(String)          // "she"/"he" for someone the author never gendered
+        case prose(String)                   // imagery and mood: "like a cage", "heavier than the water"
+        case critique(String)                // a reviewer's questions: "themes", "symbolism"
+        case refusal                         // "I'm sorry, but I can't write…": nobody asked it to
         case tooLong
         case empty
     }
@@ -77,6 +81,16 @@ public struct CompanionGuard: Sendable {
         "start", "starts", "turn", "turns", "case", "kind", "way", "ways", "thing", "things", "something",
         "anything", "nothing", "everything", "someone", "anyone", "nobody", "everyone", "into", "out", "up",
         "over", "under", "through", "without", "within", "against", "around", "my", "me", "we", "our", "us",
+        // everyday words an interviewer needs that add no story content (tested on the Duo's model)
+        "life", "lives", "like", "day", "days", "become", "becomes", "became", "came", "begin", "began", "begun",
+        "job", "learn", "learned", "learning", "taught", "teach", "sort", "time", "times", "long", "ago",
+        "years", "year", "grow", "grew", "alone", "help", "helps", "helped", "actually", "agree", "agreed",
+        "draw", "drew", "draws", "drive", "drove", "drives", "seek", "seeks", "sought", "set", "express",
+        "itself", "himself", "herself", "themselves", "otherwise", "past", "living", "move", "moves", "moved",
+        "step", "steps", "join", "joined", "stayed", "kept", "bring", "brought", "find", "found", "lose",
+        "lost", "try", "tried", "hoped", "care", "cares", "cared", "worry", "worries", "love", "loves", "loved",
+        "hate", "hates", "trust", "trusts", "trusted", "afraid", "proud", "ashamed", "happy", "sad", "angry",
+        "enough", "even", "such", "person", "people", "someone's", "talk",
     ])
 
     public var maxCharacters = 1200
@@ -93,32 +107,125 @@ public struct CompanionGuard: Sendable {
         var violations: [Violation] = []
         if trimmed.count > maxCharacters { violations.append(.tooLong) }
 
-        let lower = " " + trimmed.lowercased() + " "
-        for p in Self.suggestionPatterns where lower.contains(" " + p) || lower.contains("\n" + p) {
-            violations.append(.disguisedSuggestion(p.trimmingCharacters(in: .whitespaces)))
-        }
-
-        let authorWords = Self.words(authorText)
-        let sentences = Self.sentences(trimmed)
-
-        // Proper nouns: capitalised words not at a sentence start that the author never wrote.
-        let authorCased = Set(authorText.split(whereSeparator: { !$0.isLetter && $0 != "'" }).map(String.init))
-        for s in sentences {
-            let tokens = s.split(whereSeparator: { !$0.isLetter && $0 != "'" }).map(String.init)
-            for (i, t) in tokens.enumerated() where i > 0 && t.first?.isUppercase == true && t != "I" {
-                if !authorCased.contains(t) && !Self.openVocabulary.contains(t.lowercased()) {
-                    violations.append(.inventedName(t))
-                }
-            }
-        }
+        violations += suggestions(in: trimmed)
+        violations += names(in: trimmed, authorText: authorText)
 
         // Content words must be the author's or open-ended.
+        let authorWords = Self.words(authorText)
         for w in Self.words(Self.removingQuotes(trimmed)) where w.count > 2 {
             if !authorWords.contains(w) && !Self.openVocabulary.contains(w) && !Self.isInflection(w, of: authorWords) {
                 violations.append(.inventedConcept(w))
             }
         }
+        violations += pronouns(in: trimmed, authorText: authorText)
         return dedupe(violations)
+    }
+
+    /// Suggestion patterns at the start of a word, other than `allowed` ones.
+    private func suggestions(in reply: String, allowed: Set<String> = []) -> [Violation] {
+        let lower = " " + reply.lowercased() + " "
+        return Self.suggestionPatterns
+            .filter { !allowed.contains($0) && (lower.contains(" " + $0) || lower.contains("\n" + $0)) }
+            .map { Violation.disguisedSuggestion($0.trimmingCharacters(in: .whitespaces)) }
+    }
+
+    /// Proper nouns: capitalised words not at a sentence start that the author never wrote.
+    private func names(in reply: String, authorText: String) -> [Violation] {
+        let authorCased = Set(authorText.split(whereSeparator: { !$0.isLetter && $0 != "'" }).map(String.init))
+        var out: [Violation] = []
+        for s in Self.sentences(reply) {
+            let tokens = s.split(whereSeparator: { !$0.isLetter && $0 != "'" }).map(String.init)
+            for (i, token) in tokens.enumerated() where i > 0 && token.first?.isUppercase == true && token != "I" && !token.hasPrefix("I'") {
+                let t = token.hasSuffix("'s") ? String(token.dropLast(2)) : token   // "Ilsa's"
+                if !authorCased.contains(t) && !Self.openVocabulary.contains(t.lowercased()) { out.append(.inventedName(t)) }
+            }
+        }
+        return out
+    }
+
+    /// Gendered pronouns the author never used assume something about a
+    /// character ("she" for Ilsa); a gendered word of the author's
+    /// ("her brother Tomas") grounds them.
+    private func pronouns(in reply: String, authorText: String) -> [Violation] {
+        let authorWords = Self.words(authorText), words = Self.words(Self.removingQuotes(reply))
+        return Self.genders.flatMap { pronouns, grounds in
+            authorWords.isDisjoint(with: pronouns.union(grounds))
+                ? pronouns.intersection(words).sorted().map(Violation.assumedPronoun) : []
+        }
+    }
+
+    /// Each gender's pronouns, and the author's words that would ground them.
+    static let genders: [(pronouns: Set<String>, grounds: Set<String>)] = [
+        (["he", "him", "his", "himself"],
+         ["man", "men", "boy", "brother", "father", "son", "husband", "uncle", "nephew", "king", "prince",
+          "lord", "sir", "mr", "grandfather", "dad", "monk", "priest", "duke", "emperor", "god"]),
+        (["she", "her", "hers", "herself"],
+         ["woman", "women", "girl", "sister", "mother", "daughter", "wife", "aunt", "niece", "queen", "princess",
+          "lady", "madam", "mrs", "ms", "miss", "grandmother", "mum", "mom", "nun", "priestess", "duchess",
+          "empress", "goddess"]),
+    ]
+
+    /// For conversation (the companion as a friend to think out loud with; docs/ai-charter.md):
+    /// ordinary language passes, but not prose, suggestions, a critic's
+    /// questions, refusals, names the author never wrote or genders they
+    /// never gave. Either-or questions pass (`offersChoices` flags them).
+    public func checkReply(_ reply: String, authorText: String) -> [Violation] {
+        let trimmed = reply.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [.empty] }
+        var violations: [Violation] = []
+        // Three sentences, one question; "Ah, got it!" doesn't count as one.
+        let sentences = Self.sentences(trimmed).filter { $0.split(separator: " ").count >= 4 }
+        if trimmed.count > 450 || sentences.count > 3 || trimmed.filter({ $0 == "?" }).count > 1 {
+            violations.append(.tooLong)
+        }
+        violations += suggestions(in: trimmed, allowed: Self.conversational)
+        if trimmed.range(of: #"^(I['’]?m sorry|I am sorry|I can['’]?t|I cannot|As an AI)\b"#,
+                         options: [.regularExpression, .caseInsensitive]) != nil {
+            violations.append(.refusal)
+        }
+        // The author's own words ("the cage" they wrote) may be talked about.
+        let author = authorText.lowercased()
+        func marked(_ patterns: [String], _ violation: (String) -> Violation) {
+            for p in patterns {
+                if let r = trimmed.range(of: p, options: [.regularExpression, .caseInsensitive]),
+                   !author.contains(trimmed[r].lowercased()) {
+                    violations.append(violation(String(trimmed[r])))
+                }
+            }
+        }
+        marked(Self.proseMarkers, Violation.prose)
+        marked(Self.critiqueMarkers, Violation.critique)
+        violations += names(in: trimmed, authorText: authorText) + pronouns(in: trimmed, authorText: authorText)
+        return dedupe(violations)
+    }
+
+    /// Suggestion patterns that are everyday talk in conversation: "doesn't
+    /// add up", "let me try again". "Like a" is judged as prose instead.
+    static let conversational: Set<String> = ["like a ", "add ", "try ", "introduce "]
+
+    /// Imagery and mood: the companion writing the author's world (Kevin's line).
+    static let proseMarkers = [
+        // A simile, but not "sounds like a great start" or "like a character".
+        #"\blike an? (?!(great|good|cool|nice|fun|really|very|solid|real|fresh|big|lot|bit|kind|sort|character|person|place|name|story|start|plan|question|thing)\b)\w+"#, #"\bas if\b"#, #"\bas though\b"#, #"\bheavier than\b"#,
+        #"\balmost (physical|tangible|alive)\b"#, #"\bmirrors?\b"#, #"\bechoe?s?\b"#, #"\bcage\b"#,
+        #"\bweight of\b"#, #"\bheld breath\b"#,
+    ]
+
+    /// A literary reviewer's questions: too loaded to help the author think
+    /// (Kevin's line; it pokes at the story, not its meaning).
+    static let critiqueMarkers = [
+        #"\bthem(e|es|atic|atically)\b"#, #"\bsymbol\w*"#, #"\bmotifs?\b"#, #"\ballegor\w*"#,
+        #"\bmetaphor\w*"#, #"\bstands? for\b"#, #"\bdeeper meaning\b"#, #"\bsignifican(ce|t) of\b"#,
+        #"\bnarrative (arc|function|purpose)\b"#, #"\bjuxtapos\w*"#,
+    ]
+
+    /// "Is it X or Y?", or a menu of answers ("—open sea, river, enclosed
+    /// bay—"). Allowed in conversation for now, but flagged for review
+    /// (Kevin, 2026-11-22: open it up, flag it, tighten later if need be).
+    public static func offersChoices(_ reply: String) -> Bool {
+        reply.range(of: #"\b(is|are|was|were|does|did|do|has|have)\b[^?.!]*\bor\b[^?]*\?"#,
+                    options: [.regularExpression, .caseInsensitive]) != nil
+            || reply.range(of: #"[—:(]\s*[^,—:()?.!]+(,\s*[^,—:()?.!]+){2,}"#, options: .regularExpression) != nil
     }
 
     public func isAcceptable(_ reply: String, authorText: String) -> Bool {
@@ -151,7 +258,9 @@ public struct CompanionGuard: Sendable {
             let stem = String(w.dropLast(suffix.count))
             if vocab.contains(stem) || vocab.contains(stem + "e") { return true }
         }
-        return vocab.contains { $0.count > 3 && w.hasPrefix($0) && w.count - $0.count <= 3 }
+        // Longer or shorter forms of the author's words ("rowers", "row" for "rower").
+        return vocab.contains { ($0.count > 3 && w.hasPrefix($0) && w.count - $0.count <= 3)
+            || (w.count > 2 && $0.hasPrefix(w) && $0.count - w.count <= 3) }
     }
 
     static func sentences(_ s: String) -> [String] {

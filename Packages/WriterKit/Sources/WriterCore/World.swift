@@ -28,6 +28,8 @@ public final class WorldStore: @unchecked Sendable {
     private func folder(_ id: UUID) -> URL { root.appendingPathComponent(id.uuidString, isDirectory: true) }
     public func documents(_ id: UUID) -> URL { folder(id).appendingPathComponent("Documents", isDirectory: true) }
     public func schema(_ id: UUID) -> URL { folder(id).appendingPathComponent("Schema.json") }
+    /// The companion's conversations, one per page.
+    public func conversations(_ id: UUID) -> URL { folder(id).appendingPathComponent("Conversations", isDirectory: true) }
     private func info(_ id: UUID) -> URL { folder(id).appendingPathComponent("World.json") }
 
     /// Every world, by name. A folder whose `World.json` is missing (a move
