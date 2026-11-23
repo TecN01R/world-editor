@@ -17,6 +17,8 @@ struct CompanionPanel: View {
     /// One height for the whole message bar: the HIG's minimum touch size,
     /// growing with Dynamic Type.
     @ScaledMetric(relativeTo: .body) private var barHeight: CGFloat = 44
+    /// The system's standard margin, for the conversation and the message bar.
+    private static let margin: CGFloat = 20
     // No toolbar or NavigationStack: on the Duo any toolbar, even a sheet's,
     // joins the app's own in the side column (tried 2026-11-23), and a nested
     // stack's title leaked into the pages list's bar when folded.
@@ -31,7 +33,10 @@ struct CompanionPanel: View {
                 }
                 status
             }
-            .padding()
+            // The system's standard 20 pt margins, and as much room at the top:
+            // at 16 the first line sat against the grab handle (folded) or the
+            // display's top edge (unfolded), against the left edge too.
+            .padding(Self.margin)
         }
         .scrollEdgeEffectStyle(.soft, for: [.top, .bottom])   // softened under the bar and the grab handle, as the page is
         .defaultScrollAnchor(.bottom)
@@ -215,9 +220,15 @@ struct CompanionPanel: View {
         } description: {
             Text("A one-time download. It keeps going if you leave the app.")
         } actions: {
-            ProgressView(value: Double(download.done), total: Double(max(download.total, 1))) {
-            } currentValueLabel: {
+            // The bar, with Foundation's sizes and time left centred under it, as
+            // the title and description above are (a stock ProgressView's own
+            // value line always starts at the bar's left edge).
+            VStack(spacing: 8) {
+                ProgressView(value: Double(download.done), total: Double(max(download.total, 1)))
                 Text(download.detail)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
             }
             .frame(maxWidth: 280)
         }
@@ -261,7 +272,8 @@ struct CompanionPanel: View {
                 .accessibilityLabel("Send")
             }
         }
-        .padding()
+        .padding(.horizontal, Self.margin)
+        .padding(.vertical)
     }
 
     /// Everything that isn't the conversation itself.
