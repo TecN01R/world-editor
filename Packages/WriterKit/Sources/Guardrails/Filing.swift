@@ -4,9 +4,8 @@ import WriterCore
 
 /// What the model reads out of one of the author's messages to the companion:
 /// the pages it's about (their type, and for a new one what the author said it
-/// is) and facts for their fields. Empty strings mean "none", which keeps the
-/// shape simple for constrained decoding. The app's `@Generable` mirror and
-/// `FilingPrompt.schema` must match it.
+/// is) and facts for their fields. The model writes it as JSON, as in the
+/// prompt's example (`parse`), leaving out a part it has nothing for.
 public struct Filings: Codable, Hashable, Sendable {
     public struct Page: Codable, Hashable, Sendable {
         public var title: String
@@ -14,6 +13,15 @@ public struct Filings: Codable, Hashable, Sendable {
         public var about: String
         public init(title: String, type: String = "", about: String = "") {
             self.title = title; self.type = type; self.about = about
+        }
+
+        private enum CodingKeys: String, CodingKey { case title, type, about }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            self.init(title: try c.decode(String.self, forKey: .title),
+                      type: (try? c.decodeIfPresent(String.self, forKey: .type)) ?? "",
+                      about: (try? c.decodeIfPresent(String.self, forKey: .about)) ?? "")
         }
     }
 
@@ -33,10 +41,51 @@ public struct Filings: Codable, Hashable, Sendable {
         self.facts = facts
         self.pages = pages
     }
+
+    /// What the model wrote, read as JSON: each list on its own, so a code
+    /// fence around it or a stray brace between them doesn't lose the other.
+    /// What can't be read files nothing.
+    public static func parse(_ text: String) -> Filings {
+        func list<T: Decodable>(_ key: String, _: T.Type) -> [T] {
+            guard let json = array(after: "\"\(key)\"", in: text),
+                  let items = try? JSONDecoder().decode([Lenient<T>].self, from: Data(json.utf8)) else { return [] }
+            return items.compactMap(\.value)
+        }
+        return Filings(facts: list("facts", Fact.self), pages: list("pages", Page.self))
+    }
+
+    /// The JSON array that follows `key`, up to its matching "]" (brackets in strings don't count).
+    static func array(after key: String, in text: String) -> Substring? {
+        guard let k = text.range(of: key), let open = text[k.upperBound...].firstIndex(of: "[") else { return nil }
+        var depth = 0, inString = false, escaped = false
+        for i in text[open...].indices {
+            let c = text[i]
+            if escaped { escaped = false; continue }
+            if inString {
+                if c == "\\" { escaped = true } else if c == "\"" { inString = false }
+                continue
+            }
+            switch c {
+            case "\"": inString = true
+            case "[": depth += 1
+            case "]":
+                depth -= 1
+                if depth == 0 { return text[open...i] }
+            default: break
+            }
+        }
+        return nil
+    }
+}
+
+/// One entry of a list, or nil if it isn't what was expected.
+private struct Lenient<T: Decodable>: Decodable {
+    let value: T?
+    init(from decoder: Decoder) throws { value = try? T(from: decoder) }
 }
 
 /// What the model is asked, to read structure out of the author's message.
-/// It runs after the companion has replied, on the same model, with its output
+/// It runs after the companion has replied, on the same model, which writes
 public struct FilingPrompt: Equatable, Sendable {
     public var system: String
     public var message: String
@@ -55,7 +104,7 @@ public struct FilingPrompt: Equatable, Sendable {
         - pages: the open page, with its type; and each person, place, group or thing the message \
         names that should have a page of its own. type: what kind of thing it is (one of the \
         world's types only if it is one; a ship is not a Place). about: what the message says it \
-        is, in its exact words (or "").
+        is, in its exact words; leave it out when it doesn't say.
         When a fact's value is a name, give just the name, and list it under pages too.
 
         Example. The open page: "Bram" (no type yet). Their message: "He trained at the Iron \
@@ -66,26 +115,16 @@ public struct FilingPrompt: Equatable, Sendable {
         {"page": "Bram", "field": "Age", "value": "twenty"}, \
         {"page": "Bram", "field": "Lost his hand in", "value": "Siege of Varn"}, \
         {"page": "Siege of Varn", "field": "When", "value": "winter of 1102"}], \
-        "pages": [{"title": "Bram", "type": "Character", "about": ""}, \
+        "pages": [{"title": "Bram", "type": "Character"}, \
         {"title": "Iron Abbey", "type": "Place", "about": "a monastery in the hills"}, \
-        {"title": "Sister Maud", "type": "Character", "about": ""}, \
-        {"title": "Siege of Varn", "type": "Event", "about": ""}]}
+        {"title": "Sister Maud", "type": "Character"}, \
+        {"title": "Siege of Varn", "type": "Event"}]}
 
         Copy their words exactly; never add, reword or guess. Leave out what they asked, wondered \
         about or weren't sure of, and what only their friend said. If their message states \
-        nothing, return empty lists.
+        nothing, return empty lists. Answer with the JSON alone, as in the example.
         """
 
-    public static let schema = """
-        {"type":"object","properties":{\
-        "facts":{"type":"array","items":{"type":"object","properties":{\
-        "page":{"type":"string"},"field":{"type":"string"},"value":{"type":"string"}},\
-        "required":["page","field","value"]}},\
-        "pages":{"type":"array","items":{"type":"object","properties":{\
-        "title":{"type":"string"},"type":{"type":"string"},"about":{"type":"string"}},\
-        "required":["title","type","about"]}}},\
-        "required":["facts","pages"]}
-        """
 
     /// - Parameters:
     ///   - page: the open page's title, its type's name and its "Name: value" field lines.
@@ -114,6 +153,11 @@ public struct FilingPrompt: Equatable, Sendable {
 }
 
 extension FilingPrompt {
+    public init(system: String, message: String) {
+        self.system = system
+        self.message = message
+    }
+
     /// The prompt for `message`, sent from `page`'s conversation in a world of `pages` and `schema`.
     public init(open page: Document, pages: [Document], schema: Schema, asked: String?, message: String) {
         let type = schema.type(page.type)
@@ -139,16 +183,20 @@ public enum Filer {
         var record = FilingRecord()
         // Only questions or musing: nothing is stated, so nothing is filed (not even a type).
         guard sentences.contains(where: { !$0.hedged }) else { return record }
-        func words(_ phrase: String) -> String? {
+        /// `phrase` as the author wrote it, and whether it's a name: capitalised
+        /// mid-sentence ("the Treaty of Gull Rock"), not just at its start.
+        func found(_ phrase: String) -> (words: String, isName: Bool)? {
             let wanted = Statement.collapsed(phrase).trimmingCharacters(in: Statement.edges)
             guard !wanted.isEmpty else { return nil }
             for s in sentences where !s.hedged {
                 if let r = s.text.range(of: wanted, options: [.caseInsensitive, .diacriticInsensitive]) {
-                    return String(s.text[r])
+                    let words = String(s.text[r])
+                    return (words, r.lowerBound != s.text.startIndex && Self.looksLikeAName(words))
                 }
             }
             return nil
         }
+        func words(_ phrase: String) -> String? { found(phrase)?.words }
         func index(named name: String) -> Int? {
             let name = Self.key(name)
             guard !name.isEmpty else { return nil }
@@ -165,15 +213,21 @@ public enum Filer {
             return type.id
         }
 
+        /// A new page, just behind the open one (as `@` makes them).
+        func make(_ title: String, about: String? = nil) -> Int {
+            let new = Document(title: title, paragraphs: [Paragraph(text: about ?? "")], modified: now)
+            let at = min(1, pages.count)
+            pages.insert(new, at: at)
+            record.entries.append(.created(page: new.id, modified: now))
+            return at
+        }
+
         for page in filings.pages {
             var i = index(named: page.title)
             // A new page needs a name, as the author wrote one: capitalised ("Myriddea", not "grandmother").
             if i == nil, let title = words(page.title), title.contains(where: \.isUppercase) {
                 let about = words(page.about).flatMap { key($0) == key(title) ? nil : $0.prefix(1).uppercased() + $0.dropFirst() }
-                let new = Document(title: title, paragraphs: [Paragraph(text: about ?? "")], modified: now)
-                i = min(1, pages.count)   // just behind the open page, as `@` makes them
-                pages.insert(new, at: i!)
-                record.entries.append(.created(page: new.id, modified: now))
+                i = make(title, about: about)
             }
             guard let i, pages[i].type == nil, let type = type(named: page.type) else { continue }
             pages[i].type = type
@@ -185,11 +239,16 @@ public enum Filer {
         for fact in filings.facts {
             guard let i = index(named: fact.page), let typeID = pages[i].type,
                   let t = schema.types.firstIndex(where: { $0.id == typeID }),
-                  let fieldName = name(fact.field), let words = words(fact.value),
-                  key(words) != key(fieldName) else { continue }   // "Grandmother: grandmother" says nothing
-            let linked = index(named: words).flatMap { $0 == i ? nil : pages[$0] }
+                  let fieldName = name(fact.field), let hit = found(fact.value),
+                  key(hit.words) != key(fieldName) else { continue }   // "Grandmother: grandmother" says nothing
+            let words = hit.words
             let known = schema.fields(of: schema.types[t]).first { $0.name.lowercased() == fieldName.lowercased() }
                 ?? schema.fields.first { $0.name.lowercased() == fieldName.lowercased() }
+            // A name with no page yet gets one (the model often files "Sword: Mercy" without listing Mercy).
+            let linkable = known.map { $0.kind == .page && pages[i].values[$0.id] == nil } ?? true
+            if hit.isName, linkable, index(named: words) == nil { _ = make(words) }
+            guard let i = index(named: fact.page) else { continue }   // where it is now, after a new page
+            let linked = index(named: words).flatMap { $0 == i ? nil : pages[$0] }
             let field = known ?? FieldDefinition(name: fieldName, kind: linked == nil ? .text : .page,
                                                  pageType: linked?.type)
             guard pages[i].values[field.id] == nil, let value = value(words, linked: linked, for: field) else { continue }
@@ -205,6 +264,13 @@ public enum Filer {
             record.entries.append(.value(page: pages[i].id, field: field.id, value: value))
         }
         return record
+    }
+
+    /// Every word capitalised, but for the small ones inside ("Treaty of Gull Rock", "Mercy").
+    static func looksLikeAName(_ words: String) -> Bool {
+        let parts = words.split(separator: " ")
+        return parts.first?.first?.isUppercase == true
+            && parts.allSatisfy { $0.first?.isUppercase == true || ["of", "the", "and", "de", "la", "von", "van"].contains($0) }
     }
 
     /// What the model may call the open page instead of its title (an untitled one has none).

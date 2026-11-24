@@ -169,7 +169,19 @@ final class FilingTests: XCTestCase {
         let home = try XCTUnwrap(schema.fields.first)
         XCTAssertEqual(home.name, "Home")
         XCTAssertEqual(schema.types.map(\.name), ["Character"])   // "none" isn't a type
-        XCTAssertEqual(pages[0].values[home.id], .text("Port Vell"))
+        // A name the model didn't list as a page gets one, spelt as the author wrote it.
+        XCTAssertEqual(pages.map(\.title), ["", "Port Vell"])
+        XCTAssertEqual(pages[0].values[home.id], .page(pages[1].id))
+    }
+
+    func testOnlyNamesMidSentenceGetPages() {
+        var pages = [casperica], schema = Schema()
+        _ = file(Filings(facts: [.init(page: "she", field: "Age", value: "Nineteen"),
+                                 .init(page: "she", field: "Carries", value: "her father's compass"),
+                                 .init(page: "she", field: "Sword", value: "Mercy")],
+                         pages: [.init(title: "Casperica", type: "Character")]),
+                 "Nineteen. She carries her father's compass and a sword called Mercy.", pages: &pages, schema: &schema)
+        XCTAssertEqual(pages.map(\.title), ["Casperica", "Mercy"])
     }
 
     func testOldConversationsLoadWithoutFilings() throws {
@@ -194,6 +206,23 @@ final class FilingTests: XCTestCase {
 
             Their message: “\(message)”
             """)
-        XCTAssertNoThrow(try JSONSerialization.jsonObject(with: Data(FilingPrompt.schema.utf8)))
+    }
+
+    /// The model's JSON, as it writes it: fenced, with parts missing, or cut off.
+    func testReadingTheModelsJSON() {
+        let fenced = """
+            ```json
+            {"facts": [{"page": "Casperica", "field": "Origin", "value": "Myriddea"}, {"page": "Casperica"}],
+             "pages": [{"title": "Myriddea", "type": "Place"}]}
+            ```
+            """
+        XCTAssertEqual(Filings.parse(fenced), Filings(facts: [.init(page: "Casperica", field: "Origin", value: "Myriddea")],
+                                                      pages: [.init(title: "Myriddea", type: "Place")]))
+        XCTAssertEqual(Filings.parse(#"{"pages": []}"#), Filings())
+        XCTAssertEqual(Filings.parse(#"{"facts": [{"page": "Casp"#), Filings())
+        // A stray brace between the lists, as Gemma once wrote; and a bracket inside a value.
+        let stray = #"{"facts": [{"page": "Ilsa", "field": "Born", "value": "1211 [old count]"}]}, "pages": [{"title": "Ilsa"}]}"#
+        XCTAssertEqual(Filings.parse(stray), Filings(facts: [.init(page: "Ilsa", field: "Born", value: "1211 [old count]")],
+                                                     pages: [.init(title: "Ilsa")]))
     }
 }

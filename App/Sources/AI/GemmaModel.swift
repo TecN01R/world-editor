@@ -186,8 +186,10 @@ final class GemmaModel: CompanionModel, @unchecked Sendable {
         if build.isTrial { FileManager.default.createFile(atPath: trialLoading.path, contents: nil) }
     }
 
-    /// Reads what the message states, its output held to `Filings`' shape as it
-    /// filed more and as cleanly as Gemma's chat sampling.
+    /// Reads what the message states: the model writes it as JSON, as the
+    /// prompt's example shows, greedily (its most likely reading) and without
+    /// Not held to the shape by constrained decoding: AnyLanguageModel's took a
+    /// minute on the phone and looped (2026-11-24); `Filings.parse` reads it.
     func file(_ prompt: FilingPrompt) async throws -> Filings {
         let model = try await model()
         let instructions = Transcript.Instructions(segments: [.text(.init(content: Reasoned.gemmaPlain(prompt.system)))],
@@ -196,11 +198,10 @@ final class GemmaModel: CompanionModel, @unchecked Sendable {
         var options = GenerationOptions(sampling: .greedy, maximumResponseTokens: 600)
         options[custom: LlamaLanguageModel.self] = .init(contextSize: 8192, topK: 64, topP: 0.95, repeatPenalty: 1.0)
         let began = ContinuousClock.now
-        let output = try await session.respond(to: Reasoned.gemmaPlain(prompt.message), generating: FilingOutput.self,
-                                               includeSchemaInPrompt: false, options: options).content
-        trialLog("FILING took \(ContinuousClock.now - began): \(output.facts.count) facts, \(output.pages.count) pages")   // TRIAL
-        return Filings(facts: output.facts.map { .init(page: $0.page, field: $0.field, value: $0.value) },
-                       pages: output.pages.map { .init(title: $0.title, type: $0.type, about: $0.about) })
+        let output = try await session.respond(to: Reasoned.gemmaPlain(prompt.message), options: options).content
+        let filings = Filings.parse(output)
+        trialLog("FILING took \(ContinuousClock.now - began): \(filings.facts.count) facts, \(filings.pages.count) pages; output \(output)")   // TRIAL
+        return filings
     }
 
     func stream(_ prompt: CompanionPrompt, thinking thinks: Bool) -> AsyncThrowingStream<Reasoned, Error> {
@@ -255,21 +256,4 @@ final class GemmaModel: CompanionModel, @unchecked Sendable {
     }
 }
 
-// `Filings` as the model writes it: the same fields in the same order as
-@Generable private struct FilingOutput {
-    var facts: [FilingFact]
-    var pages: [FilingPage]
-}
-
-@Generable private struct FilingFact {
-    var page: String
-    var field: String
-    var value: String
-}
-
-@Generable private struct FilingPage {
-    var title: String
-    var type: String
-    var about: String
-}
 #endif

@@ -80,6 +80,7 @@ final class Companion {
         #endif
         needsDownload = !model.isInstalled
         if needsDownload { Task { downloadSize = await model.downloadSize() } }
+        if !needsDownload { Task { [model] in await FilingLab.runIfAsked(with: model) } }   // TRIAL
     }
 
     /// The author asked for the model: download it, then reply about `page`.

@@ -279,11 +279,12 @@ the companion is filed, never the page's writing.
 - **When:** after each reply to the author's message, so replies never wait
   for it; the next reply waits for it instead (one model, one job at a time).
 - **How:** a second, short request on the same model, without thinking and
-  greedy (its most likely reading):
-  `FilingPrompt` (instructions with one worked example; the open page, the
-  world's types and fields, the other pages' titles, what the companion said,
-  and the message), its output held to `Filings`' shape by constrained
-  decoding (AnyLanguageModel's `@Generable`).
+  greedy (its most likely reading): `FilingPrompt` (instructions with one
+  worked example; the open page, the world's types and fields, the other
+  pages' titles, what the companion said, and the message). The model writes
+  JSON as the example shows, and `Filings.parse` reads each list on its own.
+  Not constrained decoding: AnyLanguageModel's took a minute on the phone and
+  looped (Kevin's first try, 2026-11-24); plain JSON takes 2 to 3 seconds there.
 - **What code guarantees** (`Filer`, tested in WriterKit): every value, new
   page title and new page text is found in the message, in a sentence that
   isn't a question or hedged ("maybe", "might", "what if", "either"); a
@@ -291,7 +292,10 @@ the companion is filed, never the page's writing.
   name ("Myriddea", not "grandmother"); existing pages, types and fields are
   reused by name ("The Guild of Lamps" is "Guild of Lamps"); only empty fields
   are filled and only untyped pages typed; a value naming a page links to it;
-  a value that only repeats its field ("Grandmother: grandmother") is dropped.
+  a value that only repeats its field ("Grandmother: grandmother") is dropped;
+  a value written as a name mid-sentence ("a sword called Mercy") gets a page
+  of its own if it has none (the model often files the name without listing
+  the page).
 - **What shows:** under the author's message, *Added to Your Pages*: each
   page made, type given and field filled on its own line with its own Undo
   (Kevin: "each discrete action has its own undo"). Undo takes back what the
@@ -309,7 +313,9 @@ plus 11 from Kevin's world):
 | + "only when it means just that", "a ship is not a Place" | chat, ×2 | 90/96 (94%) | 29/32 | 0/36 |
 | same, with events, dates, items | chat, ×2 | 106/120 (88%) | 36/44 | 0/36 |
 | same | greedy | 55/60 (92%) | 17/22 | 0/18 |
-| + an event and a date in the example (shipped) | greedy | 57/60 (95%) | 19/22 | 0/18 |
+| + an event and a date in the example | greedy | 57/60 (95%) | 19/22 | 0/18 |
+| same, plain JSON (no constrained decoding) | greedy | 56/60 (93%) | 16/22 | 0/18 |
+| + "about" left out when empty, names in values get pages, lists read apart (shipped) | greedy | 57/60 (95%) | 20/22 | 0/18 |
 
 About 2.7 s a message on the computer's GPU. New types come from what's said
 (Event, Ship, Object, Organization appeared on their own). Read by hand, about
