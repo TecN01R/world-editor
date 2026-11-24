@@ -11,6 +11,9 @@ writing. Structure grows out of the writing, never ahead of it.
 
 ## Workflow for every change
 
+The to-do list is `docs/todo.md`: work from it, keep it current, and delete an item
+only once it's on Kevin's phone and checked, or he has answered it.
+
 1. Make the change. Keep `Packages/WriterKit` Foundation-only (it is tested on Linux).
 2. **Simplify before committing:** run the `code-simplifier` agent on the files
    you changed. If that agent isn't available in the session, do the same pass
