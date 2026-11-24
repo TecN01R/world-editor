@@ -653,10 +653,7 @@ struct MentionsView: View {
             .overlay {
                 if mentions.isEmpty {
                     ContentUnavailableView("No Mentions", systemImage: "at",
-                                           description: Text("Pages that link here with @ show up here."))
-                        // The sheet covers the Duo's side column, whose space it
-                        // would otherwise keep: centre across the whole sheet.
-                        .ignoresSafeArea(.container, edges: .horizontal)
+                                           description: Text("Pages that link here with @ or in a field show up here."))
                 }
             }
             .navigationTitle("Mentions")
@@ -666,6 +663,8 @@ struct MentionsView: View {
                     Button("Close", systemImage: "xmark") { dismiss() }
                 }
             }
+            // A stock sheet, as the companion's: its bar across the top, not in the folded Duo's side column.
+            .toolbarVerticalBehavior(.disabled)
         }
         .presentationDetents([.medium, .large])
     }
