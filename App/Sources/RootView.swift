@@ -716,15 +716,15 @@ struct EditorView: View {
                 // Done here also leaves Focus, an editing-only mode (Kevin).
                 if typing { ToolbarItem(placement: .confirmationAction) { doneButton } }
             } else if editing {
-                // Editing the page: Focus and Done (the iPhone keyboard has no key to close it)
-                // together in one glass, never in "•••" (Kevin, 2026-11-24). Unfolded, the
-                // companion and Mentions in a menu beside them. Folded, the side column above
-                // the keyboard holds only Back and two buttons: with the menu too, iOS put Done
-                // and the menu in a "•••" of its own beside Focus (Kevin's screenshot,
-                // 2026-11-24: "just looks terrible"), so they wait for the keyboard to go down.
-                // Back and the sidebar button stay, as in Notes. (Swapping the bar while any
-                // keyboard was up, search's or an alert's, hid the sidebar button and the
-                // companion's; Kevin, 2026-11-24.)
+                // Editing the page: Focus, and Done (the iPhone keyboard has no key to close it)
+                // in iOS's blue, each its own button and never in "•••" (Kevin, 2026-11-24;
+                // together in one glass, Done lost its blue). Unfolded, the companion and
+                // Mentions in a menu beside them. Folded, the side column above the keyboard
+                // holds only Back and two buttons: with the menu too, iOS put Done and the menu
+                // in a "•••" of its own beside Focus (Kevin's screenshot, 2026-11-24: "just
+                // looks terrible"), so they wait for the keyboard to go down. Back and the
+                // sidebar button stay, as in Notes. (Swapping the bar while any keyboard was
+                // up, search's or an alert's, hid the sidebar button and the companion's.)
                 if !folded {
                     ToolbarItem(placement: .topBarTrailing) {
                         Menu("More", systemImage: "ellipsis") {
@@ -735,18 +735,17 @@ struct EditorView: View {
                     ToolbarSpacer(.fixed, placement: .topBarTrailing)
                 }
                 // Focus is for the writing: offered only while it has the keyboard, not the
-                // title or a field (Kevin). Unfolded, in the top row at its right end;
-                // folded, in the side column.
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    if writing {
+                // title or a field (Kevin). Unfolded, in the top row; folded, in the side column.
+                if writing {
+                    ToolbarItem(placement: .topBarTrailing) {
                         Button("Focus Mode", systemImage: "arrow.up.left.and.arrow.down.right") {
                             withAnimation(.smooth(duration: 0.3)) { focusMode = true }
                         }
                     }
-                    doneButton
+                    .visibilityPriority(.high)
+                    .axisBehavior(folded ? .automatic : .horizontalOnly)
                 }
-                .visibilityPriority(.high)
-                .axisBehavior(folded ? .automatic : .horizontalOnly)
+                ToolbarItem(placement: .confirmationAction) { doneButton }
             } else {
                 // The companion's button at the bottom as on every screen (Kevin, 2026-11-24):
                 // folded, at the foot of the Duo's side column; unfolded, at the bottom's
