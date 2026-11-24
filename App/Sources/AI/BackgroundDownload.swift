@@ -1,5 +1,7 @@
 import BackgroundTasks
 import Foundation
+import os
+import UIKit
 
 /// Keeps the model's first download going when the author leaves the app:
 /// iOS's continued processing task, which starts from the author's action
@@ -15,6 +17,9 @@ enum BackgroundDownload {
     private static var registered = false
     private static var task: BGContinuedProcessingTask?
     private static var latest: Download?
+    /// Stops the download: cancelled from the Live Activity, or iOS ended the task, while
+    /// the author was away.
+    static var onCancel: (() -> Void)?
 
     /// The download moved on (`nil`: it ended). Starts the task with a real
     /// download, keeps its progress current, and ends it with the download.
@@ -40,7 +45,16 @@ enum BackgroundDownload {
                 MainActor.assumeIsolated {
                     guard latest != nil else { task.setTaskCompleted(success: true); return }   // already done
                     self.task = task
-                    task.expirationHandler = { Task { @MainActor in self.task = nil } }   // cancelled from the Live Activity
+                    // Cancelled from the Live Activity, or ended by iOS: the task is told it's
+                    // done (iOS may close an app that doesn't), and if the author is away from
+                    // the app, the download stops too, as it can't go on there anyway.
+                    task.expirationHandler = {
+                        Task { @MainActor in
+                            self.task?.setTaskCompleted(success: false)
+                            self.task = nil
+                            if UIApplication.shared.applicationState != .active { onCancel?() }
+                        }
+                    }
                     update(latest)
                 }
             }
@@ -48,6 +62,14 @@ enum BackgroundDownload {
         let request = BGContinuedProcessingTaskRequest(
             identifier: identifier, title: "Companion Download",
             subtitle: latest?.detail ?? "A one-time download")
-        try? BGTaskScheduler.shared.submit(request)
+        // Off the main thread, as iOS asks, saying why when it can't.
+        Task.detached {
+            do {
+                try await BGTaskScheduler.shared.submitTaskRequest(request)
+            } catch {
+                Logger(subsystem: "com.tecn01r.worldeditor", category: "companion")
+                    .error("The download's background task couldn't start: \(String(describing: error), privacy: .public)")
+            }
+        }
     }
 }

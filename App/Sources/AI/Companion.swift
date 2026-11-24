@@ -91,6 +91,8 @@ final class Companion {
     private var asks = 0
     /// The page open now (a world conversation's stand-in), whose reply is prepared when the companion opens.
     private var opened: (page: WriterCore.Document, library: Library)?
+    /// The model's download, while it runs.
+    private var downloading: Task<Void, Never>?
     /// Filing what the author said; the next reply waits for it (one model, one job at a time).
     private var filing: Task<Void, Never>?
     /// What the author said that's still to be filed, and the world it was said in. Filing
@@ -111,13 +113,21 @@ final class Companion {
 
     init() {
         #if canImport(TurboFieldfare)
-        model = TurboModel { [weak self] download in
-            Task { @MainActor in
+        // The download's progress, in the order it comes (only the latest matters): one report
+        // each in a task of its own could come out of order, and a late one after the end
+        // started the Live Activity again.
+        let (progress, report) = AsyncStream<Download?>.makeStream(bufferingPolicy: .bufferingNewest(1))
+        model = TurboModel { report.yield($0) }
+        Task { [weak self] in
+            for await download in progress {
                 self?.download = download
                 BackgroundDownload.update(download)   // keeps going if the author leaves the app
             }
         }
         #endif
+        // Cancelled from the download's Live Activity (or iOS ended it) while away: it stops
+        // where it got to, and Download goes on from there.
+        BackgroundDownload.onCancel = { [weak self] in self?.downloading?.cancel() }
         if model.isInstalled {
             Task { [model] in await FilingLab.runIfAsked(with: model) }   // TRIAL
         } else {
@@ -139,7 +149,7 @@ final class Companion {
         needsDownload = false
         state = .idle
         preparing?.cancel()   // no reply while it downloads
-        Task {
+        downloading = Task {
             do {
                 try await model.prepare()
                 download = nil
