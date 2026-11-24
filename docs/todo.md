@@ -4,8 +4,7 @@ The working list for World Editor. Kevin and Claude both edit it. Delete a line 
 it's on the phone and checked, or answered; git history keeps what's done.
 
 ## Bugs on the Duo
-- [ ] Companion button missing unfolded in landscape while the pages list is beside the page
-- [ ] Sometimes the pages list won't reopen after it closes
+- [ ] Sometimes the pages list won't reopen after it closes (now a drawer; check it always reopens)
 - [ ] Janky animations (folding, rotating, opening the companion, typing, replies)
 - [ ] Rotation crash: check it's gone
 
