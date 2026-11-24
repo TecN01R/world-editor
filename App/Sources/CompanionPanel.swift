@@ -38,15 +38,18 @@ struct CompanionPanel: View {
                         ToolbarItem(placement: .cancellationAction) {
                             Button("Close", systemImage: "xmark") { companion.isOpen = false }
                         }
-                        ToolbarItem(placement: .primaryAction) { more }
+                        if ready { ToolbarItem(placement: .primaryAction) { more } }
                     }
             }
             .toolbarVerticalBehavior(.disabled)
         } else {
             conversation
-                .toolbar { ToolbarItem(placement: .primaryAction) { more } }
+                .toolbar { if ready { ToolbarItem(placement: .primaryAction) { more } } }
         }
     }
+
+    /// The model is on the phone: until then there's nothing the menu could do.
+    private var ready: Bool { companion.download == nil && companion.state != .downloadPaused }
 
     private var conversation: some View {
         ScrollView {
@@ -76,7 +79,7 @@ struct CompanionPanel: View {
         }
         .safeAreaBar(edge: .bottom) {
             // Nothing to say until the model is here.
-            if companion.download == nil, companion.state != .downloadPaused { composer }
+            if ready { composer }
         }
         .task { companion.checkModel() }
         // Back in the app after the download dropped: it picks up where it stopped.
