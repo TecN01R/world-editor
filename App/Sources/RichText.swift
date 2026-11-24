@@ -46,23 +46,45 @@ enum RichText {
     /// The edit menu as iOS suggests it, its Format holding only what pages keep (Kevin,
     /// 2026-11-24): iOS's own Bold and Italic, then `more` (the lists, in Edit mode). Its
     /// "More…" (iOS's whole Format panel: fonts, sizes, colours, text styles, alignment…) and
-    /// anything else in it go. Format is the menu with iOS's Bold in it, whatever iOS calls it.
+    /// anything else in it go. Format is iOS's Format, Font or Text Style menu, or whichever
+    /// holds iOS's Bold, its Bold and Italic gathered from however iOS nests them.
     static func editMenu(_ suggested: [UIMenuElement], more: [UIMenuElement] = []) -> UIMenu {
         UIMenu(children: keepingPageFormatting(suggested, more: more))
     }
 
     private static let pageFormatting: Set<Selector> = [#selector(UIResponder.toggleBoldface(_:)),
                                                         #selector(UIResponder.toggleItalics(_:))]
+    private static let formatMenus: Set<UIMenu.Identifier> = [.format, .font, .textStyle]
+
+    private static func isPageFormatting(_ element: UIMenuElement) -> Bool {
+        (element as? UICommand).map { pageFormatting.contains($0.action) } ?? false
+    }
+
+    /// Bold and Italic in `menu`, however deep.
+    private static func pageFormatting(in menu: UIMenu) -> [UIMenuElement] {
+        menu.children.flatMap { child -> [UIMenuElement] in
+            if isPageFormatting(child) { return [child] }
+            return (child as? UIMenu).map(pageFormatting(in:)) ?? []
+        }
+    }
 
     private static func keepingPageFormatting(_ elements: [UIMenuElement], more: [UIMenuElement]) -> [UIMenuElement] {
         elements.map { element in
-            guard let menu = element as? UIMenu else { return element }
-            let isFormat = menu.children.contains { ($0 as? UICommand).map { pageFormatting.contains($0.action) } ?? false }
-            return menu.replacingChildren(isFormat
-                ? menu.children.filter { ($0 as? UICommand).map { pageFormatting.contains($0.action) } ?? false } + more
-                : keepingPageFormatting(menu.children, more: more))
+            guard let menu = element as? UIMenu, !pageFormatting(in: menu).isEmpty else { return element }
+            if formatMenus.contains(menu.identifier) || menu.children.contains(where: isPageFormatting) {
+                return menu.replacingChildren(pageFormatting(in: menu) + more)
+            }
+            return menu.replacingChildren(keepingPageFormatting(menu.children, more: more))
         }
     }
+
+    /// iOS's Format panel, should iOS still offer it by some other way than the edit menu's
+    /// "More…": only what pages keep (bold, italic and the lists; underline and strikethrough
+    /// come with them and aren't kept).
+    static let formatting = UITextFormattingViewController.Configuration(groups: [
+        .group([.component(.fontAttributes, .automatic)]),
+        .group([.component(.listStyles, .automatic)]),
+    ])
 
     // MARK: @ links
 

@@ -36,6 +36,7 @@ struct PageEditor: UIViewRepresentable {
         tv.keyboardDismissMode = .interactive
         tv.textContainer.lineFragmentPadding = 0   // the writing lines up under the title and fields
         tv.allowsEditingTextAttributes = true      // ⌘B, ⌘I and the Format menu
+        tv.textFormattingConfiguration = RichText.formatting
         tv.titleField = context.coordinator.titleField
         tv.onFocus = { [weak coordinator = context.coordinator] in coordinator?.onFocus() }
         let fields = UIHostingController(rootView: PageFields { [weak tv] in tv?.fieldsHeight = $0 }.environment(library))

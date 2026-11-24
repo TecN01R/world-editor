@@ -100,6 +100,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         textView.autocapitalizationType = .sentences
         textView.inlinePredictionType = .no         // ghost text would be content we didn't measure
         textView.allowsEditingTextAttributes = true // ⌘B, ⌘I and the Format menu
+        textView.textFormattingConfiguration = RichText.formatting
         textView.onBackspaceAtStart = { [weak self] in self?.mergeWithPrevious() }
         view.addSubview(textView)
 
