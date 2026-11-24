@@ -78,8 +78,9 @@ loads (whether iOS keeps them between launches isn't known). Gemma's chat
 format is rendered by the app (TurboFieldfare's own has no thinking), with
 Google's sampling and a new seed each reply; filing is greedy
 without thinking. iOS gives a background app no GPU, so leaving the app stops
-a reply or filing mid-way; it begins again from the start once the author is
-back, and one asked for while they're away waits for them. The screen stays on
+a reply or filing mid-way; once the author is back, a reply goes on from what
+it had written (reading its prompt again first) and filing starts over, and
+one asked for while they're away waits for them. The screen stays on
 while the model works, since locking it also takes the app to the background.
 The companion prepares a page's first reply only while it's open (each is
 minutes of the GPU's work on this model), and not while the phone is hot or in

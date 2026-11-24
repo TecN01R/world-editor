@@ -11,7 +11,7 @@ protocol CompanionModel: Sendable {
     /// The reply so far, growing as the model writes it, with any reasoning
     /// before it; the last is the whole reply. `thinking`: reason first, if the
     /// model can. Throws `PromptTooLong` when the prompt doesn't fit the model.
-    func stream(_ prompt: CompanionPrompt, thinking: Bool) -> AsyncThrowingStream<Reasoned, Error>
+    func stream(_ prompt: CompanionPrompt, thinking: Bool) -> AsyncThrowingStream<ReplySoFar, Error>
     // Declared here, not only defaulted below, so a model's own versions are the
     // ones called through `any CompanionModel` (a default that isn't a
     // requirement is always the one used, whatever the model).
@@ -54,10 +54,19 @@ struct Download: Equatable, Sendable {
     var detail: String
 }
 
+/// A reply as far as the model has got: what it has written (with any reasoning)
+/// and, while it reads its prompt before writing more, how much of the prompt it has
+/// read (0 to 1): on the 26B that's tens of seconds, shown rather than left to look
+/// stuck (Kevin, 2026-11-24).
+struct ReplySoFar: Sendable {
+    var reply: Reasoned
+    var reading: Double? = nil
+}
+
 /// Runs `body`, which yields the reply so far, as a stream; ending the stream
 /// cancels it.
-func streaming(_ body: @escaping @Sendable (AsyncThrowingStream<Reasoned, Error>.Continuation) async throws -> Void)
-    -> AsyncThrowingStream<Reasoned, Error> {
+func streaming(_ body: @escaping @Sendable (AsyncThrowingStream<ReplySoFar, Error>.Continuation) async throws -> Void)
+    -> AsyncThrowingStream<ReplySoFar, Error> {
     AsyncThrowingStream { continuation in
         let task = Task {
             do { try await body(continuation); continuation.finish() } catch { continuation.finish(throwing: error) }
@@ -85,12 +94,12 @@ struct AppleModel: CompanionModel {
         }
     }
 
-    func stream(_ prompt: CompanionPrompt, thinking: Bool) -> AsyncThrowingStream<Reasoned, Error> {
+    func stream(_ prompt: CompanionPrompt, thinking: Bool) -> AsyncThrowingStream<ReplySoFar, Error> {
         streaming { continuation in   // Apple's model has no thinking step
             #if canImport(FoundationModels)
             let session = LanguageModelSession(model: .default, instructions: prompt.system)
             for try await snapshot in session.streamResponse(to: prompt.flattened, options: GenerationOptions(temperature: 0.7)) {
-                continuation.yield(Reasoned(reply: snapshot.content))
+                continuation.yield(ReplySoFar(reply: Reasoned(reply: snapshot.content)))
             }
             #else
             throw CancellationError()

@@ -324,6 +324,8 @@ struct CompanionPanel: View {
                     } icon: {
                         Image(systemName: "ellipsis").symbolEffect(.variableColor.iterative, options: .repeating)
                     }
+                } actions: {
+                    if let fraction = companion.reading { reading(fraction) }
                 }
             }
         }
@@ -344,13 +346,18 @@ struct CompanionPanel: View {
                     words(writing)
                         .contentTransition(.opacity)
                         .animation(.easeOut(duration: 0.2), value: writing)
-                    Image(systemName: "circle.fill")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .symbolEffect(.pulse, options: .repeating)
-                        .accessibilityLabel("Writing")
+                    if companion.reading == nil {
+                        Image(systemName: "circle.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .symbolEffect(.pulse, options: .repeating)
+                            .accessibilityLabel("Writing")
+                    }
                 }
-            } else if partialReasoning == nil, companion.download == nil {
+            }
+            if let fraction = companion.reading {
+                reading(fraction)
+            } else if partialReply == nil, partialReasoning == nil, companion.download == nil {
                 thinking
             }
         case .unavailable(let reason):
@@ -393,6 +400,25 @@ struct CompanionPanel: View {
     private var partialReply: String? {
         guard let writing = companion.writing, !writing.isEmpty else { return nil }
         return writing
+    }
+
+    /// While the model reads its prompt before writing (tens of seconds on the 26B): how
+    /// far it has got, so it doesn't look stuck (Kevin, 2026-11-24). Having already written
+    /// some, it's going on from there after the author left the app.
+    private func reading(_ fraction: Double) -> some View {
+        let label: LocalizedStringKey = if partialReply != nil || partialReasoning != nil {
+            "Picking up where it left off…"
+        } else if aboutWorld {
+            "Reading your world…"
+        } else {
+            "Reading your page…"
+        }
+        return ProgressView(value: fraction) {
+            Text(label)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(minWidth: 0, idealWidth: 240, maxWidth: 240, alignment: .leading)
     }
 
     private var thinking: some View {

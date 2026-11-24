@@ -69,7 +69,7 @@ final class TurboModel: CompanionModel, @unchecked Sendable {
 
     // MARK: - Replies
 
-    func stream(_ prompt: CompanionPrompt, thinking thinks: Bool) -> AsyncThrowingStream<Reasoned, Error> {
+    func stream(_ prompt: CompanionPrompt, thinking thinks: Bool) -> AsyncThrowingStream<ReplySoFar, Error> {
         streaming { continuation in
             let text = Self.chat(system: prompt.system, turns: prompt.turns.map { (author: $0.speaker == .author, text: $0.text) },
                                  thinking: thinks)
@@ -77,25 +77,39 @@ final class TurboModel: CompanionModel, @unchecked Sendable {
             // top-k 64, no repetition penalty, and a new seed each reply, so Try Again
             // differs. Room for its reasoning as well as the reply (E4B's longest over the
             let config = GenerationConfig(maxNewTokens: 1500, temperature: 1, topK: 64, topP: 0.95, repetitionPenalty: 1)
+            let room = thinks ? 1000 : 300
             let output = Output()
             let began = ContinuousClock.now
             let run: RawDecodeResult = try await Self.again {
-                // Begun again after the author left the app: what it had written goes.
-                if output.clear() { continuation.yield(Reasoned(reply: "")) }
-                return try await self.engine.generate(text, config, room: thinks ? 1000 : 300) { event, tokenizer in
+                // Begun again after the author left the app (iOS gives an app in the
+                // background no GPU): it goes on from what it had written, which stays on
+                // screen, rather than starting over, which looked stuck (Kevin, 2026-11-24).
+                // Its prompt is read again (the model's cache is dropped when a job ends
+                // early), with what it had written as the start of its turn.
+                var rest = config
+                rest.maxNewTokens = max(1, config.maxNewTokens - output.tokens)
+                if !output.raw.isEmpty { output.resumed += 1 }
+                let written = Reasoned.gemma(output.raw)
+                return try await self.engine.generate(text + output.raw, rest, room: max(100, room - output.tokens)) { event, tokenizer in
+                    if case .prefill(let done, let total) = event {
+                        continuation.yield(ReplySoFar(reply: written, reading: Double(done) / Double(max(total, 1))))
+                        return
+                    }
                     guard output.add(event, tokenizer) else { return }
                     let reply = Reasoned.gemma(output.raw)
                     if output.firstWords == nil, !reply.reply.isEmpty { output.firstWords = ContinuousClock.now - began }
-                    continuation.yield(reply)
+                    continuation.yield(ReplySoFar(reply: reply))
                 }
             }
             // TRIAL: speed on the phone. How much of the prompt it read (and how much it
-            // had already), when its first words came, how fast it wrote, and what's left.
+            // had already), when its first words came, how fast it wrote, how often it
+            // went on after the author came back, and what's left.
             let reply = Reasoned.gemma(output.raw)
             func count(_ text: String) -> Int { text.split(whereSeparator: \.isWhitespace).count }
             trialLog("SPEED \(Self.name)\(thinks ? ", thinking" : ""): \(Self.reading(run)), "
                 + "first words after \(output.firstWords ?? .zero) (\(count(reply.reasoning)) words of thinking), "
                 + "whole reply (\(count(reply.reply)) words) in \(ContinuousClock.now - began), \(Self.writing(run)); "
+                + (output.resumed > 0 ? "went on after the author came back \(output.resumed) times; " : "")
                 + "\(Self.state); its output (\(output.raw.count) characters) began \(String(reflecting: String(output.raw.prefix(48))))")
         }
     }
@@ -107,7 +121,7 @@ final class TurboModel: CompanionModel, @unchecked Sendable {
         let output = Output()
         let began = ContinuousClock.now
         let run: RawDecodeResult = try await Self.again {
-            _ = output.clear()
+            output.clear()
             return try await engine.generate(text, GenerationConfig(maxNewTokens: 600, temperature: 0), room: 300) { event, tokenizer in
                 _ = output.add(event, tokenizer)
             }
@@ -118,9 +132,10 @@ final class TurboModel: CompanionModel, @unchecked Sendable {
         return filings
     }
 
-    /// Runs `job` (a turn of the model) again from the start if leaving the app ended
-    /// it: the engine waits for the author to come back first. So a reply, or the
-    /// filing after one, isn't lost to a look at another app.
+    /// Runs `job` (a turn of the model) again if leaving the app ended it: the engine
+    /// waits for the author to come back first, then a reply goes on from what it had
+    /// written and filing starts over. So a reply, or the filing after one, isn't lost
+    /// to a look at another app.
     private static func again<T>(_ job: () async throws -> T) async throws -> T {
         while true {
             do { return try await job() } catch is Interrupted { try Task.checkCancellation() }
@@ -433,7 +448,7 @@ final class TurboModel: CompanionModel, @unchecked Sendable {
 }
 
 /// The job couldn't be finished: the author left the app, and iOS gives a background
-/// app no GPU. It begins again once they're back (`TurboModel.again`).
+/// app no GPU. It's run again once they're back (`TurboModel.again`).
 private struct Interrupted: Error {}
 
 /// The phone moved from Wi-Fi to a metered network while the model downloaded.
@@ -633,6 +648,9 @@ private final class ModelThread: TaskExecutor {
 private final class Output: @unchecked Sendable {
     var raw = ""
     var firstWords: Duration?
+    /// The tokens it has written, and how often it went on from them after the author came back.
+    var tokens = 0
+    var resumed = 0
 
     /// Adds what a token wrote; false for anything else (the prompt being read).
     func add(_ event: RawDecodeProgress, _ tokenizer: GFTokenizer) -> Bool {
@@ -640,6 +658,7 @@ private final class Output: @unchecked Sendable {
         case .prefill:
             return false
         case .token(_, let id, let delta):
+            tokens += 1
             raw += delta
             if id == tokenizer.channelStartID {
                 raw += "<|channel>"
@@ -652,10 +671,11 @@ private final class Output: @unchecked Sendable {
         return true
     }
 
-    /// Starts over; true if it had written anything.
-    func clear() -> Bool {
-        defer { raw = ""; firstWords = nil }
-        return !raw.isEmpty
+    /// Starts over (filing, whose output isn't shown, begun again after the author left the app).
+    func clear() {
+        raw = ""
+        firstWords = nil
+        tokens = 0
     }
 }
 

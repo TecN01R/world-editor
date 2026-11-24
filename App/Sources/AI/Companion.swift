@@ -23,6 +23,9 @@ final class Companion {
     private(set) var writing: String?
     /// What it's thinking, while it thinks before replying.
     private(set) var reasoning: String?
+    /// How much of its prompt the model has read (0 to 1), while it reads before writing:
+    /// tens of seconds on the 26B, shown so it doesn't look stuck (Kevin, 2026-11-24).
+    private(set) var reading: Double?
     /// What it thought before each of its replies (by the reply, so each tried
     /// version keeps its own), for this session only: shown collapsed, never saved
     /// or sent back to the model (its makers' advice).
@@ -261,7 +264,7 @@ final class Companion {
         guard !conversation.aboutWorld || !conversation.turns.isEmpty else { return }
         if let reason = await model.unavailableReason { state = .unavailable(reason); return }
         state = .thinking
-        defer { self.writing = nil; self.reasoning = nil }
+        defer { self.writing = nil; self.reasoning = nil; self.reading = nil }
         await filing?.value
         // Dropped while filing finished (another page opened, or asked again): whoever
         // dropped it owns the conversation and the reply taken back now.
@@ -295,9 +298,10 @@ final class Companion {
                 do {
                     for try await partial in model.stream(prompt, thinking: thinks) {
                         guard !Task.isCancelled else { break }
-                        reply = partial
-                        self.reasoning = partial.reasoning
-                        self.writing = partial.reply
+                        reply = partial.reply
+                        self.reasoning = reply.reasoning
+                        self.writing = reply.reply
+                        self.reading = partial.reading
                     }
                     break
                 } catch is PromptTooLong where room < 4 {
