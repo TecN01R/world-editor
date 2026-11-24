@@ -271,9 +271,19 @@ struct PageEditor: UIViewRepresentable {
             return .init(menu: UIMenu(children: [open]))
         }
 
-        /// Holding or selecting text: iOS's edit menu, its Format only Bold and Italic.
+        /// Holding or selecting text: iOS's edit menu, its Format what pages keep: Bold and
+        /// Italic, and the lists, ticked as the format bar shows them.
         func textView(_ tv: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
-            RichText.editMenu(suggestedActions)
+            let selected = range.location..<(range.location + range.length)
+            let kind = library.document.paragraphs[library.document.locate(range.location).index].kind
+            let lists = [(ParagraphKind.bullet, "Bulleted List", "list.bullet"), (.numbered, "Numbered List", "list.number")]
+                .map { list, title, symbol in
+                    UIAction(title: title, image: UIImage(systemName: symbol), state: kind == list ? .on : .off) { [weak self] _ in
+                        self?.toggleKind(list, in: selected)
+                        self?.updateFormatBar()
+                    }
+                }
+            return RichText.editMenu(suggestedActions, more: lists)
         }
 
         /// Tapping a link opens its page.

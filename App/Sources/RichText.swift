@@ -43,24 +43,24 @@ enum RichText {
 
     // MARK: Edit menu
 
-    /// The edit menu as iOS suggests it, its Format holding only what pages keep: Bold and
-    /// Italic, iOS's own. Its "More…" (iOS's whole Format panel: fonts, sizes, colours, text
-    /// styles, alignment…) and anything else in it go (Kevin, 2026-11-24). Format is the menu
-    /// with iOS's Bold in it, whatever iOS calls it.
-    static func editMenu(_ suggested: [UIMenuElement]) -> UIMenu {
-        UIMenu(children: keepingPageFormatting(suggested))
+    /// The edit menu as iOS suggests it, its Format holding only what pages keep (Kevin,
+    /// 2026-11-24): iOS's own Bold and Italic, then `more` (the lists, in Edit mode). Its
+    /// "More…" (iOS's whole Format panel: fonts, sizes, colours, text styles, alignment…) and
+    /// anything else in it go. Format is the menu with iOS's Bold in it, whatever iOS calls it.
+    static func editMenu(_ suggested: [UIMenuElement], more: [UIMenuElement] = []) -> UIMenu {
+        UIMenu(children: keepingPageFormatting(suggested, more: more))
     }
 
     private static let pageFormatting: Set<Selector> = [#selector(UIResponder.toggleBoldface(_:)),
                                                         #selector(UIResponder.toggleItalics(_:))]
 
-    private static func keepingPageFormatting(_ elements: [UIMenuElement]) -> [UIMenuElement] {
+    private static func keepingPageFormatting(_ elements: [UIMenuElement], more: [UIMenuElement]) -> [UIMenuElement] {
         elements.map { element in
             guard let menu = element as? UIMenu else { return element }
             let isFormat = menu.children.contains { ($0 as? UICommand).map { pageFormatting.contains($0.action) } ?? false }
             return menu.replacingChildren(isFormat
-                ? menu.children.filter { ($0 as? UICommand).map { pageFormatting.contains($0.action) } ?? false }
-                : keepingPageFormatting(menu.children))
+                ? menu.children.filter { ($0 as? UICommand).map { pageFormatting.contains($0.action) } ?? false } + more
+                : keepingPageFormatting(menu.children, more: more))
         }
     }
 
