@@ -28,8 +28,7 @@ struct CompanionPanel: View {
     /// menu. On the folded Duo a sheet's bar would otherwise go into the side
     /// column (tried 2026-11-23); with a couple of controls Apple's advice is to
     /// keep it horizontal (iOS 27.1, `toolbarVerticalBehavior`). Unfolded, the
-    /// inspector's own toolbar holds the menu: a navigation stack nested in the
-    /// split view's column destabilised its layout while folding.
+    /// column has no bar of its own (see below).
     var body: some View {
         if inSheet {
             NavigationStack {
@@ -45,8 +44,10 @@ struct CompanionPanel: View {
             }
             .toolbarVerticalBehavior(.disabled)
         } else {
+            // No toolbar in the column: merged into the split view's bar, it
+            // crashed UIKit's layout while the Duo folded (2026-11-23, twice).
+            // The menu sits beside the message field instead.
             conversation
-                .toolbar { if ready { ToolbarItem(placement: .primaryAction) { more } } }
         }
     }
 
@@ -299,11 +300,18 @@ struct CompanionPanel: View {
     private func retry() { companion.retry(page: library.document, in: library) }
     private func resume() { companion.startDownload(page: library.document, in: library) }
 
-    /// The message field in Liquid Glass: the field and send, one height
-    /// (the stock glass button styles each come in a different one).
+    /// The message field in Liquid Glass: (unfolded) the menu, the field and
+    /// send, one height (the stock glass button styles each come in a different one).
     private var composer: some View {
         GlassEffectContainer {
             HStack(alignment: .bottom, spacing: 8) {
+                if !inSheet {
+                    more
+                        .labelStyle(.iconOnly)
+                        .frame(width: barHeight, height: barHeight)
+                        .glassEffect(.regular.interactive(), in: .circle)
+                        .tint(.primary)   // a menu's label takes the tint, not a foreground style
+                }
                 // What they type is theirs (New York); the placeholder is the app's.
                 TextField("Message", text: $message, prompt: Text("Message").font(.body), axis: .vertical)
                     .font(.authored(.body))
