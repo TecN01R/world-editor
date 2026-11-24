@@ -195,6 +195,9 @@ final class GemmaModel: CompanionModel, @unchecked Sendable {
     /// minute on the phone and looped (2026-11-24); `Filings.parse` reads it.
     func file(_ prompt: FilingPrompt) async throws -> Filings {
         let model = try await model()
+        // TRIAL: it got through. (Filing can be what loads the model: without this the
+        // marker stayed, and an app closed later counted as the trial failing, 2026-11-24.)
+        defer { try? FileManager.default.removeItem(at: Self.trialLoading) }
         let instructions = Transcript.Instructions(segments: [.text(.init(content: Reasoned.gemmaPlain(prompt.system)))],
                                                    toolDefinitions: [])
         let session = LanguageModelSession(model: model, transcript: Transcript(entries: [.instructions(instructions)]))
