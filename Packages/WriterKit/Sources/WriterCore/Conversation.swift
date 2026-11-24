@@ -28,6 +28,10 @@ public struct Conversation: Codable, Hashable, Sendable {
         /// `question` is the one chosen: the one showing when the author answered,
         /// which the conversation goes on from (Kevin, 2026-11-24).
         public var versions: [String]?
+        /// What the companion searched the author's pages for while writing each of its
+        /// replies here (`question` or one of `versions`), in order, for the "Searched your
+        /// pages for …" line. Kept so the line survives reopening; never sent to the model.
+        public var searches: [String: [String]]?
 
         public init(id: UUID = UUID(), question: String, answer: String? = nil, asked: Date = Date(),
                     filed: FilingRecord? = nil) {
@@ -95,9 +99,12 @@ public struct Conversation: Codable, Hashable, Sendable {
     /// Everything the author said here, in their words.
     public var authorText: String { turns.compactMap(\.answer).joined(separator: "\n") }
 
-    public mutating func ask(_ question: String, at date: Date = Date()) {
+    /// The companion's reply, and what it searched the author's pages for while writing it.
+    public mutating func ask(_ question: String, searches: [String] = [], at date: Date = Date()) {
         guard waiting == nil else { return }
-        turns.append(Turn(question: question, asked: date))
+        var turn = Turn(question: question, asked: date)
+        if !searches.isEmpty { turn.searches = [question: searches] }
+        turns.append(turn)
     }
 
     /// Takes the waiting reply back to ask again: the turn, to restore if asking fails.
@@ -106,12 +113,16 @@ public struct Conversation: Codable, Hashable, Sendable {
         return turns.removeLast()
     }
 
-    /// The new reply in place of `retracted` (if Try Again took one back), which is kept with its versions.
-    public mutating func ask(_ question: String, after retracted: Turn?, at date: Date = Date()) {
-        ask(question, at: date)
+    /// The new reply in place of `retracted` (if Try Again took one back), which is kept with
+    /// its versions and what each searched for.
+    public mutating func ask(_ question: String, after retracted: Turn?, searches: [String] = [], at date: Date = Date()) {
+        ask(question, searches: searches, at: date)
         guard let retracted else { return }
         let earlier = (retracted.versions ?? [retracted.question]).filter { $0 != question }
-        if !earlier.isEmpty, let i = turns.indices.last { turns[i].versions = earlier + [question] }
+        guard !earlier.isEmpty, let i = turns.indices.last else { return }
+        turns[i].versions = earlier + [question]
+        let kept = (retracted.searches ?? [:]).filter { earlier.contains($0.key) }.merging(turns[i].searches ?? [:]) { $1 }
+        turns[i].searches = kept.isEmpty ? nil : kept
     }
 
     /// Makes `version` the reply the conversation goes on from, while it waits for an answer
@@ -129,6 +140,8 @@ public struct Conversation: Codable, Hashable, Sendable {
         versions.remove(at: at)
         if turns[i].question == version { turns[i].question = versions[max(at - 1, 0)] }
         turns[i].versions = versions.count > 1 ? versions : nil
+        if !versions.contains(version) { turns[i].searches?[version] = nil }
+        if turns[i].searches?.isEmpty == true { turns[i].searches = nil }
     }
 
     /// The author's words: an answer to the waiting reply, or, if nothing has been said

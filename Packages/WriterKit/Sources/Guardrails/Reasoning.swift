@@ -6,10 +6,14 @@ import Foundation
 public struct Reasoned: Equatable, Sendable {
     public var reasoning: String
     public var reply: String
+    /// What it searched the author's pages for while replying, in order (`PageLookup`):
+    /// shown as "Searched your pages for …" and kept with the reply (`Conversation.Turn.searches`).
+    public var searches: [String]
 
-    public init(reasoning: String = "", reply: String) {
+    public init(reasoning: String = "", reply: String = "", searches: [String] = []) {
         self.reasoning = reasoning
         self.reply = reply
+        self.searches = searches
     }
 
     /// Gemma 4's output, whole or so far: `<|channel>thought\n…<channel|>reply`

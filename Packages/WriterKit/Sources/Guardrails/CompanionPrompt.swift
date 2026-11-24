@@ -128,19 +128,37 @@ public struct CompanionPrompt: Equatable, Sendable {
     /// on other pages as background, cut to what bears on this page, then the
     /// last `maxTurns` exchanges of `conversation`. The background stays within
     /// `maxCharacters`, the turns within `maxTurnCharacters`.
+    /// - Parameter lookup: what the companion can look up, which shows the other pages as
+    ///   the few most like this one and the rest by name (nil: every page's opening, as before).
     public init(page: Page, others: [Page] = [], earlier: [(page: String, conversation: Conversation)] = [],
                 conversation: Conversation, maxCharacters: Int = 6000, maxTurns: Int = 12,
-                maxTurnCharacters: Int = 6000) {
+                maxTurnCharacters: Int = 6000, lookup: Lookup? = nil) {
         let focus = [page.name, page.fields, page.writing, conversation.authorText].joined(separator: "\n")
-        let world = Self.worldSummary(others, focus: focus, maxCharacters: maxCharacters / 3)
         let memory = Self.memory(earlier, focus: focus, maxCharacters: maxCharacters / 4)
-        var background = ["What the app shows you of the writer's pages (for reference; the writer didn't just say this):"]
-        if !world.isEmpty { background.append("Their other pages:\n" + world) }
-        if !memory.isEmpty { background.append("From your earlier conversations:\n" + memory) }
-        let used = world.count + memory.count + page.fields.count
+        var background = [Self.backgroundHeading(lookup)]
+        let world: String
+        var related = ""
+        if let lookup {
+            // The few most like the page with their openings, which keeps "how it sits with
+            // their other pages"; the rest by name, for search_pages to find what's on them.
+            let ordered = Self.ordered(others.filter { !$0.name.isEmpty || !$0.writing.isEmpty }, focus: focus)
+            let like = Self.worldSummary(Array(ordered.prefix(3)), focus: "", maxCharacters: maxCharacters / 6)
+            let names = PageLookup.directory(Array(ordered.dropFirst(3)), focus: "", maxCharacters: maxCharacters / 6)
+            related = lookup.related(to: conversation, maxCharacters: maxCharacters / 5)
+            if !like.isEmpty { background.append("Their other pages most like this one:\n" + like) }
+            if !names.isEmpty { background.append("Their other pages, by name:\n" + names) }
+            if !memory.isEmpty { background.append("From your earlier conversations:\n" + memory) }
+            if !related.isEmpty { background.append(Self.relatedHeading + "\n" + related) }
+            world = like + names
+        } else {
+            world = Self.worldSummary(others, focus: focus, maxCharacters: maxCharacters / 3)
+            if !world.isEmpty { background.append("Their other pages:\n" + world) }
+            if !memory.isEmpty { background.append("From your earlier conversations:\n" + memory) }
+        }
+        let used = world.count + related.count + memory.count + page.fields.count
         background.append("The page they have open now:\n" + Self.describe(page, maxCharacters: max(0, maxCharacters - used)))
 
-        var system = [Self.instructions, Self.examples, background.joined(separator: "\n\n")]
+        var system = [Self.instructions(searching: lookup?.searching ?? false), Self.examples, background.joined(separator: "\n\n")]
         // What to do first is said only when it applies: a small model follows
         // an instruction better than a condition.
         if conversation.turns.isEmpty { system.append(Self.opening(page, alone: world.isEmpty)) }
@@ -152,21 +170,78 @@ public struct CompanionPrompt: Equatable, Sendable {
     /// The prompt for a conversation about the whole world, from the pages list (Kevin,
     /// 2026-11-24: "converse with it and not operate solely within a single page"): every
     /// page as background, the ones bearing on what's being said first, and no page open.
+    /// - Parameter lookup: what the companion can look up, which lists the pages by name
+    ///   in place of the first 800 characters of each (nil: as before).
     public init(world: String, pages: [Page], earlier: [(page: String, conversation: Conversation)] = [],
                 conversation: Conversation, maxCharacters: Int = 6000, maxTurns: Int = 12,
-                maxTurnCharacters: Int = 6000) {
+                maxTurnCharacters: Int = 6000, lookup: Lookup? = nil) {
         let focus = conversation.authorText
         // Much more of each page than beside an open one: here the pages are all it has
-        let summary = Self.worldSummary(pages, focus: focus, maxCharacters: maxCharacters * 2 / 3, perPage: 800)
+        let summary = lookup == nil ? Self.worldSummary(pages, focus: focus, maxCharacters: maxCharacters * 2 / 3, perPage: 800)
+            : PageLookup.directory(pages, focus: focus, maxCharacters: maxCharacters / 4)
         let memory = Self.memory(earlier, focus: focus, maxCharacters: maxCharacters / 4)
-        var background = ["What the app shows you of the writer's pages (for reference; the writer didn't just say this):"]
+        var background = [Self.backgroundHeading(lookup)]
         background.append(summary.isEmpty ? "Their world, \u{201C}\(world)\u{201D}, has no pages yet."
-                                          : "Their world, \u{201C}\(world)\u{201D}, and its pages:\n" + summary)
+                          : "Their world, \u{201C}\(world)\u{201D}, and its pages\(lookup == nil ? "" : ", by name"):\n" + summary)
+        if let related = lookup?.related(to: conversation, maxCharacters: maxCharacters / 4), !related.isEmpty {
+            background.append(Self.relatedHeading + "\n" + related)
+        }
         if !memory.isEmpty { background.append("From your earlier conversations:\n" + memory) }
         // It doesn't speak first here: it waits for the author (Kevin, 2026-11-24).
-        system = [Self.instructions, Self.examples, background.joined(separator: "\n\n")].joined(separator: "\n\n")
+        system = [Self.instructions(searching: lookup?.searching ?? false), Self.examples, background.joined(separator: "\n\n")]
+            .joined(separator: "\n\n")
         turns = Self.authorFirst(Self.recent(conversation, maxTurns: maxTurns, maxTurnCharacters: maxTurnCharacters),
                                  opener: Self.openedWorld)
+    }
+
+    /// What the companion can look up in the author's pages (docs/companion-roadmap.md, its
+    /// own tools for the writer's pages): the prompt then shows only part of their pages, adds
+    /// what they say about the author's last message (`retrieving`), and offers `search_pages`
+    public struct Lookup: Sendable {
+        public var pages: PageLookup
+        /// Spotlight's item ids for the author's last message, best first (none on Linux).
+        public var ranked: [String]
+        /// The open page, shown whole already, so left out of what's found.
+        public var open: UUID?
+        /// What their pages say about the author's last message goes in the prompt.
+        public var retrieving: Bool
+        /// The model is offered `search_pages` and told to look with it.
+        public var searching: Bool
+
+        public init(pages: PageLookup, ranked: [String] = [], open: UUID? = nil, retrieving: Bool, searching: Bool) {
+            self.pages = pages
+            self.ranked = ranked
+            self.open = open
+            self.retrieving = retrieving
+            self.searching = searching
+        }
+
+        /// What the pages say about the author's last message in `conversation`, if retrieving.
+        func related(to conversation: Conversation, maxCharacters: Int) -> String {
+            guard retrieving, let message = conversation.turns.last?.answer else { return "" }
+            return pages.related(to: message, maxCharacters: maxCharacters, ranked: ranked, excluding: open)
+        }
+    }
+
+    private static let relatedHeading = "What their pages say about what they just said:"
+
+    private static func backgroundHeading(_ lookup: Lookup?) -> String {
+        "What the app shows you of the writer's pages (for reference; the writer didn't just say this"
+            + (lookup == nil ? "):" : "; only part of their pages is shown here):")
+    }
+
+    /// The reply case added when the model can search the author's pages.
+    public static let searchInstruction = """
+        - If they ask about something of theirs that isn't shown to you here, look for it with \
+        \(PageLookup.toolName) first, then answer from what it finds. If it finds nothing, say it isn't on \
+        their pages: that part is theirs to tell you.
+        """
+
+    /// `instructions`, with `searchInstruction` after the real-world case when `searching`.
+    public static func instructions(searching: Bool) -> String {
+        guard searching else { return instructions }
+        let next = "- If they asked what you think"
+        return instructions.replacingOccurrences(of: next, with: searchInstruction + "\n" + next)
     }
 
     /// The author's first turn in a world conversation the companion began (before it
@@ -245,7 +320,7 @@ public struct CompanionPrompt: Equatable, Sendable {
         let name = page.name
         var lines: [String]
         if let type = page.type {
-            let a = (type.first.map { "aeiouAEIOU".contains($0) } ?? false) ? "an" : "a"
+            let a = article(type)
             if name.isEmpty {
                 lines = ["\(a.capitalized) \(type) page with no title yet."]
             } else {
@@ -268,9 +343,14 @@ public struct CompanionPrompt: Equatable, Sendable {
     }
 
     /// "Character" as a common noun, "character"; "NPC" stays as written.
-    private static func lowercasedWord(_ word: String) -> String {
+    static func lowercasedWord(_ word: String) -> String {
         guard let first = word.first, word.dropFirst().first?.isLowercase ?? true else { return word }
         return first.lowercased() + word.dropFirst()
+    }
+
+    /// "an" before a word that starts with a vowel, otherwise "a".
+    static func article(_ word: String) -> String {
+        (word.first.map { "aeiouAEIOU".contains($0) } ?? false) ? "an" : "a"
     }
 
     /// A text longer than `maxCharacters` as how it opens (a quarter of the
@@ -292,17 +372,12 @@ public struct CompanionPrompt: Equatable, Sendable {
     /// - Parameter perPage: how much of each page's opening it shows (the world's own
     ///   conversation, with no open page, shows more: it's all the companion has).
     static func worldSummary(_ pages: [Page], focus: String, maxCharacters: Int = 2000, perPage: Int = 160) -> String {
-        let topic = keywords(focus)
-        let scored = pages.enumerated().map { (offset: $0.offset, page: $0.element,
-                                               shared: keywords($0.element.name + " " + $0.element.writing).intersection(topic).count) }
-        let ordered = scored.sorted { ($1.shared, $0.offset) < ($0.shared, $1.offset) }   // most shared first, then as they were
         var lines: [String] = [], used = 0
-        for (_, page, _) in ordered {
+        for page in ordered(pages, focus: focus) {
             let opening = oneLine(page.writing)
             guard !page.name.isEmpty || !opening.isEmpty else { continue }
             let fields = oneLine(page.fields.replacingOccurrences(of: "\n", with: "; "), maxCharacters: 200)
-            let head = "- " + (page.name.isEmpty ? "Untitled" : page.name) + (page.type.map { " (\($0))" } ?? "")
-                + (page.fields.isEmpty ? "" : " [\(fields)]")
+            let head = listed(page.name, type: page.type) + (page.fields.isEmpty ? "" : " [\(fields)]")
             // As much of its opening as fits, then less, then none: every page is named while there's room.
             let withOpening: [String] = opening.isEmpty ? [] : [perPage, 160].map { head + ": " + opening.prefix($0) }
             guard let line = (withOpening + [head]).first(where: { used + $0.count <= maxCharacters }) else { break }
@@ -310,6 +385,21 @@ public struct CompanionPrompt: Equatable, Sendable {
             used += line.count + 1
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// A page as a line of a list: "- Name (Type)", "Untitled" when it has no name.
+    static func listed(_ name: String, type: String?) -> String {
+        "- " + (name.isEmpty ? "Untitled" : name) + (type.map { " (\($0))" } ?? "")
+    }
+
+    /// `pages`, those sharing the most words with `focus` first, then as they were.
+    static func ordered(_ pages: [Page], focus: String) -> [Page] {
+        let topic = keywords(focus)
+        guard !topic.isEmpty else { return pages }
+        return pages.enumerated()
+            .map { (offset: $0.offset, page: $0.element, shared: keywords($0.element.name + " " + $0.element.writing).intersection(topic).count) }
+            .sorted { ($1.shared, $0.offset) < ($0.shared, $1.offset) }
+            .map(\.page)
     }
 
     /// What the author has told the companion on other pages that bears on
@@ -342,7 +432,7 @@ public struct CompanionPrompt: Equatable, Sendable {
     }
 
     /// `text` on one line, cut to `maxCharacters` with an ellipsis.
-    private static func oneLine(_ text: String, maxCharacters: Int = .max) -> String {
+    static func oneLine(_ text: String, maxCharacters: Int = .max) -> String {
         let line = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
         return line.count > maxCharacters ? line.prefix(maxCharacters) + "\u{2026}" : line
     }

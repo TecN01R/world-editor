@@ -65,6 +65,26 @@ final class ConversationVersionsTests: XCTestCase {
         let old = #"{"page":"\#(UUID().uuidString)","turns":[{"id":"\#(UUID().uuidString)","question":"Hi","asked":0}]}"#
         let talk = try JSONDecoder().decode(Conversation.self, from: Data(old.utf8))
         XCTAssertNil(talk.turns[0].versions)
+        XCTAssertNil(talk.turns[0].searches)
+    }
+
+    /// What each reply searched the author's pages for stays with that reply: kept when Try
+    /// Again makes another, saved, and gone with a deleted version.
+    func testEachReplyKeepsWhatItSearchedFor() throws {
+        var talk = Conversation(page: UUID())
+        talk.ask("A", searches: ["Kestrel"])
+        XCTAssertEqual(talk.turns[0].searches, ["A": ["Kestrel"]])
+        talk.ask("B", after: try XCTUnwrap(talk.retract()), searches: ["Port Vell", "salt tolls"])
+        talk.ask("C", after: try XCTUnwrap(talk.retract()))
+        XCTAssertEqual(talk.turns[0].searches, ["A": ["Kestrel"], "B": ["Port Vell", "salt tolls"]])
+        let saved = try JSONDecoder().decode(Conversation.self, from: JSONEncoder().encode(talk))
+        XCTAssertEqual(saved.turns[0].searches, talk.turns[0].searches)
+        talk.delete("A", in: talk.turns[0].id)
+        XCTAssertEqual(talk.turns[0].searches, ["B": ["Port Vell", "salt tolls"]])
+        talk.delete("B", in: talk.turns[0].id)
+        XCTAssertNil(talk.turns[0].searches)
+        talk.ask("D")
+        XCTAssertNil(talk.turns[0].searches)
     }
 }
 

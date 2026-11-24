@@ -6,6 +6,14 @@ final class ReasoningTests: XCTestCase {
         XCTAssertEqual(Reasoned.gemma(" Got it, a rower. "), Reasoned(reply: "Got it, a rower."))
     }
 
+    /// A search, before any words of the reply: what the "Searching your pages" line shows.
+    func testASearchBeforeTheReply() {
+        let searching = Reasoned(searches: ["Kestrel"])
+        XCTAssertEqual(searching.reply, "")
+        XCTAssertEqual(searching.searches, ["Kestrel"])
+        XCTAssertEqual(Reasoned.gemma("Hi").searches, [])
+    }
+
     func testThinkingThenReply() {
         let output = "<|channel>thought\nThey said she rows.\nAsk about that.<channel|>So she rows for a living?"
         XCTAssertEqual(Reasoned.gemma(output),

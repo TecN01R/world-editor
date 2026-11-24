@@ -110,11 +110,15 @@ public final class SchemaStore: @unchecked Sendable {
 }
 
 extension Document {
-    /// "Name: value" lines for `fields` that have a value, for search.
-    public func fieldText(_ fields: [FieldDefinition], pageName: (UUID) -> String?) -> String {
+    /// "Name: value" for each of `fields` that has a value, for search.
+    public func fieldLines(_ fields: [FieldDefinition], pageName: (UUID) -> String?) -> [String] {
         fields.compactMap { field in
             values[field.id]?.display(pageName: pageName).map { "\(field.name): \($0)" }
         }
-        .joined(separator: "\n")
+    }
+
+    /// The same, as the lines of one text.
+    public func fieldText(_ fields: [FieldDefinition], pageName: (UUID) -> String?) -> String {
+        fieldLines(fields, pageName: pageName).joined(separator: "\n")
     }
 }
