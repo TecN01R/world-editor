@@ -10,9 +10,23 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 git pull --ff-only --quiet || echo "(couldn't pull; building what's here)"
 scripts/fetch-llama.sh   # llama.cpp's framework, which xtool.yml copies into the app
+# Stops at once when the phone can't be reached (not on this network, not plugged
+# in): xtool would otherwise wait for it indefinitely (Kevin, 2026-11-24, away from home).
+reachable() {
+    command -v pymobiledevice3 >/dev/null || return 0   # can't tell: let xtool try
+    local devices
+    devices=$(timeout 15 pymobiledevice3 usbmux list 2>/dev/null | tr -d '[:space:]')
+    [[ -n "$devices" && "$devices" != "[]" ]]
+}
+unreachable() {
+    echo "The iPhone isn't reachable (not on this network or plugged in), so nothing was installed." >&2
+    exit 2
+}
 if [[ "${1:-}" == "--no-launch" ]]; then
     shift
     xtool dev build --ipa "$@"
-    exec xtool install xtool/WorldEditor.ipa
+    reachable || unreachable   # built, ready for when it is
+    exec timeout 600 xtool install xtool/WorldEditor.ipa
 fi
+reachable || unreachable
 exec xtool dev "$@"

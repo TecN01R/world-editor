@@ -67,3 +67,22 @@ final class ConversationVersionsTests: XCTestCase {
         XCTAssertNil(talk.turns[0].versions)
     }
 }
+
+/// The world's conversations: marked, titled by the author's first words, dated by the last turn.
+final class WorldConversationListTests: XCTestCase {
+    func testAWorldConversationsTitleDateAndMark() throws {
+        var talk = Conversation(page: UUID(), aboutWorld: true)
+        XCTAssertNil(talk.title)
+        talk.answer("Ilsa and Verran\nand the salt wars", at: Date(timeIntervalSince1970: 10))
+        talk.ask("They share a harbour.", at: Date(timeIntervalSince1970: 20))
+        XCTAssertEqual(talk.title, "Ilsa and Verran")
+        XCTAssertEqual(talk.lastActive, Date(timeIntervalSince1970: 20))
+        let again = try JSONDecoder().decode(Conversation.self, from: JSONEncoder().encode(talk))
+        XCTAssertTrue(again.aboutWorld)
+    }
+
+    func testOlderConversationsAreAPagesOwn() throws {
+        let old = #"{"page":"\#(UUID().uuidString)","turns":[]}"#
+        XCTAssertFalse(try JSONDecoder().decode(Conversation.self, from: Data(old.utf8)).aboutWorld)
+    }
+}

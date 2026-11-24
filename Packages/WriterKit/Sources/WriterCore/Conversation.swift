@@ -1,8 +1,9 @@
 import Foundation
 
-/// The companion's conversation about one page: its replies (`question`) and
-/// the author's answers. The answers are the author's own words, so they count
-/// as author text (docs/ai-charter.md): what the companion may quote and build on.
+/// The companion's conversation about one page (or the whole world: `aboutWorld`):
+/// its replies (`question`) and the author's answers. The answers are the author's
+/// own words, so they count as author text (docs/ai-charter.md): what the companion
+/// may quote and build on.
 public struct Conversation: Codable, Hashable, Sendable {
     public struct Turn: Codable, Hashable, Sendable, Identifiable {
         public var id: UUID
@@ -38,12 +39,38 @@ public struct Conversation: Codable, Hashable, Sendable {
         }
     }
 
+    /// The page it's about; a conversation about the whole world has its own id here.
     public var page: UUID
     public var turns: [Turn]
+    /// About the whole world, not one page: one of the world's conversations listed
+    /// under the pages list's Companion (Kevin, 2026-11-24).
+    public var aboutWorld: Bool
 
-    public init(page: UUID, turns: [Turn] = []) {
+    public init(page: UUID, turns: [Turn] = [], aboutWorld: Bool = false) {
         self.page = page
         self.turns = turns
+        self.aboutWorld = aboutWorld
+    }
+
+    private enum CodingKeys: String, CodingKey { case page, turns, aboutWorld }
+
+    /// Conversations saved before `aboutWorld` load as a page's.
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        page = try c.decode(UUID.self, forKey: .page)
+        turns = try c.decode([Turn].self, forKey: .turns)
+        aboutWorld = try c.decodeIfPresent(Bool.self, forKey: .aboutWorld) ?? false
+    }
+
+    /// What a list shows for it: the author's first words, on one line.
+    public var title: String? {
+        guard let first = turns.lazy.compactMap(\.answer).first else { return nil }
+        return first.split(whereSeparator: \.isNewline).first.map(String.init) ?? first
+    }
+
+    /// When it was last added to.
+    public var lastActive: Date? {
+        turns.last.map { $0.answered ?? $0.asked }
     }
 
     /// The question waiting for an answer, if any.
@@ -104,9 +131,14 @@ public struct Conversation: Codable, Hashable, Sendable {
         turns[i].versions = versions.count > 1 ? versions : nil
     }
 
+    /// The author's words: an answer to the waiting reply, or, if nothing has been said
+    /// yet, the conversation's first words (the world's conversation waits for them;
+    /// Kevin, 2026-11-24), on a turn with no reply before it.
     public mutating func answer(_ text: String, at date: Date = Date()) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let i = turns.indices.last, turns[i].answer == nil else { return }
+        guard !trimmed.isEmpty else { return }
+        if turns.isEmpty { turns.append(Turn(question: "", asked: date)) }
+        guard let i = turns.indices.last, turns[i].answer == nil else { return }
         turns[i].answer = trimmed
         turns[i].answered = date
     }

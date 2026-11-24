@@ -24,6 +24,12 @@ struct CompanionPanel: View {
     private static let margin: CGFloat = 20
     /// Folded, a sheet; unfolded, the inspector column beside the page.
     let inSheet: Bool
+    /// A conversation about the whole world, as a screen of its own from the pages
+    /// list's companion (`WorldCompanionView`): its bar has Changes and the menu.
+    var worldConversation: UUID? = nil
+    /// Starts another world conversation (its menu's New Conversation).
+    var newConversation: (() -> Void)? = nil
+    private var aboutWorld: Bool { worldConversation != nil }
 
     /// Folded, a stock sheet: a navigation bar with the title, Close, Changes
     /// and the menu. On the folded Duo a sheet's bar would otherwise go into the side
@@ -47,6 +53,16 @@ struct CompanionPanel: View {
                     }
             }
             .toolbarVerticalBehavior(.disabled)
+        } else if aboutWorld {
+            conversation
+                .navigationTitle(companion.conversation.title ?? "New Conversation")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    if ready {
+                        ToolbarItem(placement: .primaryAction) { changesButton }
+                        ToolbarItem(placement: .primaryAction) { more }
+                    }
+                }
         } else {
             // No toolbar in the column: merged into the split view's bar, it
             // crashed UIKit's layout while the Duo folded (2026-11-23, twice).
@@ -55,6 +71,9 @@ struct CompanionPanel: View {
         }
     }
 
+    /// What the conversation is about: the open page, or the world as a whole.
+    private var subject: WriterCore.Document { worldConversation.map(library.worldSubject) ?? library.document }
+
     /// The model is on the phone: until then there's nothing the menu could do.
     private var ready: Bool { companion.download == nil && companion.state != .downloadPaused && !companion.needsDownload }
 
@@ -62,11 +81,17 @@ struct CompanionPanel: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
                 // Until the model is here, only the download shows (over an empty panel).
-                ForEach(companion.needsDownload || companion.download != nil ? [] : companion.conversation.turns) { turn in
+                let turns = companion.needsDownload || companion.download != nil ? [] : companion.conversation.turns
+                ForEach(Array(turns.enumerated()), id: \.element.id) { i, turn in
                     if let thought = companion.thoughts[turn.question] { reasoning(thought, done: true) }
-                    reply(turn)
+                    if !turn.question.isEmpty { reply(turn) }   // empty: the author began
+                    // What was filed from the author's message before this reply shows under the
+                    // reply, as the companion's doing, in the order it happens: filing runs once
+                    // the reply is done (Kevin, 2026-11-24).
+                    if i > 0, let record = turns[i - 1].filed, !record.isEmpty { filed(record, from: turns[i - 1].id) }
                     if let answer = turn.answer { mine(answer) }
-                    if let record = turn.filed, !record.isEmpty { filed(record, from: turn.id) }
+                    // No reply after it (being tried again): under the message meanwhile.
+                    if i == turns.count - 1, let record = turn.filed, !record.isEmpty { filed(record, from: turn.id) }
                 }
                 status
             }
@@ -104,7 +129,7 @@ struct CompanionPanel: View {
                             titleVisibility: .visible) {
             Button("New Conversation", role: .destructive) {
                 message = ""
-                companion.startOver(page: library.document, in: library)
+                companion.startOver(page: subject, in: library)
             }
         } message: {
             Text("This conversation, and your messages in it, will be deleted.")
@@ -235,10 +260,11 @@ struct CompanionPanel: View {
             ? Text("\(filed(line)) · changed since") : filed(line)
     }
 
-    /// What was filed from the author's message, under it: each page made,
-    /// type given and field filled, in their words (New York), with its own Undo.
+    /// What was filed from the author's message, under the companion's reply to it,
+    /// left-aligned with the reply: each page made, type given and field filled, in
+    /// their words (New York), with its own Undo.
     private func filed(_ record: FilingRecord, from turn: UUID) -> some View {
-        VStack(alignment: .trailing, spacing: 6) {
+        VStack(alignment: .leading, spacing: 6) {
             Label("Added to Your Pages", systemImage: "square.stack.3d.up")
             ForEach(library.describe(record), id: \.self) { line in
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -249,9 +275,7 @@ struct CompanionPanel: View {
         }
         .font(.footnote)
         .foregroundStyle(.secondary)
-        .multilineTextAlignment(.trailing)
-        .padding(.leading, 48)
-        .frame(maxWidth: .infinity, alignment: .trailing)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// "New page: Myriddea (Place)", "Casperica · Character", "Casperica · Origin: Myriddea".
@@ -273,8 +297,13 @@ struct CompanionPanel: View {
     @ViewBuilder private var empty: some View {
         switch companion.state {
         case .idle:
-            ContentUnavailableView("Talk About This Page", systemImage: "bubble.left.and.text.bubble.right",
-                                   description: Text("Write a little on this page, and the companion will talk with you about it."))
+            if aboutWorld {
+                ContentUnavailableView("Talk About Your World", systemImage: "bubble.left.and.text.bubble.right",
+                                       description: Text("The companion knows all your pages. Talk with it about any of them, or all of them."))
+            } else {
+                ContentUnavailableView("Talk About This Page", systemImage: "bubble.left.and.text.bubble.right",
+                                       description: Text("Write a little on this page, and the companion will talk with you about it."))
+            }
         case .downloadPaused:
             ContentUnavailableView {
                 Label("Download Paused", systemImage: "arrow.down.circle")
@@ -383,7 +412,7 @@ struct CompanionPanel: View {
             Text("The companion runs on your phone, so nothing you write leaves it. It needs a one-time download"
                  + (companion.downloadSize.map { " of \($0.formatted(.byteCount(style: .file)))" } ?? "") + ".")
         } actions: {
-            Button("Download") { companion.startDownload(page: library.document, in: library) }
+            Button("Download") { companion.startDownload(page: subject, in: library) }
                 .buttonStyle(.borderedProminent)
         }
     }
@@ -419,15 +448,15 @@ struct CompanionPanel: View {
             .buttonStyle(.bordered)
     }
 
-    private func retry() { companion.retry(page: library.document, in: library) }
-    private func resume() { companion.startDownload(page: library.document, in: library) }
+    private func retry() { companion.retry(page: subject, in: library) }
+    private func resume() { companion.startDownload(page: subject, in: library) }
 
     /// The message field in Liquid Glass: (unfolded) the menu, the field and
     /// send, one height (the stock glass button styles each come in a different one).
     private var composer: some View {
         GlassEffectContainer {
             HStack(alignment: .bottom, spacing: 8) {
-                if !inSheet {
+                if !inSheet && !aboutWorld {
                     more
                         .labelStyle(.iconOnly)
                         .frame(width: barHeight, height: barHeight)
@@ -442,7 +471,7 @@ struct CompanionPanel: View {
                     .padding(.vertical, 8)
                     .frame(minHeight: barHeight)
                     .glassEffect(.regular.interactive(), in: .rect(cornerRadius: barHeight / 2))
-                    .disabled(companion.conversation.waiting == nil)
+                    .disabled(!canWrite)
                 Button(action: send) {
                     Image(systemName: "arrow.up")
                         .fontWeight(.semibold)
@@ -461,11 +490,14 @@ struct CompanionPanel: View {
     /// Everything that isn't the conversation itself.
     private var more: some View {
         Menu {
-            Button("New Conversation", systemImage: "square.and.pencil") { confirmingNew = true }
-                .disabled(companion.conversation.turns.isEmpty)
+            Button("New Conversation", systemImage: "square.and.pencil") {
+                // A world conversation: another one, this one kept in the list; a page's: after confirming.
+                if let newConversation { newConversation() } else { confirmingNew = true }
+            }
+            .disabled(companion.conversation.turns.isEmpty)
             ShareLink("Share Conversation", item: transcript)
                 .disabled(companion.conversation.turns.isEmpty)
-            if !inSheet { changesButton }   // the sheet has it beside the menu (Kevin, 2026-11-24)
+            if !inSheet && !aboutWorld { changesButton }   // the sheet (Kevin, 2026-11-24) and the world's screen have it beside the menu
             Toggle("Think Before Replying", systemImage: "lightbulb",
                    isOn: Binding { companion.thinks } set: { companion.thinks = $0 })
             // TRIAL (Kevin, 2026-11-24): the model on its own.
@@ -502,22 +534,32 @@ struct CompanionPanel: View {
     /// The conversation as plain text, to paste anywhere: who said what, and
     /// which model replied (to compare how it's going).
     private var transcript: String {
-        let title = library.document.title.isEmpty ? "Untitled page" : library.document.title
+        let title: String
+        if aboutWorld {
+            title = library.world.name
+        } else {
+            title = library.document.title.isEmpty ? "Untitled page" : library.document.title
+        }
         let header = "World Editor companion on “\(title)” (\(Companion.modelName), thinking \(companion.thinks ? "on" : "off")"
             + (companion.plain ? ", plain model" : "") + ")"
         let turns = companion.conversation.turns.flatMap { turn in
-            ["Companion: \(turn.question)"] + (turn.answer.map { ["Me: \($0)"] } ?? [])
+            (turn.question.isEmpty ? [] : ["Companion: \(turn.question)"]) + (turn.answer.map { ["Me: \($0)"] } ?? [])
         }
         return ([header] + turns).joined(separator: "\n\n")
     }
 
+    /// Its reply is waiting for an answer, or nothing has been said yet (the author may begin).
+    private var canWrite: Bool {
+        companion.conversation.waiting != nil || companion.conversation.turns.isEmpty
+    }
+
     private var canSend: Bool {
-        companion.conversation.waiting != nil && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        canWrite && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func send() {
         guard canSend else { return }
-        companion.answer(message, page: library.document, in: library)
+        companion.answer(message, page: subject, in: library)
         message = ""
         scrollToEnd()
     }

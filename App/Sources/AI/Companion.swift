@@ -61,6 +61,8 @@ final class Companion {
     /// The world's other conversations, as of opening this page: their filings can
     /// change this page too, so Undo, newest first, looks at them as well.
     private(set) var others: [Conversation] = []
+    /// The world's conversations about the world as a whole, newest first, for their list.
+    private(set) var worldConversations: [Conversation] = []
 
     // The one model the companion uses: the test's leader that runs on the
     // phone today (Kevin: one model, no choosing, as when it ships). Gemma,
@@ -123,7 +125,8 @@ final class Companion {
 
     /// The open page changed: load its conversation and, after a pause,
     /// prepare a reply quietly.
-    func open(_ page: WriterCore.Document, in library: Library) {
+    /// - Parameter aboutWorld: a conversation about the whole world (`page` is a stand-in).
+    func open(_ page: WriterCore.Document, in library: Library, aboutWorld: Bool = false) {
         let directory = library.conversationsDirectory
         // The same page again (folding or unfolding rebuilds the editor): leave a reply or
         // Try Again in progress alone.
@@ -131,6 +134,8 @@ final class Companion {
         preparing?.cancel()
         store = directory.flatMap { try? ConversationStore(directory: $0) }
         conversation = store?.load(page.id) ?? Conversation(page: page.id)
+        // (The first world conversation, from before there were several, went by the world's id.)
+        if aboutWorld || page.id == library.world.id { conversation.aboutWorld = true }
         others = (store?.all() ?? []).filter { $0.page != page.id }
         retracted = nil
         state = .idle
@@ -181,10 +186,32 @@ final class Companion {
         save()
     }
 
+    /// Lists the world's conversations about the world as a whole, newest first.
+    func loadWorldConversations(in library: Library) {
+        let store = library.conversationsDirectory.flatMap { try? ConversationStore(directory: $0) }
+        worldConversations = (store?.all() ?? [])
+            .filter { Self.isAboutWorld($0, in: library) && !$0.turns.isEmpty }
+            .sorted { ($0.lastActive ?? .distantPast) > ($1.lastActive ?? .distantPast) }
+    }
+
+    /// About the world as a whole: marked so, or the first world conversation, which (from
+    /// before there were several) went by the world's id.
+    private static func isAboutWorld(_ talk: Conversation, in library: Library) -> Bool {
+        talk.aboutWorld || talk.page == library.world.id
+    }
+
+    /// Deletes one of the world's conversations (what was filed from it stays in the pages).
+    func deleteWorldConversation(_ id: UUID, in library: Library) {
+        library.conversationsDirectory.flatMap { try? ConversationStore(directory: $0) }?.delete(id)
+        if conversation.page == id { conversation = Conversation(page: UUID(), aboutWorld: true) }
+        if library.lastWorldConversation == id { library.lastWorldConversation = nil }
+        loadWorldConversations(in: library)
+    }
+
     /// Forgets this page's conversation and starts afresh.
     func startOver(page: WriterCore.Document, in library: Library) {
         store?.delete(page.id)
-        conversation = Conversation(page: page.id)
+        conversation = Conversation(page: page.id, aboutWorld: conversation.aboutWorld)
         retracted = nil
         state = .idle
         askNow(about: page, in: library)
@@ -211,6 +238,9 @@ final class Companion {
     /// Asks the model for a reply about `page`, shown as it's written.
     private func ask(about page: WriterCore.Document, in library: Library) async {
         guard conversation.waiting == nil, conversation.page == page.id, !needsDownload else { return }
+        // The world's conversation waits for the author to begin (Kevin, 2026-11-24: "no need
+        // for it to think before prompted"); a page's begins with the companion.
+        guard !conversation.aboutWorld || !conversation.turns.isEmpty else { return }
         if let reason = await model.unavailableReason { state = .unavailable(reason); return }
         state = .thinking
         defer { self.writing = nil; self.reasoning = nil }
@@ -221,19 +251,29 @@ final class Companion {
         let page = library.pages.first { $0.id == page.id } ?? page   // as it is now, not when it opened
         let others = library.pages.filter { $0.id != page.id }
         let earlier = (store?.all() ?? []).filter { $0.page != page.id }.map { talk in
-            (page: others.first { $0.id == talk.page }?.heading ?? "", conversation: talk)
+            (page: Self.isAboutWorld(talk, in: library) ? "\(library.world.name) as a whole"
+                                                        : others.first { $0.id == talk.page }?.heading ?? "",
+             conversation: talk)
         }
+        let isWorld = conversation.aboutWorld   // a conversation about the whole world: no page open
         var reply = Reasoned(reply: "")
         do {
             // Unusual text takes more of the model's context than its length
             // suggests: a prompt that doesn't fit is rebuilt with less background.
             for room in [1, 2, 4] {
-                let prompt = plain
-                    ? CompanionPrompt.plain(conversation, maxTurnCharacters: 6000 / room)
-                    : CompanionPrompt(page: library.companionPage(page, open: true),
-                                      others: others.map { library.companionPage($0) },
-                                      earlier: earlier, conversation: conversation,
-                                      maxCharacters: 6000 / room, maxTurnCharacters: 6000 / room)
+                let prompt: CompanionPrompt
+                if plain {
+                    prompt = CompanionPrompt.plain(conversation, maxTurnCharacters: 6000 / room)
+                } else if isWorld {
+                    prompt = CompanionPrompt(world: library.world.name, pages: others.map { library.companionPage($0) },
+                                             earlier: earlier, conversation: conversation,
+                                             maxCharacters: 6000 / room, maxTurnCharacters: 6000 / room)
+                } else {
+                    prompt = CompanionPrompt(page: library.companionPage(page, open: true),
+                                             others: others.map { library.companionPage($0) },
+                                             earlier: earlier, conversation: conversation,
+                                             maxCharacters: 6000 / room, maxTurnCharacters: 6000 / room)
+                }
                 do {
                     for try await partial in model.stream(prompt, thinking: thinks) {
                         guard !Task.isCancelled else { break }
@@ -264,19 +304,23 @@ final class Companion {
         save()
         state = .idle
         // Replied: now what the author said, filed (after, so the reply never waits for it).
-        if let answered = conversation.turns.dropLast().last { file(answered, page: page.id, in: library) }
+        if let answered = conversation.turns.dropLast().last {
+            file(answered, page: page.id, aboutWorld: conversation.aboutWorld, in: library)
+        }
     }
 
     /// Files what the author said in `turn` of `page`'s conversation, unless something already was.
-    private func file(_ turn: Conversation.Turn, page: UUID, in library: Library) {
+    private func file(_ turn: Conversation.Turn, page: UUID, aboutWorld: Bool, in library: Library) {
         guard turn.needsFiling, let message = turn.answer, Filer.states(message) else { return }
         let previous = filing
         filing = Task {
             await previous?.value
-            guard let doc = library.pages.first(where: { $0.id == page }) else { return }
+            // A world conversation has no page of its own; it files into the pages it names.
+            guard let doc = aboutWorld ? library.worldSubject(page) : library.pages.first(where: { $0.id == page }) else { return }
             let filings: Filings
             do {
-                filings = try await model.file(library.filingPrompt(for: doc, asked: turn.question, message: message))
+                filings = try await model.file(library.filingPrompt(for: doc, aboutWorld: aboutWorld, asked: turn.question,
+                                                                    message: message))
             } catch {
                 Self.log.error("Filing failed: \(String(describing: error), privacy: .public)")
                 trialLog("FILING ERROR: \(String(describing: error))")   // TRIAL
@@ -285,7 +329,7 @@ final class Companion {
             // Gone meanwhile (a new conversation, another world): nothing to file into.
             let there = conversation.page == page ? conversation.turns.contains { $0.id == turn.id }
                                                   : store?.load(page).turns.contains { $0.id == turn.id } == true
-            guard there, library.pages.contains(where: { $0.id == page }) else { return }
+            guard there, aboutWorld || library.pages.contains(where: { $0.id == page }) else { return }
             // Kept even when empty: Try Again reads the message again only if nothing came of it.
             let sent = turn.seen.map { (values: $0, title: turn.seenTitle ?? "") }
             setFiled(library.file(filings, message: message, on: page, again: turn.filed, sent: sent), turn: turn.id, page: page)
@@ -327,7 +371,11 @@ final class Companion {
     private func save() {
         var talk = conversation
         if let retracted, talk.waiting == nil { talk.turns.append(retracted) }
+        guard !(talk.aboutWorld && talk.turns.isEmpty) else { return }   // a world conversation exists once something's said
         try? store?.save(talk)
+        if talk.aboutWorld, !worldConversations.contains(where: { $0.page == talk.page }) {
+            worldConversations.insert(talk, at: 0)   // new: to the top of its list
+        }
     }
 }
 

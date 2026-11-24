@@ -40,7 +40,8 @@ public struct CompanionPrompt: Equatable, Sendable {
     /// stays the same from reply to reply comes first, so a model that keeps
     /// what it has already read re-reads only what changed.
     public var system: String
-    /// The conversation: the author opening the page, then who said what, in
+    /// The conversation: the author opening the page (or saying their first
+    /// words, where the companion waits for them), then who said what, in
     /// order. It ends with the author's turn, which the model replies to.
     public var turns: [Turn]
 
@@ -144,8 +145,38 @@ public struct CompanionPrompt: Equatable, Sendable {
         // an instruction better than a condition.
         if conversation.turns.isEmpty { system.append(Self.opening(page, alone: world.isEmpty)) }
         self.system = system.joined(separator: "\n\n")
-        turns = [Turn(speaker: .author, text: Self.opened)]
-            + Self.recent(conversation, maxTurns: maxTurns, maxTurnCharacters: maxTurnCharacters)
+        turns = Self.authorFirst(Self.recent(conversation, maxTurns: maxTurns, maxTurnCharacters: maxTurnCharacters),
+                                 opener: Self.opened)
+    }
+
+    /// The prompt for a conversation about the whole world, from the pages list (Kevin,
+    /// 2026-11-24: "converse with it and not operate solely within a single page"): every
+    /// page as background, the ones bearing on what's being said first, and no page open.
+    public init(world: String, pages: [Page], earlier: [(page: String, conversation: Conversation)] = [],
+                conversation: Conversation, maxCharacters: Int = 6000, maxTurns: Int = 12,
+                maxTurnCharacters: Int = 6000) {
+        let focus = conversation.authorText
+        // Much more of each page than beside an open one: here the pages are all it has
+        let summary = Self.worldSummary(pages, focus: focus, maxCharacters: maxCharacters * 2 / 3, perPage: 800)
+        let memory = Self.memory(earlier, focus: focus, maxCharacters: maxCharacters / 4)
+        var background = ["What the app shows you of the writer's pages (for reference; the writer didn't just say this):"]
+        background.append(summary.isEmpty ? "Their world, \u{201C}\(world)\u{201D}, has no pages yet."
+                                          : "Their world, \u{201C}\(world)\u{201D}, and its pages:\n" + summary)
+        if !memory.isEmpty { background.append("From your earlier conversations:\n" + memory) }
+        // It doesn't speak first here: it waits for the author (Kevin, 2026-11-24).
+        system = [Self.instructions, Self.examples, background.joined(separator: "\n\n")].joined(separator: "\n\n")
+        turns = Self.authorFirst(Self.recent(conversation, maxTurns: maxTurns, maxTurnCharacters: maxTurnCharacters),
+                                 opener: Self.openedWorld)
+    }
+
+    /// The author's first turn in a world conversation the companion began (before it
+    /// waited for the author).
+    public static let openedWorld = "(I've just opened the companion for my whole world.)"
+
+    /// `recent`, after `opener` when the companion spoke first: a chat model's
+    /// conversation begins with the author.
+    private static func authorFirst(_ recent: [Turn], opener: String) -> [Turn] {
+        recent.first?.speaker == .author ? recent : [Turn(speaker: .author, text: opener)] + recent
     }
 
     /// The model with nothing of the app's (Kevin's trial, 2026-11-24: "remove all your rules and
@@ -172,7 +203,7 @@ public struct CompanionPrompt: Equatable, Sendable {
         }
         func fitted(_ text: String) -> String { excerpt(text, maxCharacters: maxTurnCharacters) ?? text }
         return recent.flatMap { turn in
-            [Turn(speaker: .companion, text: fitted(turn.question))]
+            (turn.question.isEmpty ? [] : [Turn(speaker: .companion, text: fitted(turn.question))])   // the author began
                 + (turn.answer.map { [Turn(speaker: .author, text: fitted($0))] } ?? [])
         }
     }
@@ -258,7 +289,9 @@ public struct CompanionPrompt: Equatable, Sendable {
     /// Pages that share words with `focus` (the open page and what the author
     /// has said about it) come first, most shared first, so those are what a
     /// big world is cut down to. Until `maxCharacters`.
-    static func worldSummary(_ pages: [Page], focus: String, maxCharacters: Int = 2000) -> String {
+    /// - Parameter perPage: how much of each page's opening it shows (the world's own
+    ///   conversation, with no open page, shows more: it's all the companion has).
+    static func worldSummary(_ pages: [Page], focus: String, maxCharacters: Int = 2000, perPage: Int = 160) -> String {
         let topic = keywords(focus)
         let scored = pages.enumerated().map { (offset: $0.offset, page: $0.element,
                                                shared: keywords($0.element.name + " " + $0.element.writing).intersection(topic).count) }
@@ -268,7 +301,7 @@ public struct CompanionPrompt: Equatable, Sendable {
             let opening = oneLine(page.writing)
             guard !page.name.isEmpty || !opening.isEmpty else { continue }
             let line = "- " + (page.name.isEmpty ? "Untitled" : page.name) + (page.type.map { " (\($0))" } ?? "")
-                + (opening.isEmpty ? "" : ": " + opening.prefix(160))
+                + (opening.isEmpty ? "" : ": " + opening.prefix(perPage))
             guard used + line.count <= maxCharacters else { break }
             lines.append(line)
             used += line.count + 1

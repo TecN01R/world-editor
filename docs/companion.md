@@ -298,6 +298,27 @@ changed more than once opens its timeline (Kevin, 2026-11-24): every value it
 was given here, newest first, each with its message and time, the current one
 marked, and Undo on the newest (`Conversation.history`).
 
+## The world's own conversation
+
+The companion button beside New Page in the pages list opens the world's
+conversations about the whole world, not one page (Kevin, 2026-11-24:
+"converse with it and not operate solely within a single page"; then "a list
+of conversations unless you were already in one, and start fresh ones"): a
+stock list, newest first, each titled by the author's first words, with New
+Conversation; it goes back into the one the author was in, and with none yet
+straight into a new one. Folded it fills the screen as a page does, unfolded
+it sits beside the list (`WorldCompanionView`, `CompanionPanel(thread:)`).
+Each is stored under its own id, marked `aboutWorld`; one exists once
+something's been said in it. The model
+gets every page as background, the ones bearing on what's being said first,
+and no open page (`CompanionPrompt(world:)`). It doesn't speak first: it
+waits for the author to write (Kevin, 2026-11-24: "no need for it to think
+before prompted"); a conversation can begin with the author's words
+(`Conversation.answer` on an empty one). What's said is filed into the pages it names
+(`FilingPrompt(world:)`): "she" has no page to mean, so it isn't filed, and
+nothing is renamed. Page conversations remember it, as they remember each
+other.
+
 ## Filing: structure from the conversation
 
 Kevin, 2026-11-23: "Take a free flowing conversation and give it extreme
@@ -329,7 +350,7 @@ the companion is filed, never the page's writing.
   a value written as a name mid-sentence ("a sword called Mercy") gets a page
   of its own if it has none (the model often files the name without listing
   the page).
-- **What shows:** under the author's message, *Added to Your Pages*: each
+- **What shows:** under the companion's reply to the author's message, left-aligned (Kevin, 2026-11-24: filing comes after the reply), *Added to Your Pages*: each
   page made, type given and field filled on its own line with its own Undo
   (Kevin: "each discrete action has its own undo"). Undo takes back what the
   author hasn't changed since; a new type or field nothing uses any more goes

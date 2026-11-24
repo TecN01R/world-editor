@@ -133,20 +133,26 @@ public struct FilingPrompt: Equatable, Sendable {
 
 
     /// - Parameters:
-    ///   - page: the open page's title, its type's name and its "Name: value" field lines.
+    ///   - page: the open page's title, its type's name and its "Name: value" field lines;
+    ///     nil in the world's own conversation, where no page is open.
     ///   - types: the world's types, each with its field names.
     ///   - others: the other pages' titles.
     ///   - asked: what the companion said that the message answers.
-    public init(page: (title: String, type: String?, fields: String), types: [(name: String, fields: [String])],
+    public init(page: (title: String, type: String?, fields: String)?, types: [(name: String, fields: [String])],
                 others: [String], asked: String?, message: String) {
         system = Self.instructions
-        var lines = ["The open page: \(Self.quoted(page.title))" + (page.type.map { " (type: \($0))" } ?? " (no type yet)")]
-        if !page.fields.isEmpty { lines.append("Its fields:\n\(page.fields)") }
+        var lines: [String]
+        if let page {
+            lines = ["The open page: \(Self.quoted(page.title))" + (page.type.map { " (type: \($0))" } ?? " (no type yet)")]
+            if !page.fields.isEmpty { lines.append("Its fields:\n\(page.fields)") }
+        } else {
+            lines = ["No page is open: they're talking about their world as a whole."]
+        }
         lines.append(types.isEmpty ? "The world's types: none yet" : "The world's types:\n" + types.map {
             "- \($0.name)" + ($0.fields.isEmpty ? "" : ": \($0.fields.joined(separator: ", "))")
         }.joined(separator: "\n"))
         let titles = others.filter { !$0.isEmpty }.prefix(Self.maxOthers)
-        if !titles.isEmpty { lines.append("Other pages: " + titles.joined(separator: ", ")) }
+        if !titles.isEmpty { lines.append((page == nil ? "Their pages: " : "Other pages: ") + titles.joined(separator: ", ")) }
         if let asked, !asked.isEmpty { lines.append("Their friend said: \(Self.quoted(asked))") }
         lines.append("Their message: \(Self.quoted(message))")
         self.message = lines.joined(separator: "\n\n")
@@ -162,6 +168,12 @@ extension FilingPrompt {
     public init(system: String, message: String) {
         self.system = system
         self.message = message
+    }
+
+    /// The prompt for `message`, sent from the world's own conversation: no page open.
+    public init(world pages: [Document], schema: Schema, asked: String?, message: String) {
+        self.init(page: nil, types: schema.types.map { (name: $0.name, fields: schema.fields(of: $0).map(\.name)) },
+                  others: pages.map(\.heading), asked: asked, message: message)
     }
 
     /// The prompt for `message`, sent from `page`'s conversation in a world of `pages` and `schema`.

@@ -146,9 +146,11 @@ final class Library {
     // MARK: Filing from the companion's conversation (docs/companion.md, Filing)
 
     /// What the model is asked, to read types, fields and pages out of the
-    /// author's `message` in `page`'s conversation, answering `asked`.
-    func filingPrompt(for page: WriterCore.Document, asked: String?, message: String) -> FilingPrompt {
-        FilingPrompt(open: page, pages: pages, schema: schema, asked: asked, message: message)
+    /// author's `message` in `page`'s conversation, answering `asked`;
+    /// `aboutWorld`: in a conversation about the whole world, with no page open.
+    func filingPrompt(for page: WriterCore.Document, aboutWorld: Bool, asked: String?, message: String) -> FilingPrompt {
+        aboutWorld ? FilingPrompt(world: pages, schema: schema, asked: asked, message: message)
+                   : FilingPrompt(open: page, pages: pages, schema: schema, asked: asked, message: message)
     }
 
     /// Files what the model read out of `message` (`Filer` keeps only the
@@ -264,6 +266,19 @@ final class Library {
     private var schemaStore: SchemaStore?
     /// Pending debounced saves, one per page, so editing one page never drops another's.
     private var pendingSaves: [UUID: Task<Void, Never>] = [:]
+
+    /// A conversation about the whole world stands for no page: it goes by its own id
+    /// (`WorldCompanionView`; Kevin, 2026-11-24).
+    func worldSubject(_ conversation: UUID) -> WriterCore.Document {
+        WriterCore.Document(id: conversation, title: world.name)
+    }
+
+    /// The world conversation open when the author last left the companion's list, to go
+    /// back into (nil: they were at the list).
+    var lastWorldConversation: UUID? {
+        get { UserDefaults.standard.string(forKey: "worldConversation." + world.id.uuidString).flatMap(UUID.init) }
+        set { UserDefaults.standard.set(newValue?.uuidString, forKey: "worldConversation." + world.id.uuidString) }
+    }
 
     /// The open page (an empty one if none is open).
     var document: WriterCore.Document {
