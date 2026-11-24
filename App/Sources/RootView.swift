@@ -466,11 +466,13 @@ struct EditorView: View {
     /// The keyboard is up: the toolbar shows Done and Focus, and nothing else.
     @State private var typing = false
 
-    /// Closes the keyboard: the iPhone keyboard has no key for it.
+    /// Closes the keyboard (the iPhone keyboard has no key for it) and, in
+    /// Focus, leaves it: Focus is for editing, so there's nothing to stay for.
     private var done: some ToolbarContent {
         ToolbarItem(placement: .confirmationAction) {
             Button("Done", systemImage: "checkmark") {
                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                if focusMode { withAnimation(.smooth(duration: 0.3)) { focusMode = false } }
             }
         }
     }
@@ -571,7 +573,7 @@ struct EditorView: View {
                     }
                     .keyboardShortcut(.cancelAction)
                 }
-                // Done closes the keyboard here too, as on the page (Kevin).
+                // Done here also leaves Focus, an editing-only mode (Kevin).
                 if typing { done }
             } else {
                 // Two sets, swapped by the keyboard (Kevin, 2026-11-23). Typing: Done
