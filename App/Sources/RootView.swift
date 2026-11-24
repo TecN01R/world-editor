@@ -464,6 +464,15 @@ struct EditorView: View {
     /// The keyboard is up: the toolbar shows Done and Focus, and nothing else.
     @State private var typing = false
 
+    /// Closes the keyboard: the iPhone keyboard has no key for it.
+    private var done: some ToolbarContent {
+        ToolbarItem(placement: .confirmationAction) {
+            Button("Done", systemImage: "checkmark") {
+                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            }
+        }
+    }
+
     /// A page field's "New Place…": the field it fills.
     private var newPageField: FieldDefinition? {
         guard case .newPage(let id)? = library.fieldsRequest else { return nil }
@@ -495,7 +504,7 @@ struct EditorView: View {
                     .ignoresSafeArea()   // the whole display; bars appear over it
                     .transition(.opacity)
             } else {
-                PageEditor {   // stops at the keyboard, as iOS lays pages out
+                PageEditor(keepsKeyboard: typing) {   // stops at the keyboard, as iOS lays pages out
                     withAnimation(.smooth(duration: 0.3)) { focusMode = true }
                 }
                     .transition(.opacity)
@@ -560,17 +569,15 @@ struct EditorView: View {
                     }
                     .keyboardShortcut(.cancelAction)
                 }
+                // Done closes the keyboard here too, as on the page (Kevin).
+                if typing { done }
             } else {
                 // Two sets, swapped by the keyboard (Kevin, 2026-11-23). Typing: Done
                 // (the iPhone keyboard has no key to close it) and Focus, a writing
                 // tool, in its own glass. Not typing: Back, the sidebar button, the
                 // companion and Mentions.
                 if typing {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done", systemImage: "checkmark") {
-                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                        }
-                    }
+                    done
                     ToolbarSpacer(.fixed, placement: .topBarTrailing)
                     // Unfolded, kept in the top row at its right end; folded, in the
                     // side column, as iOS places it.

@@ -129,8 +129,11 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         show(c.paragraph, caret: .offset(c.offset), direction: 0)
     }
 
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
+    // As soon as it's on screen, not once the switch from Edit has finished
+    // animating: the page's text view still has the keyboard then and hands it
+    // over, so the keyboard stays up through the switch (Kevin, 2026-11-23).
+    override func viewIsAppearing(_ animated: Bool) {
+        super.viewIsAppearing(animated)
         textView.becomeFirstResponder()
         if size > 0 { apply(size) }   // becoming first responder resets an empty view's typing font
     }

@@ -9,8 +9,14 @@ struct PageEditor: UIViewRepresentable {
     @Environment(Library.self) private var library
     /// Steps into Focus mode with ⇧⌘F (its button is in the toolbar).
     private let onFocus: () -> Void
+    /// The keyboard was up when the page appeared (coming back from Focus):
+    /// keep writing, keyboard up, instead of waiting for a tap.
+    private let keepsKeyboard: Bool
 
-    init(onFocus: @escaping () -> Void) { self.onFocus = onFocus }
+    init(keepsKeyboard: Bool = false, onFocus: @escaping () -> Void) {
+        self.keepsKeyboard = keepsKeyboard
+        self.onFocus = onFocus
+    }
 
     func makeCoordinator() -> Coordinator { Coordinator(library: library, onFocus: onFocus) }
 
@@ -29,6 +35,7 @@ struct PageEditor: UIViewRepresentable {
         fields.safeAreaRegions = []
         tv.fieldsController = fields
         context.coordinator.textView = tv
+        context.coordinator.keepsKeyboard = keepsKeyboard
         context.coordinator.render(selection: nil)
         context.coordinator.restoreCaret()
         return PageView(textView: tv, bar: context.coordinator.formatBar)
@@ -67,6 +74,7 @@ struct PageEditor: UIViewRepresentable {
         /// Replacing the text moves the selection; that isn't the user moving the caret.
         private var isRendering = false
         var onFocus: () -> Void
+        var keepsKeyboard = false
         lazy var formatBar = FormatBar(onAction: { [weak self] action in self?.perform(action) })
 
         lazy var titleField: UITextField = {
@@ -311,11 +319,13 @@ struct PageEditor: UIViewRepresentable {
             updateTypingAttributes()
             // A new page starts in its title, keyboard up, as a new note does in
             // Notes; any other page opens where you left off, keyboard down
-            // until you tap (Kevin, 2026-11-23).
+            // until you tap (Kevin, 2026-11-23), unless it was already up (back
+            // from Focus, which hands it over).
             let startInTitle = doc.isEmpty && !Screenshots.isActive
             guard !Screenshots.opensMara || Screenshots.showsMentions else { return }   // CI: the page at rest
-            DispatchQueue.main.async { [titleField] in
+            DispatchQueue.main.async { [titleField, keepsKeyboard] in
                 if startInTitle { titleField.becomeFirstResponder(); return }
+                if keepsKeyboard { tv.becomeFirstResponder() }
                 tv.scrollRangeToVisible(tv.selectedRange)
             }
         }
