@@ -428,15 +428,18 @@ struct CompanionPanel: View {
         } actions: {
             // The bar, with Foundation's sizes and time left centred under it, as
             // the title and description above are (a stock ProgressView's own
-            // value line always starts at the bar's left edge).
+            // value line always starts at the bar's left edge). The bar keeps one
+            // width while the line under it changes (Kevin, 2026-11-24: it grew and
+            // shrank with the text), and the digits keep theirs.
             VStack(spacing: 8) {
                 ProgressView(value: Double(download.done), total: Double(max(download.total, 1)))
                 Text(download.detail)
                     .font(.footnote)
+                    .monospacedDigit()
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             }
-            .frame(maxWidth: 280)
+            .frame(minWidth: 0, idealWidth: 280, maxWidth: 280)
         }
     }
 
