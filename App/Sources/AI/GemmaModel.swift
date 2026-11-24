@@ -5,7 +5,7 @@ import Guardrails
 import HuggingFace
 import os
 
-/// The companion's model: Gemma 4 E2B through llama.cpp, with Hugging Face's
+/// The companion's model: Gemma 4 E4B through llama.cpp, with Hugging Face's
 /// AnyLanguageModel on top (Foundation Models' session API, Gemma's own chat
 /// format). Not on the simulator, which llama.cpp doesn't ship for: the
 /// companion uses Apple's model there.
@@ -15,35 +15,39 @@ final class GemmaModel: CompanionModel, @unchecked Sendable {
         let repo: Repo.ID
         let file: String
         let name: String
-        var isTrial = false
+
+        /// Where the revision of it in use is kept (see `revision`).
+        var revisionKey: String { "companionRevision." + file }
     }
 
-    /// Downloaded once (about 3 GB) with Hugging Face's client into its cache, so
-    /// the download can show progress (AnyLanguageModel's own download can't), then
-    /// loaded by path. Text only for now: the image projector comes with images.
-    private static let standard = Build(repo: Repo.ID(namespace: "unsloth", name: "gemma-4-E2B-it-GGUF"),
-                                        file: "gemma-4-E2B-it-Q4_K_M.gguf", name: "Gemma 4 E2B (Q4_K_M)")
+    /// Gemma 4 E4B, Unsloth's quantisation-aware 4-bit build (4.2 GB): the standard
+    /// model since Kevin's word on 2026-11-24, after it ran as a trial from 2026-11-23
+    /// Face's client into its cache, so the download can show progress
+    /// (AnyLanguageModel's own download can't), then loaded by path. Text only for
+    /// now: the image projector comes with images.
+    private static let build = Build(repo: Repo.ID(namespace: "unsloth", name: "gemma-4-E4B-it-qat-GGUF"),
+                                     file: "gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf", name: "Gemma 4 E4B")
 
-    // TRIAL: a line in Documents/companion-trial.txt, put there from the computer
-    // ("namespace/repository file.gguf"), names another build of Gemma to download
-    // and use instead: a way to try one on the phone without a new app. While it
-    // loads and writes a reply a marker sits beside the line, taken away however
-    // the reply ends; a marker still there at the next launch means the app died
-    // in the middle (too big for the phone, most likely), and the trial is passed
-    // over from then on.
-    private static let trialNote = URL.documentsDirectory.appendingPathComponent("companion-trial.txt")
-    private static let trialLoading = trialNote.appendingPathExtension("loading")
-    private static let trialFailed = trialNote.appendingPathExtension("failed")
-    private static let build: Build = {
+    /// What came before it: E2B, the standard until 2026-11-24 (about 3 GB),
+    /// removed from the phone once E4B is there.
+    private static let retired = Build(repo: Repo.ID(namespace: "unsloth", name: "gemma-4-E2B-it-GGUF"),
+                                       file: "gemma-4-E2B-it-Q4_K_M.gguf", name: "Gemma 4 E2B")
+
+    /// Frees what E2B and the trial switch (a line in Documents/companion-trial.txt,
+    /// with .loading and .failed markers beside it; gone since 2026-11-24) left on the phone.
+    private static func removeRetired() {
         let files = FileManager.default
-        if files.fileExists(atPath: trialLoading.path) { try? files.moveItem(at: trialLoading, to: trialFailed) }
-        guard !files.fileExists(atPath: trialFailed.path),
-              let words = (try? String(contentsOf: trialNote, encoding: .utf8))?.split(whereSeparator: \.isWhitespace),
-              words.count == 2, case let repo = words[0].split(separator: "/"), repo.count == 2
-        else { return standard }
-        return Build(repo: Repo.ID(namespace: String(repo[0]), name: String(repo[1])), file: String(words[1]),
-                     name: words[1].replacing(".gguf", with: "") + " (trial)", isTrial: true)
-    }()
+        for note in ["companion-trial.txt", "companion-trial.txt.loading", "companion-trial.txt.failed"] {
+            try? files.removeItem(at: URL.documentsDirectory.appendingPathComponent(note))
+        }
+        let revision = UserDefaults.standard.string(forKey: retired.revisionKey) ?? "main"
+        // Its repository's whole folder in the cache: the file there is a link to a blob kept beside it.
+        if let cache = HubClient.default.cache,
+           cache.cachedFilePath(repo: retired.repo, kind: .model, revision: revision, filename: retired.file) != nil {
+            try? files.removeItem(at: cache.repoDirectory(repo: retired.repo, kind: .model))
+        }
+        UserDefaults.standard.removeObject(forKey: retired.revisionKey)
+    }
 
     static var name: String { build.name }
 
@@ -51,8 +55,8 @@ final class GemmaModel: CompanionModel, @unchecked Sendable {
     /// moved to, else its main branch as it was when first downloaded (the cache
     /// keeps that, and never looks again by itself).
     private static var revision: String {
-        get { UserDefaults.standard.string(forKey: "companionRevision." + build.file) ?? "main" }
-        set { UserDefaults.standard.set(newValue, forKey: "companionRevision." + build.file) }
+        get { UserDefaults.standard.string(forKey: build.revisionKey) ?? "main" }
+        set { UserDefaults.standard.set(newValue, forKey: build.revisionKey) }
     }
 
     /// The model file on the phone, once it's been downloaded.
@@ -109,7 +113,6 @@ final class GemmaModel: CompanionModel, @unchecked Sendable {
 
     func prepare() async throws {
         _ = try await model()
-        try? FileManager.default.removeItem(at: Self.trialLoading)   // TRIAL: loaded without ending the app
     }
 
     func install(_ update: ModelUpdate) async throws {
@@ -147,7 +150,7 @@ final class GemmaModel: CompanionModel, @unchecked Sendable {
     private func model() async throws -> LlamaLanguageModel {
         if let model = loaded.withLock({ $0 }) { return model }
         let path = try await download(revision: Self.revision)
-        Self.markTrial()   // from here on (loading it, then replying) is what might end the app
+        Self.removeRetired()   // E4B is here: what it replaced can go
         let model = LlamaLanguageModel(modelPath: path.path)
         loaded.withLock { $0 = model }
         return model
@@ -156,7 +159,7 @@ final class GemmaModel: CompanionModel, @unchecked Sendable {
     /// The build's file at `revision`, from the cache if it's there, reporting the download's progress if not.
     private func download(revision: String) async throws -> URL {
         // A file download, so Foundation words its progress the way Apple's apps do
-        // ("1.5 GB of 3.1 GB (12 MB/sec) — About 2 minutes remaining").
+        // ("1.5 GB of 4.2 GB (12 MB/sec) — About 4 minutes remaining").
         let progress = Progress()
         progress.kind = .file
         progress.fileOperationKind = .downloading
@@ -184,20 +187,12 @@ final class GemmaModel: CompanionModel, @unchecked Sendable {
                                                         progress: progress, transport: .lfs)
     }
 
-    /// TRIAL: sets the marker that says a trial build is at work.
-    private static func markTrial() {
-        if build.isTrial { FileManager.default.createFile(atPath: trialLoading.path, contents: nil) }
-    }
-
     /// Reads what the message states: the model writes it as JSON, as the
     /// prompt's example shows, greedily (its most likely reading) and without
     /// Not held to the shape by constrained decoding: AnyLanguageModel's took a
     /// minute on the phone and looped (2026-11-24); `Filings.parse` reads it.
     func file(_ prompt: FilingPrompt) async throws -> Filings {
         let model = try await model()
-        // TRIAL: it got through. (Filing can be what loads the model: without this the
-        // marker stayed, and an app closed later counted as the trial failing, 2026-11-24.)
-        defer { try? FileManager.default.removeItem(at: Self.trialLoading) }
         let instructions = Transcript.Instructions(segments: [.text(.init(content: Reasoned.gemmaPlain(prompt.system)))],
                                                    toolDefinitions: [])
         let session = LanguageModelSession(model: model, transcript: Transcript(entries: [.instructions(instructions)]))
@@ -213,8 +208,6 @@ final class GemmaModel: CompanionModel, @unchecked Sendable {
     func stream(_ prompt: CompanionPrompt, thinking thinks: Bool) -> AsyncThrowingStream<Reasoned, Error> {
         streaming { continuation in
             let model = try await self.model()
-            Self.markTrial()
-            defer { try? FileManager.default.removeItem(at: Self.trialLoading) }   // TRIAL: it got through this reply
             // The conversation so far as a transcript: the instructions, then the
             // turns before the author's last, which is the prompt being answered.
             // Its earlier reasoning is never among them (its makers' advice). To

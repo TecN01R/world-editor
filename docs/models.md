@@ -7,7 +7,7 @@ function uses the best-fitting openly licensed model that runs on an iPhone.
 |---|---|---|---|---|---|
 | Search by meaning | **Qwen3-Embedding-0.6B** (Q8_0 GGUF) | Apache-2.0 | llama.cpp (MIT) | ~640 MB | EmbeddingGemma 300M |
 | Re-ranking (optional) | Qwen3-Reranker-0.6B | Apache-2.0 | llama.cpp | ~640 MB | — |
-| Writing companion | **Gemma 4 E2B** (Q4_K_M), through AnyLanguageModel | Apache-2.0 | llama.cpp | ~3.1 GB (+0.6 GB for images, later) | "Qwen3-1.7B Socratic" |
+| Writing companion | **Gemma 4 E4B** (Unsloth QAT UD-Q4_K_XL), through AnyLanguageModel | Apache-2.0 | llama.cpp | ~4.2 GB (+ images, later) | Gemma 4 26B-A4B via TurboFieldfare, if proven on the Duo |
 | Facts & continuity | **Apple Foundation Models** (on-device) | System framework | iOS 26+ | 0 (built in) | same |
 | Illustration | **Stable Diffusion 1.5** + **ControlNet 1.1** (Core ML) | CreativeML OpenRAIL-M | apple/ml-stable-diffusion | ~2.1 GB + ~0.7 GB | same |
 
@@ -37,15 +37,16 @@ runs through Hugging Face's AnyLanguageModel (Foundation Models' session API
 over llama.cpp), with Gemma's recommended sampling (temperature 1, top-p
 0.95, top-k 64, no repetition penalty).
 
-**Gemma 4 E4B is on trial on the Duo** (from 2026-11-23, Kevin's decision). With the current prompt
+**Gemma 4 E4B is the companion's model** (a trial from 2026-11-23; standard from 2026-11-24, Kevin: "E4B shouldn't be trial now"). With the current prompt
 (`docs/companion.md`) the 4.2 GB build (`unsloth/gemma-4-E4B-it-qat-GGUF`,
 UD-Q4_K_XL) scores 5.2 out of 10 where E2B scores 4.5, and breaks one of
-Kevin's rules in 9% of replies where E2B does in 24%. What isn't known yet
-is whether the Duo holds it in memory and how fast it runs there (about half
-E2B's speed is the guess). The phone is pointed at it by a line in
-`Documents/companion-trial.txt` (`GemmaModel`), with no change to the app, and
-goes back to E2B if that line is removed or loading it ends the app. Once
-it's settled, the build moves into `GemmaModel` and the trial line goes. The 3.2 GB "mobile" 2-bit build of E4B and
+Kevin's rules in 9% of replies where E2B does in 24%. What wasn't known yet
+was whether the Duo holds it in memory and how fast it runs there: it does,
+replying in a few seconds. It's `GemmaModel`'s build; the trial switch
+(`Documents/companion-trial.txt`) is gone, and the app removes E2B's file and
+the trial's leftovers from the phone once E4B is there. Gemma 4 26B-A4B
+replaces it as the default, with no trial, once it's proven on the Duo
+(Kevin, 2026-11-24). The 3.2 GB "mobile" 2-bit build of E4B and
 is.
 
 **Updates to the companion's model.** Its makers re-upload a file now and
