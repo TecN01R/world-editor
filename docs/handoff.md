@@ -60,6 +60,11 @@ features below. Read `CLAUDE.md` first; this covers what isn't there.
    the Socratic and continuity companion features, and possibly NLP-based field
    suggestions. All need the device. Tags and "book posture" were dropped:
    Apple's seated posture keeps documents in place, so there's nothing to do.
+4. **A world's own calendar (Kevin, 2026-11-24):** eventually a custom date
+   picker on a calendar the author defines (months, years, eras). Until then
+   dates are text fields, filed in the author's words ("spring of 1214",
+   "first day of Highsun, year 402"), so they can be read into that calendar
+   when it exists.
 
 ## Device setup (Fedora, done)
 
