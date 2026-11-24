@@ -20,6 +20,8 @@ struct RootView: View {
     /// The world conversation open (a new one has its id before anything's said).
     @State private var worldConversation: UUID?
     @State private var columns: NavigationSplitViewVisibility = Self.startsInFocus ? .detailOnly : .all
+    /// The pages list as it was before Focus mode put it away, to put back after.
+    @State private var columnsBeforeFocus: NavigationSplitViewVisibility?
     /// Folded, the companion's sheet keeps the height it was left at, half or full,
     /// across folding, reopening and relaunching (iOS's scene state restoration).
     @SceneStorage("companionFullHeight") private var companionFullHeight = false
@@ -36,14 +38,12 @@ struct RootView: View {
     /// A page is open: not the pages list (folded, going back to it clears the
     /// selection), nor the world's conversations.
     private var pageShown: Bool { !conversationsShown && library.selection != nil }
-    /// The companion is on screen: folded, whenever it's open over a page; unfolded,
-    /// only while the pages list is put away (with both out, the page between them was
-    /// squeezed to a sliver; Kevin, 2026-11-23). Never over the pages list or the world's
-    /// own conversations, which have the world's companion (Kevin, 2026-11-24: a
-    /// page's companion over the list is "weird").
-    private var companionShown: Bool {
-        companion.isOpen && pageShown && (sizeClass == .compact || columns == .detailOnly)
-    }
+    /// The page's companion is on screen: whenever it's open over a page. Never over the
+    /// pages list or the world's own conversations, which have the world's companion
+    /// (Kevin, 2026-11-24: a page's companion over the list is "weird"). It goes by this
+    /// alone, never by where the pages list is: iOS moves both as the Duo rotates, and the
+    /// two following each other mid-layout crashed iOS's split view (2026-11-24).
+    private var companionShown: Bool { companion.isOpen && pageShown }
 
     var body: some View {
         @Bindable var library = library
@@ -61,53 +61,37 @@ struct RootView: View {
                 }
             }
         } detail: {
-            if conversationsShown {
-                if let id = worldConversation {
-                    CompanionPanel(inSheet: false, worldConversation: id, newConversation: startConversation)
-                        .task(id: id) {
-                            companion.open(library.worldSubject(id), in: library, aboutWorld: true)
-                            library.lastWorldConversation = id
-                        }
-                } else {
-                    ContentUnavailableView("No Conversation Open", systemImage: "bubble.left.and.text.bubble.right",
-                                           description: Text("Choose a conversation or start a new one."))
-                }
-            } else if let id = library.selection {
-                EditorView(focusMode: $focusMode, focusControls: $focusControls, chromeHidden: chromeHidden,
-                           companionShown: companionShown, onCompanionOpened: putPagesListAway)
-                .id(id)
-                // The companion, on the page, so it's never over the pages list or the world's
-                // conversations (Kevin, 2026-11-24, "stop replacing stock components"): unfolded,
-                // iOS's inspector beside the page; folded, iOS's sheet, half or full height. Each
-                // shows by the size class this update draws with, so folding and unfolding swap
-                // them at once and keep the companion open, and rotating changes neither. (The
-                // inspector's own sheet, folded, merged the companion's bar into the page's and
-                // showed no conversation; Kevin, 2026-11-24, "this weird companion header".)
-                // iOS restores the inspector's presentation by itself as the Duo unfolds:
-                // opened that way, the companion is open (it showed an empty column before).
-                // What iOS reports closing it, as the Duo folds, is ignored.
-                .inspector(isPresented: Binding { companionShown && sizeClass == .regular } set: { open in
-                    guard open, !companion.isOpen, !focusMode else { return }
-                    companion.isOpen = true
-                    columns = .detailOnly
-                }) {
-                    CompanionPanel(inSheet: false)
-                        .inspectorColumnWidth(min: 300, ideal: 380, max: 520)
-                }
-                // Swiping the sheet down closes the companion, but only while folded (by both
-                // this update's size class and the posture flag): unfolding dismisses it too.
-                .sheet(isPresented: Binding { companionShown && sizeClass == .compact } set: { open in
-                    if !open, companion.folded, sizeClass == .compact { companion.isOpen = false }
-                }) {
-                    CompanionPanel(inSheet: true)
-                        .presentationDetents([.medium, .large], selection: Binding {
-                            companionFullHeight ? .large : .medium
-                        } set: { companionFullHeight = $0 == .large })
-                        .presentationDragIndicator(.visible)
-                }
-            } else {
-                ContentUnavailableView("No Page Open", systemImage: "doc.text",
-                                       description: Text("Choose a page or start a new one."))
+            // A stack of the detail's own, as Apple advises: in a bare `if`, a split view's
+            // detail can lose its toolbar items after a re-layout (a known iOS bug).
+            NavigationStack {
+                detail
+                    // The page's companion, attached once, so changing pages never rebuilds it
+                    // (Kevin, 2026-11-24, "stop replacing stock components"): unfolded, iOS's
+                    // inspector beside the page, at iOS's own width; folded, iOS's sheet, half or
+                    // full height. Each shows by the size class this update draws with, so folding
+                    // and unfolding swap them at once and keep the companion open. (The
+                    // inspector's own sheet, folded, merged the companion's bar into the page's
+                    // and showed no conversation; Kevin, 2026-11-24, "this weird companion
+                    // header".) iOS opens and closes the inspector itself too (it restores it as
+                    // the Duo unfolds): taken as the author's (never opening it in Focus mode),
+                    // except as the Duo folds or the page goes, when only the column goes.
+                    .inspector(isPresented: Binding { companionShown && sizeClass == .regular } set: { open in
+                        guard sizeClass == .regular, pageShown, !(open && focusMode) else { return }
+                        companion.isOpen = open
+                    }) {
+                        CompanionPanel(inSheet: false)
+                    }
+                    // Swiping the sheet down closes the companion, but only while folded (by both
+                    // this update's size class and the posture flag): unfolding dismisses it too.
+                    .sheet(isPresented: Binding { companionShown && sizeClass == .compact } set: { open in
+                        if !open, companion.folded, sizeClass == .compact { companion.isOpen = false }
+                    }) {
+                        CompanionPanel(inSheet: true)
+                            .presentationDetents([.medium, .large], selection: Binding {
+                                companionFullHeight ? .large : .medium
+                            } set: { companionFullHeight = $0 == .large })
+                            .presentationDragIndicator(.visible)
+                    }
             }
         }
         // Coming back to the app (its icon, the app switcher) opens nothing: it's where
@@ -134,14 +118,19 @@ struct RootView: View {
             library.lastWorldConversation = nil
             companion.loadWorldConversations(in: library)
         }
-        .onChange(of: sizeClass, initial: true) { _, size in
-            companion.folded = size == .compact
-            // Unfolding with the companion open over a page: the page and the companion
-            // side by side, the pages list put away (as opening it unfolded does).
-            if size == .regular, companion.isOpen, !focusMode, pageShown { columns = .detailOnly }
-        }
+        // The pages list is left where iOS and the author put it as the Duo folds, unfolds
+        // and rotates: moving it then too crashed iOS's split view (2026-11-24).
+        .onChange(of: sizeClass, initial: true) { _, size in companion.folded = size == .compact }
         // Applied at the root: status bar visibility is decided by the top controller.
         .statusBarHidden(chromeHidden)
+        // Files this version couldn't read (a newer version's, or damaged): said once, kept as they are.
+        .alert("Some of This World Couldn’t Be Read", isPresented: Binding { !library.unreadable.isEmpty } set: { shown in
+            if !shown { library.unreadable = [] }
+        }) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("World Editor couldn’t read \(library.unreadable.formatted(.list(type: .and))). They may be from a newer version of the app, or damaged. They’re kept exactly as they are and nothing is saved over them, so a version that reads them shows them again.")
+        }
         // A page chosen in the system's Spotlight search opens here.
         .onContinueUserActivity(CSSearchableItemActionType) { activity in
             if let id = (activity.userInfo?[CSSearchableItemActivityIdentifier] as? String).flatMap(UUID.init) {
@@ -163,17 +152,54 @@ struct RootView: View {
             // (or as soon as you type), so Exit Focus is in sight at first (Kevin).
             focusControls = focus
             if focus { companion.isOpen = false }   // never in Focus mode
-            withAnimation { columns = focus ? .detailOnly : .all }   // unfolded: list beside the page
+            // Unfolded, the pages list steps aside, and comes back only if it was out before
+            // (always bringing it back opened the drawer over the page in portrait).
+            if focus {
+                columnsBeforeFocus = columns
+                withAnimation { columns = .detailOnly }
+            } else if let before = columnsBeforeFocus {
+                withAnimation { columns = before }
+            }
         }
     }
 
-    /// Unfolded, opening the companion puts the pages list away; closing it leaves the list
-    /// where it is, one tap away with the sidebar button: in portrait the list is a drawer
-    /// over the page, and bringing it back opened that drawer, so the button went between
-    /// the drawer and the companion (Kevin, 2026-11-24). Only the author's taps do this (its
-    /// button, the download's Live Activity); unfolding with it open is `onChange(of: sizeClass)`'s.
+    /// What's beside the pages list (unfolded) or over it (folded): the world conversation
+    /// chosen, or the open page.
+    @ViewBuilder private var detail: some View {
+        if conversationsShown {
+            if let id = worldConversation {
+                CompanionPanel(inSheet: false, worldConversation: id, newConversation: startConversation)
+                    .task(id: id) {
+                        companion.open(library.worldSubject(id), in: library, aboutWorld: true)
+                        library.lastWorldConversation = id
+                    }
+            } else {
+                ContentUnavailableView("No Conversation Open", systemImage: "bubble.left.and.text.bubble.right",
+                                       description: Text("Choose a conversation or start a new one."))
+            }
+        } else if let id = library.selection {
+            EditorView(focusMode: $focusMode, focusControls: $focusControls, chromeHidden: chromeHidden,
+                       onCompanionOpened: putPagesListAway)
+            .id(id)
+        } else {
+            ContentUnavailableView("No Page Open", systemImage: "doc.text",
+                                   description: Text("Choose a page or start a new one."))
+        }
+    }
+
+    /// Opening the companion puts the pages list away (with both out, the page between them
+    /// was squeezed to a sliver; Kevin, 2026-11-23); closing it leaves the list where it
+    /// is, one tap away with the sidebar button: in portrait the list is a drawer over the
+    /// page, and bringing it back opened that drawer, so the button went between the drawer
+    /// and the companion (Kevin, 2026-11-24). Folded too, so unfolding shows the page and
+    /// the companion side by side (unseen until then, so not animated). Only the author's
+    /// taps do this (its button, the download's Live Activity), never iOS's own layout changes.
     private func putPagesListAway() {
-        if sizeClass == .regular { withAnimation { columns = .detailOnly } }
+        if sizeClass == .regular {
+            withAnimation { columns = .detailOnly }
+        } else {
+            columns = .detailOnly
+        }
     }
 
     /// The world's conversations: their list in the pages list's place, with the one last
@@ -546,8 +572,6 @@ struct EditorView: View {
     @Binding var focusMode: Bool
     @Binding var focusControls: Bool
     let chromeHidden: Bool
-    /// The companion is on screen (unfolded, the pages list hides it).
-    let companionShown: Bool
     /// The author opened the companion with its button.
     let onCompanionOpened: () -> Void
 
@@ -559,8 +583,8 @@ struct EditorView: View {
     /// The keyboard is up.
     @State private var typing = false
     /// The page has the keyboard (its writing, title or a field), not the companion's message
-    /// field: the toolbar shows Done (and Focus, while writing), and nothing else (Kevin,
-    /// 2026-11-24: Done made no sense with the companion's field focused).
+    /// field: the toolbar adds Done, and Focus while writing (Kevin, 2026-11-24: Done made
+    /// no sense with the companion's field focused).
     private var pageTyping: Bool { typing && !companion.composing }
     /// The page's writing has the keyboard (not its title, a field or the companion).
     @State private var writing = false
@@ -622,8 +646,8 @@ struct EditorView: View {
         // sidebar button. The bar draws over the writing, which ignores the
         // safe area and so never reflows.
         .toolbar(chromeHidden ? .hidden : .automatic, for: .navigationBar)
-        .navigationBarBackButtonHidden(focusMode || pageTyping)
-        .toolbar(removing: focusMode || pageTyping ? .sidebarToggle : nil)
+        .navigationBarBackButtonHidden(focusMode)
+        .toolbar(removing: focusMode ? .sidebarToggle : nil)
         // While the page has the keyboard, Done shows, as in Notes. Focus is for
         // writing, so the keyboard going down (Done, or swiped away) leaves it (Kevin).
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in typing = true }
@@ -683,10 +707,10 @@ struct EditorView: View {
                 // Done here also leaves Focus, an editing-only mode (Kevin).
                 if pageTyping { done }
             } else {
-                // Two sets, swapped by the keyboard (Kevin, 2026-11-23). Typing on the
-                // page: Done (the iPhone keyboard has no key to close it) and Focus, a
-                // writing tool, in its own glass. Not typing: Back, the sidebar button,
-                // the companion and Mentions.
+                // As in Notes: Back, the sidebar button, the companion and Mentions stay, and
+                // typing on the page adds Done (the iPhone keyboard has no key to close it)
+                // and Focus. (Swapping the whole bar for Done while any keyboard was up hid the
+                // sidebar button and the companion's; Kevin, 2026-11-24.)
                 if pageTyping {
                     done
                     // Focus is for the writing: offered only while it has the keyboard,
@@ -701,26 +725,25 @@ struct EditorView: View {
                         }
                         .axisBehavior(folded ? .automatic : .horizontalOnly)
                     }
-                } else {
-                    // The companion, beside the page (unfolded) or a sheet (folded), its
-                    // button at the bottom as on every screen (Kevin, 2026-11-24): folded, at
-                    // the foot of the Duo's side column; unfolded, at the bottom's trailing
-                    // end, where the companion opens (alone it sat in the middle: "dumb as
-                    // fuck"). ⌥⌘I is the system's shortcut for an inspector.
-                    ToolbarSpacer(.flexible, placement: .bottomBar)
-                    ToolbarItem(placement: .bottomBar) {
-                        Button(companionShown ? "Hide Companion" : "Companion", systemImage: "bubble.left.and.text.bubble.right") {
-                            companion.isOpen = !companionShown
-                            if companion.isOpen { onCompanionOpened() }
-                        }
-                        .keyboardShortcut("i", modifiers: [.command, .option])
-                    }
-                    // Shown when there's room; first into "•••" when there isn't.
-                    ToolbarItem(placement: .primaryAction) {
-                        Button("Mentions", systemImage: "at") { showMentions = true }
-                    }
-                    .visibilityPriority(.low)
                 }
+                // The companion, beside the page (unfolded) or a sheet (folded), its
+                // button at the bottom as on every screen (Kevin, 2026-11-24): folded, at
+                // the foot of the Duo's side column; unfolded, at the bottom's trailing
+                // end, where the companion opens (alone it sat in the middle: "dumb as
+                // fuck"). ⌥⌘I is the system's shortcut for an inspector.
+                ToolbarSpacer(.flexible, placement: .bottomBar)
+                ToolbarItem(placement: .bottomBar) {
+                    Button(companion.isOpen ? "Hide Companion" : "Companion", systemImage: "bubble.left.and.text.bubble.right") {
+                        companion.isOpen.toggle()
+                        if companion.isOpen { onCompanionOpened() }
+                    }
+                    .keyboardShortcut("i", modifiers: [.command, .option])
+                }
+                // Shown when there's room; first into "•••" when there isn't.
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Mentions", systemImage: "at") { showMentions = true }
+                }
+                .visibilityPriority(.low)
             }
         }
         .task {
