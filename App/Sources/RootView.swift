@@ -570,9 +570,12 @@ struct EditorView: View {
                 // go into the side column. A bar for Focus alone cost the page a row
                 // (Kevin, 2026-11-23). Unfolded, Focus sits with the other buttons.
                 if folded {
-                    ToolbarItem(placement: .principal) {
+                    // At the leading edge, where the page's own title sat, as large as
+                    // the bar allows (not the bar's centred title: Kevin, 2026-11-23).
+                    ToolbarItem(placement: .topBarLeading) {
                         TextField("Title", text: title)
-                            .font(.authored(.title3).bold())   // the author's words: New York
+                            .font(.authored(.title2).bold())   // the author's words: New York
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .focused($titleFocused)
                             .submitLabel(.next)
                             .onSubmit { writeRequest += 1 }   // Return moves on to the writing, as on the page
