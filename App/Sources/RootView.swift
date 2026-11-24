@@ -67,7 +67,8 @@ struct RootView: View {
         }
         // Unfolded, the pages list is a drawer that slides over the page, in portrait and
         // landscape alike, never squeezing it (Kevin, 2026-11-24: "the drawer would slide
-        // over instead"); the companion is a column beside the page, one or the other open.
+        // over instead"); the companion is a column beside the page, and stays open as the
+        // drawer slides in.
         .navigationSplitViewStyle(.prominentDetail)
         // Coming back to the app (its icon, the app switcher) opens nothing: it's where
         // the author left it, even while the companion's download runs. Only a tap on the
@@ -96,15 +97,6 @@ struct RootView: View {
         // The pages list is left where iOS and the author put it as the Duo folds, unfolds
         // and rotates: moving it then too crashed iOS's split view (2026-11-24).
         .onChange(of: sizeClass, initial: true) { _, size in companion.folded = size == .compact }
-        // Unfolded, the pages list and the companion never show together: there's no room for
-        // both beside the page, and iOS slides the list over the page and dims it (Kevin,
-        // 2026-11-24: "I hate it"; before, the page squeezed to a sliver). Opening the list
-        // closes the companion; the companion's button puts the list away. A reaction to the
-        // list opening, not the companion's visibility worked out from it, which flipped
-        // while iOS laid out a rotation.
-        .onChange(of: columns) { _, now in
-            if sizeClass == .regular, now != .detailOnly, companion.isOpen, !focusMode { companion.isOpen = false }
-        }
         // Applied at the root: status bar visibility is decided by the top controller.
         .statusBarHidden(chromeHidden)
         // Files this version couldn't read (a newer version's, or damaged): said once, kept as they are.
@@ -180,7 +172,10 @@ struct RootView: View {
                 guard sizeClass == .regular, pageShown, !(open && focusMode) else { return }
                 companion.isOpen = open
             }) {
+                // Wider by dragging its edge (Kevin, 2026-11-24: "the conversation can't take
+                // up more space"), from about iOS's own width.
                 CompanionPanel(inSheet: false)
+                    .inspectorColumnWidth(min: 320, ideal: 420, max: 640)
             }
             // Swiping the sheet down closes the companion, but only while folded (by both
             // this update's size class and the posture flag): unfolding dismisses it too.
@@ -199,13 +194,12 @@ struct RootView: View {
         }
     }
 
-    /// Opening the companion puts the pages list away (with both out, the page between them
-    /// was squeezed to a sliver; Kevin, 2026-11-23); closing it leaves the list where it
-    /// is, one tap away with the sidebar button: in portrait the list is a drawer over the
-    /// page, and bringing it back opened that drawer, so the button went between the drawer
-    /// and the companion (Kevin, 2026-11-24). Folded too, so unfolding shows the page and
-    /// the companion side by side (unseen until then, so not animated). Only the author's
-    /// taps do this (its button, the download's Live Activity), never iOS's own layout changes.
+    /// Opening the companion closes the pages list's drawer, to talk about the page under it;
+    /// closing the companion leaves the drawer as it is, one tap away with the sidebar button
+    /// (bringing it back made the button go between the drawer and the companion; Kevin,
+    /// 2026-11-24). Folded too, so unfolding shows the page and the companion side by side
+    /// (unseen until then, so not animated). Only the author's taps do this (its button, the
+    /// download's Live Activity), never iOS's own layout changes.
     private func putPagesListAway() {
         if sizeClass == .regular {
             withAnimation { columns = .detailOnly }
