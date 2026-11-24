@@ -72,13 +72,10 @@ struct CompanionPanel: View {
         .scrollEdgeEffectStyle(.soft, for: [.top, .bottom])   // softened under the bar and the grab handle, as the page is
         .defaultScrollAnchor(.bottom)
         .defaultScrollAnchor(.top, for: .alignment)          // a short conversation starts at the top
-        .defaultScrollAnchor(.bottom, for: .sizeChanges)     // follows new messages
+        // Sending brings the conversation to the bottom (send()); the reply
+        // then grows below without moving it, so you read at your own pace (Kevin).
+        .defaultScrollAnchor(.top, for: .sizeChanges)
         .scrollPosition($position)
-        // Each new message (yours, then its reply as it starts) brings the
-        // conversation to the bottom (Kevin: sending left it where it was).
-        .onChange(of: companion.conversation.turns.count) { scrollToEnd() }
-        .onChange(of: companion.conversation.waiting == nil) { scrollToEnd() }
-        .onChange(of: partialReply == nil) { scrollToEnd() }
         .scrollDismissesKeyboard(.interactively)
         .overlay {
             if let download = companion.download {
