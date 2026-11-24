@@ -492,7 +492,7 @@ struct EditorView: View {
                     .ignoresSafeArea()   // the whole display; bars appear over it
                     .transition(.opacity)
             } else {
-                PageEditor {   // stops at the keyboard, as iOS lays pages out
+                PageEditor(focusBesideTitle: folded) {   // stops at the keyboard, as iOS lays pages out
                     withAnimation(.smooth(duration: 0.3)) { focusMode = true }
                 }
                     .transition(.opacity)
@@ -555,10 +555,18 @@ struct EditorView: View {
                     .keyboardShortcut(.cancelAction)
                 }
             } else {
-                // Focus isn't here: it's at the end of the page's title row, folded
-                // and unfolded (PageEditor). Kept in the bar at the top it added a
-                // row; with the title moved into the bar, the title shrank to a few
-                // letters (Kevin, 2026-11-23).
+                // Focus at the top right of the page. Unfolded: here, kept in the row
+                // the sidebar button already uses, not the side column (Kevin,
+                // 2026-11-23). Folded there's no such row (one kept for it pushed the
+                // page down), so it's at the end of the title's row (PageEditor).
+                if !folded {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Focus Mode", systemImage: "arrow.up.left.and.arrow.down.right") {
+                            withAnimation(.smooth(duration: 0.3)) { focusMode = true }
+                        }
+                    }
+                    .axisBehavior(.horizontalOnly)
+                }
                 // The companion, beside the page (unfolded) or a sheet (folded); on
                 // the Duo the side column, which stays in reach above the keyboard.
                 // ⌥⌘I is the system's shortcut for an inspector.
