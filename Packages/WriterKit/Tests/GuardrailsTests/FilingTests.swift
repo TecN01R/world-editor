@@ -150,19 +150,50 @@ final class FilingTests: XCTestCase {
         XCTAssertEqual(pages[0].values[origin.id], .page(nation.id))
     }
 
-    func testNothingTheAuthorFilledIsReplaced() {
-        let origin = FieldDefinition(name: "Origin", kind: .text)
+    /// Kevin on the phone: "Actually it's a bireme" after Vessel: trireme. Her type stays.
+    func testACorrectionReplacesAValueAndUndoPutsItBack() throws {
+        let vessel = FieldDefinition(name: "Vessel", kind: .text)
+        let character = PageType(name: "Character", fields: [vessel.id])
+        var schema = Schema(fields: [vessel], types: [character])
+        var her = casperica
+        her.type = character.id
+        her.values[vessel.id] = .text("trireme")
+        var pages = [her]
+        var record = file(Filings(facts: [.init(page: "Casperica", field: "vessel", value: "bireme"),
+                                          .init(page: "Casperica", field: "vessel", value: "trireme")],
+                                  pages: [.init(title: "Casperica", type: "Pirate")]),
+                          "Actually it's a bireme, not a trireme", pages: &pages, schema: &schema)
+        XCTAssertEqual(record.actions, [.replaced(page: her.id, field: vessel.id, was: .text("trireme"), value: .text("bireme"))])
+        XCTAssertEqual(pages[0].type, character.id)
+
+        _ = record.undo(try XCTUnwrap(record.actions.first), pages: &pages, schema: &schema)
+        XCTAssertEqual(pages, [her])
+
+        // What was true once isn't a correction.
+        let then = file(Filings(facts: [.init(page: "she", field: "Vessel", value: "galley")]),
+                        "She rowed on a galley when she was sixteen.", pages: &pages, schema: &schema)
+        XCTAssertTrue(then.isEmpty)
+        XCTAssertEqual(pages, [her])
+    }
+
+    /// A correction that names a new page links it; undoing that page puts the old value back.
+    func testUndoingAPageACorrectionMadeRestoresTheOldValue() throws {
+        let origin = FieldDefinition(name: "Origin", kind: .page)
         let character = PageType(name: "Character", fields: [origin.id])
+        let verran = Document(title: "Verran", paragraphs: [Paragraph(text: "")])
         var schema = Schema(fields: [origin], types: [character])
         var her = casperica
         her.type = character.id
-        her.values[origin.id] = .text("Verran")
-        var pages = [her]
-        let record = file(Filings(facts: [.init(page: "she", field: "origin", value: "Myriddea")],
-                                  pages: [.init(title: "Casperica", type: "Pirate")]),
-                          message, pages: &pages, schema: &schema)
+        her.values[origin.id] = .page(verran.id)
+        var pages = [her, verran]
+        var record = file(Filings(facts: [.init(page: "she", field: "Origin", value: "Myriddea")]),
+                          "No, she's from Myriddea.", pages: &pages, schema: &schema)
+        let made = try XCTUnwrap(record.actions.first { if case .created = $0 { true } else { false } })
+        XCTAssertNotEqual(pages.first { $0.id == her.id }?.values[origin.id], .page(verran.id))
+
+        _ = record.undo(made, pages: &pages, schema: &schema)
+        XCTAssertEqual(pages.first { $0.id == her.id }, her)
         XCTAssertTrue(record.isEmpty)
-        XCTAssertEqual(pages, [her])
     }
 
     func testTheAuthorsSpellingAndAnUntitledOpenPage() throws {

@@ -290,8 +290,9 @@ the companion is filed, never the page's writing.
   isn't a question or hedged ("maybe", "might", "what if", "either"); a
   message that states nothing files nothing; a new page needs a capitalised
   name ("Myriddea", not "grandmother"); existing pages, types and fields are
-  reused by name ("The Guild of Lamps" is "Guild of Lamps"); only empty fields
-  are filled and only untyped pages typed; a value naming a page links to it;
+  reused by name ("The Guild of Lamps" is "Guild of Lamps"); a filled field
+  changes only in a message that corrects something ("actually", "not"), and
+  only untyped pages are typed; a value naming a page links to it;
   a value that only repeats its field ("Grandmother: grandmother") is dropped;
   a value written as a name mid-sentence ("a sword called Mercy") gets a page
   of its own if it has none (the model often files the name without listing
@@ -328,15 +329,33 @@ message; ×2 samples, 65 + 12 scenarios):
 | "about" right after the title, and on every new page in the example (shipped) | greedy, ×2 | 118/130 (91%) | 44/50 | 14/18 | 0/36 |
 
 The code also drops text that is only part of the page's name ("Lady" for
-Lady Corvina).
+Lady Corvina) or says what it isn't ("not Port Vell").
+
+Corrections (Kevin on the phone, 2026-11-24: "Actually it's a bireme" after
+Vessel: trireme, and nothing happened). The model gave the new value; the
+code dropped it, as it filled only empty fields. Now a filled field takes the
+new value, shown as "Vessel: bireme (was trireme)" with its own Undo, which
+puts the old one back. Seven scenarios added: three corrections and four
+facts that mustn't replace one ("her brother is 40", "she was 16 when…"):
+
+| Change | Facts filed | Corrections made | Filled values kept | Filed from questions, hedges, chat |
+|---|---|---|---|---|
+| filled fields replaced, nothing else | 124/136 (91%) | 6/6 | 12/14 | 0/36 |
+| + in the prompt's facts rule: correct only when told; "her age when something happened is not her age" | 100/136 (74%) | 6/6 | 14/14 | 0/36 |
+| the same sentence moved to the closing rules | 122/136 (90%) | 6/6 | 14/14, but "when she was nineteen" still replaced her age | 0/36 |
+| + the code replaces only in a message with a correcting word ("actually", "not", "sorry", "wait"…) (shipped) | 122/136 (90%) | 6/6 | all | 0/36 |
+
+In the 74% row the model stopped listing the open page with its type, so
+facts had no fields to go in; where a rule sits in the prompt matters.
 
 About 2.7 s a message on the computer's GPU. New types come from what's said
 (Event, Ship, Object, Organization appeared on their own). Read by hand, about
 1 in 30 filings in the shipped run were still wrong (a ship typed as a Place,
 "Gull Rock" for "Treaty of Gull Rock", a fact pinned on the wrong page): each
 shows as its own line in the conversation, undone in one tap.
-Not yet: a fact about a page already filled stays as it was (nothing is
-replaced), an untitled page isn't named from the conversation, and the
+Not yet: a change over time that isn't worded as a correction ("she moved
+to Calloway") leaves the old value, an untitled page isn't named from the
+conversation, and the
 page's own writing isn't read.
 
 ## Changing it

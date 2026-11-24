@@ -187,10 +187,12 @@ final class Library {
                 return FilingLine(action: action, page: page.heading, detail: nil, type: schema.type(page.type)?.name)
             case .typed(let id, let type):
                 return name(id).map { FilingLine(action: action, page: $0, detail: schema.type(type)?.name, type: nil) }
-            case .value(let id, let fieldID, let value):
+            case .value(let id, let fieldID, let value), .replaced(let id, let fieldID, _, let value):
                 guard let page = name(id), let field = schema.fields.first(where: { $0.id == fieldID }),
                       let shown = value.display(pageName: name) else { return nil }
-                return FilingLine(action: action, page: page, detail: "\(field.name): \(shown)", type: nil)
+                var detail = "\(field.name): \(shown)"
+                if case .replaced(_, _, let was, _) = action, let old = was.display(pageName: name) { detail += " (was \(old))" }
+                return FilingLine(action: action, page: page, detail: detail, type: nil)
             default:
                 return nil
             }

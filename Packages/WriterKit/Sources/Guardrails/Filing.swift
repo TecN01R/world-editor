@@ -125,8 +125,10 @@ public struct FilingPrompt: Equatable, Sendable {
         {"title": "Siege of Varn", "about": "the war's last battle", "type": "Event"}]}
 
         Copy their words exactly; never add, reword or guess. Leave out what they asked, wondered \
-        about or weren't sure of, and what only their friend said. If their message states \
-        nothing, return empty lists. Answer with the JSON alone, as in the example.
+        about or weren't sure of, and what only their friend said. Give a field that already has \
+        a value only when they correct it ("actually it's a bireme"); her age when something \
+        happened is not her age. If their message states nothing, return empty lists. Answer \
+        with the JSON alone, as in the example.
         """
 
 
@@ -176,10 +178,11 @@ extension FilingPrompt {
 /// what the author said: every value, new page title and new page text must be
 /// their own words, found in a sentence of the message that isn't a question
 /// or hedged ("maybe", "might"). Type and field names are structure, which
-/// the model may choose (docs/ai-charter.md). Nothing the author wrote is
-/// replaced: only empty fields are filled, only untyped pages get a type, and
-/// an existing page's text is never touched. What's dropped is dropped, not
-/// repaired.
+/// the model may choose (docs/ai-charter.md). A field that has a value gets
+/// a new one only from a message that corrects something ("Actually it's a
+/// bireme"), kept in the record so Undo puts the old one back. Only untyped
+/// pages get a type, and an existing page's text is never touched. What's
+/// dropped is dropped, not repaired.
 public enum Filer {
     public static func file(_ filings: Filings, message: String, open: UUID,
                             pages: inout [Document], schema: inout Schema, now: Date = Date()) -> FilingRecord {
@@ -230,10 +233,12 @@ public enum Filer {
             var i = index(named: page.title)
             // A new page needs a name, as the author wrote one: capitalised ("Myriddea", not "grandmother").
             if i == nil, let title = words(page.title), title.contains(where: \.isUppercase) {
-                // Its text says what it is, not part of its name ("Lady" for Lady Corvina).
+                // Its text says what it is: not part of its name ("Lady" for Lady Corvina), nor what
+                // it isn't ("not Port Vell").
                 let named = Set(key(title).split(separator: " "))
                 let about = words(page.about).flatMap {
-                    Set(key($0).split(separator: " ")).isSubset(of: named) ? nil : $0.prefix(1).uppercased() + $0.dropFirst()
+                    Set(key($0).split(separator: " ")).isSubset(of: named) || key($0).hasPrefix("not ")
+                        ? nil : $0.prefix(1).uppercased() + $0.dropFirst()
                 }
                 i = make(title, about: about)
             }
@@ -244,6 +249,8 @@ public enum Filer {
             }
         }
 
+        let correcting = Statement.has(Statement.corrections, in: message)
+        var filled = Set<[UUID]>()   // page and field filled from this message
         for fact in filings.facts {
             guard let i = index(named: fact.page), let typeID = pages[i].type,
                   let t = schema.types.firstIndex(where: { $0.id == typeID }),
@@ -253,13 +260,18 @@ public enum Filer {
             let known = schema.fields(of: schema.types[t]).first { $0.name.lowercased() == fieldName.lowercased() }
                 ?? schema.fields.first { $0.name.lowercased() == fieldName.lowercased() }
             // A name with no page yet gets one (the model often files "Sword: Mercy" without listing Mercy).
-            let linkable = known.map { $0.kind == .page && pages[i].values[$0.id] == nil } ?? true
+            let linkable = known.map { $0.kind == .page && (pages[i].values[$0.id] == nil || correcting) } ?? true
             if hit.isName, linkable, index(named: words) == nil { _ = make(words) }
             guard let i = index(named: fact.page) else { continue }   // where it is now, after a new page
             let linked = index(named: words).flatMap { $0 == i ? nil : pages[$0] }
             let field = known ?? FieldDefinition(name: fieldName, kind: linked == nil ? .text : .page,
                                                  pageType: linked?.type)
-            guard pages[i].values[field.id] == nil, let value = value(words, linked: linked, for: field) else { continue }
+            // A field filled from this message keeps its first value; one filled before changes
+            // only when the message corrects something.
+            let was = pages[i].values[field.id]
+            guard let value = value(words, linked: linked, for: field), value != was,
+                  was == nil || correcting, !filled.contains([pages[i].id, field.id]) else { continue }
+            filled.insert([pages[i].id, field.id])
             if known == nil {
                 schema.fields.append(field)
                 record.entries.append(.newField(field.id))
@@ -269,7 +281,8 @@ public enum Filer {
                 record.entries.append(.fieldAdded(type: typeID, field: field.id))
             }
             pages[i].values[field.id] = value
-            record.entries.append(.value(page: pages[i].id, field: field.id, value: value))
+            record.entries.append(was.map { .replaced(page: pages[i].id, field: field.id, was: $0, value: value) }
+                                  ?? .value(page: pages[i].id, field: field.id, value: value))
         }
         return record
     }
@@ -343,7 +356,17 @@ struct Statement {
 
     /// Whether the sentence holds one of the author's words for uncertainty, as a whole word.
     private static func hedges(_ text: String) -> Bool {
-        let padded = " " + String(text.lowercased().map { $0.isLetter || $0 == "'" ? $0 : " " }) + " "
-        return ProvenanceValidator.hedges.contains { $0 != "?" && padded.contains(" \($0) ") }
+        has(ProvenanceValidator.hedges.filter { $0 != "?" }, in: text)
+    }
+
+    /// Words that take something back: a filled field changes only in a message with one,
+    /// so "she was nineteen when…" doesn't replace her age.
+    static let corrections = ["actually", "not", "no", "isn't", "wasn't", "sorry", "wait", "instead",
+                              "rather", "meant", "mean", "wrong", "oops", "correction", "changed"]
+
+    /// Whether `text` holds one of `words` as whole words.
+    static func has(_ words: [String], in text: String) -> Bool {
+        let padded = " " + String(collapsed(text).lowercased().map { $0.isLetter || $0 == "'" ? $0 : " " }) + " "
+        return words.contains { padded.contains(" \($0) ") }
     }
 }
