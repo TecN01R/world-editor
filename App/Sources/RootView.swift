@@ -472,6 +472,9 @@ struct EditorView: View {
         ToolbarItem(placement: .confirmationAction) {
             Button("Done", systemImage: "checkmark") {
                 UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                // Done now, not when the keyboard's notice arrives: the page coming
+                // back from Focus would otherwise take the keyboard straight back.
+                typing = false
                 if focusMode { withAnimation(.smooth(duration: 0.3)) { focusMode = false } }
             }
         }
