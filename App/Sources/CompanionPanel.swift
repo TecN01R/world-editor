@@ -119,7 +119,7 @@ struct CompanionPanel: View {
             // Nothing to say until the model is here.
             if ready { composer }
         }
-        .task { companion.checkModel() }
+        .task { companion.readModelVersion() }
         // Back in the app after the download dropped: it picks up where it stopped.
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, companion.state == .downloadPaused { resume() }
@@ -409,8 +409,10 @@ struct CompanionPanel: View {
         ContentUnavailableView {
             Label("Download the Companion", systemImage: "arrow.down.circle")
         } description: {
+            // With why it couldn't go ahead last time, if it couldn't (too little free space).
             Text("The companion runs on your phone, so nothing you write leaves it. It needs a one-time download"
-                 + (companion.downloadSize.map { " of \($0.formatted(.byteCount(style: .file)))" } ?? "") + ".")
+                 + (companion.downloadSize.map { " of \($0.formatted(.byteCount(style: .file)))" } ?? "") + "."
+                 + (companion.downloadNote.map { "\n\n" + $0 } ?? ""))
         } actions: {
             Button("Download") { companion.startDownload(page: subject, in: library) }
                 .buttonStyle(.borderedProminent)
@@ -506,12 +508,6 @@ struct CompanionPanel: View {
                 Text("No instructions or pages, only the conversation")
             }
             Section {
-                if let update = companion.modelUpdate {
-                    Button(action: companion.updateModel) {
-                        Label("Update Available", systemImage: "arrow.down.circle")
-                        Text("A newer \(Companion.modelName), \(update.bytes.formatted(.byteCount(style: .file)))")
-                    }
-                }
                 // What it's running, as a line to read (a menu has no plain text).
                 Button {} label: {
                     Text(Companion.modelName)

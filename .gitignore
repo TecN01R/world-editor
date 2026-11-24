@@ -21,7 +21,7 @@ build/
 # xtool dev build output
 /xtool/
 
-# llama.cpp framework, fetched by scripts/fetch-llama.sh
+# TurboFieldfare, the companion's engine, fetched by scripts/fetch-turbo-fieldfare.sh
 /Vendor/
 
 __pycache__/

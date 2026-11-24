@@ -20,8 +20,6 @@ protocol CompanionModel: Sendable {
     /// Downloads the model if it isn't on the phone yet; nothing else.
     func prepare() async throws
     var version: String? { get }
-    func availableUpdate() async -> ModelUpdate?
-    func install(_ update: ModelUpdate) async throws
     /// What the author's message states, read out for filing (types, fields,
     /// new pages); `Filer` then keeps only what's in their words.
     func file(_ prompt: FilingPrompt) async throws -> Filings
@@ -30,15 +28,11 @@ protocol CompanionModel: Sendable {
 extension CompanionModel {
     /// The model is on the phone (or part of iOS): it can reply without downloading anything.
     var isInstalled: Bool { true }
-    /// How much the model's download is, if it has one; asked once, before downloading.
+    /// How much the model's download is, if it has one; asked whenever the download is offered.
     func downloadSize() async -> Int64? { nil }
     func prepare() async throws {}
     /// When the model on the phone was downloaded, in words; nil if it hasn't been, or it's part of iOS.
     var version: String? { nil }
-    /// A newer file than the one on the phone, if its maker has published one. Downloads nothing.
-    func availableUpdate() async -> ModelUpdate? { nil }
-    /// Downloads `update` and uses it from the next reply on.
-    func install(_ update: ModelUpdate) async throws {}
     /// Files nothing: only the companion's own model has been measured at it (Apple's runs only on the simulator).
     func file(_ prompt: FilingPrompt) async throws -> Filings { Filings() }
 }
@@ -46,10 +40,10 @@ extension CompanionModel {
 /// The prompt is more than the model can read at once.
 struct PromptTooLong: Error {}
 
-/// A newer file of the companion's model: which revision of its repository, and how big.
-struct ModelUpdate: Equatable, Sendable {
-    var revision: String
-    var bytes: Int64
+/// The model's download can't go ahead, for a reason the author can do something
+/// about (too little free space): shown with the download's offer.
+struct DownloadBlocked: Error {
+    var reason: String
 }
 
 /// A model's first download: bytes so far and in all, and Foundation's
@@ -73,7 +67,7 @@ func streaming(_ body: @escaping @Sendable (AsyncThrowingStream<Reasoned, Error>
 }
 
 /// Apple's on-device model (never its server ones: `SystemLanguageModel.default`).
-/// Used only where llama.cpp isn't (the simulator); otherwise kept for comparing it
+/// Used only where TurboFieldfare isn't (the simulator); otherwise kept for comparing it
 /// with the companion's model on the phone.
 struct AppleModel: CompanionModel {
     var unavailableReason: String? {

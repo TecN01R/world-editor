@@ -27,21 +27,21 @@ final class Companion {
     /// version keeps its own), for this session only: shown collapsed, never saved
     /// or sent back to the model (its makers' advice).
     private(set) var thoughts: [String: String] = [:]
-    /// The panel is showing: beside the page unfolded, a sheet folded.
-    var isOpen = false
+    /// The panel is showing: beside the page unfolded, a sheet folded. Opening it
+    /// prepares the open page's reply, if one is due (`prepareSoon`).
+    var isOpen = false {
+        didSet { if isOpen, !oldValue { prepareSoon() } }
+    }
     /// The Duo is folded (compact width): the companion is a sheet, not a column.
     var folded = true
 
     /// The model's first download, while it runs.
     private(set) var download: Download?
+    /// Why the download couldn't go ahead (too little free space), shown with its offer.
+    private(set) var downloadNote: String?
 
     /// When the model on the phone was downloaded, for the menu.
     private(set) var modelVersion: String?
-    /// A newer file of the model, if its maker has published one: offered in
-    /// the menu, never fetched unasked (it's gigabytes, and it may not behave
-    /// as the one the instructions were measured on).
-    private(set) var modelUpdate: ModelUpdate?
-    private var lookedForUpdate = false
 
     /// It thinks before it replies, unless the author turns that off: replies
     /// then start sooner. (Measured, thinking made no difference to how good
@@ -64,13 +64,13 @@ final class Companion {
     /// The world's conversations about the world as a whole, newest first, for their list.
     private(set) var worldConversations: [Conversation] = []
 
-    // The one model the companion uses: the test's leader that runs on the
-    // phone today (Kevin: one model, no choosing, as when it ships). Gemma,
-    // set in `init`, wherever llama.cpp is; Apple's model elsewhere.
-    #if canImport(AnyLanguageModel)
-    static let modelName = GemmaModel.name
+    // The one model the companion uses (Kevin: one model, no choosing, as when it
+    // ships): Gemma 4 26B, set in `init`, wherever TurboFieldfare is; Apple's
+    // model elsewhere.
+    #if canImport(TurboFieldfare)
+    static let modelName = TurboModel.name
     #else
-    static let modelName = "Apple's on-device model"   // the simulator: no llama.cpp there
+    static let modelName = "Apple's on-device model"   // the simulator: no TurboFieldfare there
     #endif
     /// The model isn't on the phone, and the author hasn't asked for it yet:
     /// the companion offers the download and does nothing else until then.
@@ -80,39 +80,52 @@ final class Companion {
     private var model: any CompanionModel = AppleModel()
     private var store: ConversationStore?
     private var preparing: Task<Void, Never>?
+    /// The page open now (a world conversation's stand-in), whose reply is prepared when the companion opens.
+    private var opened: (page: WriterCore.Document, library: Library)?
     /// Filing what the author last said; the next reply waits for it (one model, one job at a time).
     private var filing: Task<Void, Never>?
     private static let log = Logger(subsystem: "com.tecn01r.worldeditor", category: "companion")
 
     init() {
-        #if canImport(AnyLanguageModel)
-        model = GemmaModel { [weak self] download in
+        #if canImport(TurboFieldfare)
+        model = TurboModel { [weak self] download in
             Task { @MainActor in
                 self?.download = download
                 BackgroundDownload.update(download)   // keeps going if the author leaves the app
             }
         }
         #endif
-        needsDownload = !model.isInstalled
-        if needsDownload { Task { downloadSize = await model.downloadSize() } }
-        if !needsDownload { Task { [model] in await FilingLab.runIfAsked(with: model) } }   // TRIAL
+        if model.isInstalled {
+            Task { [model] in await FilingLab.runIfAsked(with: model) }   // TRIAL
+        } else {
+            offerDownload()
+        }
     }
 
-    /// The author asked for the model: download it, then reply about `page`.
-    /// Also resumes a download that lost its connection.
+    /// The author asked for the model: download it, then reply about the page open
+    /// by then. Also resumes a download that lost its connection. The download is a
+    /// task of its own, which opening another page or asking again never stops: it
+    /// takes 10 to 30 minutes, and the author goes on writing meanwhile.
     func startDownload(page: WriterCore.Document, in library: Library) {
+        guard download == nil else { return }
+        opened = (page, library)
         // The download shows from the tap: the first progress report comes a
         // moment later, and in between the conversation would flash up (Kevin).
         download = Download(done: 0, total: downloadSize ?? 0, detail: "Starting…")
+        downloadNote = nil
         needsDownload = false
         state = .idle
-        preparing?.cancel()
-        preparing = Task {
+        preparing?.cancel()   // no reply while it downloads
+        Task {
             do {
                 try await model.prepare()
                 download = nil
                 modelVersion = model.version
-                await ask(about: page, in: library)   // if a reply is due (a new or blank page)
+                prepareSoon()   // if a reply is due (a new or blank page)
+            } catch let blocked as DownloadBlocked {
+                download = nil
+                downloadNote = blocked.reason
+                needsDownload = true
             } catch {
                 download = nil
                 Self.log.error("Download failed: \(String(describing: error), privacy: .public)")
@@ -123,14 +136,15 @@ final class Companion {
         }
     }
 
-    /// The open page changed: load its conversation and, after a pause,
-    /// prepare a reply quietly.
+    /// The open page changed: load its conversation and, after a pause, prepare a
+    /// reply quietly (`prepareSoon`).
     /// - Parameter aboutWorld: a conversation about the whole world (`page` is a stand-in).
     func open(_ page: WriterCore.Document, in library: Library, aboutWorld: Bool = false) {
         let directory = library.conversationsDirectory
         // The same page again (folding or unfolding rebuilds the editor): leave a reply or
         // Try Again in progress alone.
         guard page.id != conversation.page || directory != store?.directory else { return }
+        opened = (page, library)
         preparing?.cancel()
         store = directory.flatMap { try? ConversationStore(directory: $0) }
         conversation = store?.load(page.id) ?? Conversation(page: page.id)
@@ -138,35 +152,38 @@ final class Companion {
         if aboutWorld || page.id == library.world.id { conversation.aboutWorld = true }
         others = (store?.all() ?? []).filter { $0.page != page.id }
         retracted = nil
-        state = .idle
+        if state != .downloadPaused { state = .idle }   // a paused download stays on offer
         guard conversation.waiting == nil else { return }   // a blank page too: it helps you start
+        prepareSoon(after: .seconds(2))   // settle: the author may be passing through
+    }
+
+    /// Prepares the open page's reply after `pause`, if one is due, only while the
+    /// companion is open: on this model a reply is minutes of the GPU's work, too much
+    /// to spend on every page passed through with it closed. Not while the phone is hot
+    /// or in Low Power Mode either: the author begins instead.
+    private func prepareSoon(after pause: Duration = .zero) {
+        let phone = ProcessInfo.processInfo
+        guard isOpen, download == nil, state == .idle, let opened,
+              phone.thermalState != .serious, phone.thermalState != .critical, !phone.isLowPowerModeEnabled else { return }
+        preparing?.cancel()
         preparing = Task {
-            try? await Task.sleep(for: .seconds(2))   // settle: the author may be passing through
+            try? await Task.sleep(for: pause)
             guard !Task.isCancelled else { return }
-            await ask(about: page, in: library)
+            await ask(about: opened.page, in: opened.library)
         }
     }
 
-    /// Reads what's on the phone and, once per launch, asks whether there's a newer file.
-    func checkModel() {
+    /// The model isn't on the phone (never downloaded, or its files failed their check
+    /// and were removed): the download is offered, never started unasked.
+    private func offerDownload() {
+        needsDownload = true
+        state = .idle
+        Task { downloadSize = await model.downloadSize() }
+    }
+
+    /// Reads when the model on the phone was downloaded, for the menu.
+    func readModelVersion() {
         modelVersion = model.version
-        guard !lookedForUpdate else { return }
-        lookedForUpdate = true
-        Task { modelUpdate = await model.availableUpdate() }
-    }
-
-    /// Downloads the newer file (the download shows as the first one did) and uses it from the next reply.
-    func updateModel() {
-        guard let update = modelUpdate, state != .thinking else { return }
-        Task {
-            do {
-                try await model.install(update)
-                modelUpdate = nil
-                modelVersion = model.version
-            } catch {
-                Self.log.error("Model update failed: \(String(describing: error), privacy: .public)")
-            }
-        }
     }
 
     /// Asks again now, in place of any waiting reply, which is kept as a version of the new one.
@@ -292,6 +309,7 @@ final class Companion {
             trialLog("ERROR \(page.title): \(String(describing: error))")   // TRIAL
             if !Task.isCancelled { restoreRetracted() }
             state = error is URLError ? .downloadPaused : .failed
+            if !model.isInstalled { offerDownload() }   // its files failed their check and were removed
             return
         }
         guard !Task.isCancelled else { return }   // superseded: leave state to whoever dropped it

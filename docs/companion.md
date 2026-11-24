@@ -1,11 +1,12 @@
 # The companion: how it's prompted, and why
 
-The companion is a small language model running on the phone. What it says is
-decided by three things: which model it is, the text it's given before the
-conversation (its prompt), and how its output is sampled. This page records
-what those are, the reasons, and the measurements behind them, so the next
-change starts from evidence. `docs/companion-roadmap.md` covers what isn't
-built yet (web search, images, documents).
+The companion is a language model running on the phone (Gemma 4 26B-A4B since
+2026-11-24; `docs/models.md`). What it says is decided by three things: which
+model it is, the text it's given before the conversation (its prompt), and how
+its output is sampled. This page records what those are, the reasons, and the
+measurements behind them, so the next change starts from evidence.
+`docs/companion-roadmap.md` covers what isn't built yet (web search, images,
+documents).
 
 ## What it's for
 
@@ -64,14 +65,18 @@ system turn, in this order, then the conversation:
 
 The conversation follows as real turns. It begins with the writer's
 "(I've just opened this page.)", because the companion speaks first and a chat
-model's conversation has to begin with the other side.
+model's conversation has to begin with the other side. It does so only while
+the companion is open, and not while the phone is hot or in Low Power Mode,
+when the author begins instead (on the 26B a reply is minutes of the GPU's work).
 
 Sampling is Google's for Gemma 4: temperature 1.0, top-p 0.95, top-k 64, no
 repetition penalty. It thinks before it replies (Gemma's `<|think|>`) unless
 the author switches that off in the companion's menu, and its earlier thinking
 is never sent back to it. On the phone the thinking is the
-wait before a reply (4 to 8 seconds on E2B, measured), and it can't be shown:
-AnyLanguageModel removes Gemma's thought channel from what it hands the app. Anything in the writer's text that
+wait before a reply (4 to 8 seconds on E2B, measured; not yet on the 26B, which
+writes far slower, so it may take minutes). The app renders Gemma's chat format
+itself (`TurboModel.chat`) and reads its thought channel, so the thinking shows,
+collapsed, as it comes. Anything in the writer's text that
 Gemma would read as one of its control tokens is defused first
 (`Reasoned.gemmaPlain`).
 
@@ -276,9 +281,9 @@ one the conversation goes on from, and it stays that once answered (Kevin,
 author's message again for filing if nothing came of it the first time and
 nothing was undone (`Turn.needsFiling`; his "I think it was actually a
 bireme" was first read by E2B, which saw "trireme").
-Each reply draws a new seed: AnyLanguageModel otherwise draws one when the
-model loads and reuses it, so Try Again gave the same words (temperature was
-already Gemma's 1.0).
+Each reply draws a new seed, so Try Again differs (under AnyLanguageModel,
+before the 26B, one seed drawn when the model loaded gave the same words each
+time, though temperature was already Gemma's 1.0).
 
 Plain Model (TRIAL, in the menu; Kevin, 2026-11-24: "remove all your rules
 and context and prompts so I can see how this actually works as a model"):
@@ -337,7 +342,9 @@ the companion is filed, never the page's writing.
   pages' titles, what the companion said, and the message). The model writes
   JSON as the example shows, and `Filings.parse` reads each list on its own.
   Not constrained decoding: AnyLanguageModel's took a minute on the phone and
-  looped (Kevin's first try, 2026-11-24); plain JSON takes 2 to 3 seconds there.
+  looped (Kevin's first try, 2026-11-24); plain JSON took 2 to 3 seconds there
+  on E4B. Not yet measured on the 26B, which reads the whole filing prompt
+  afresh each time, and after it the companion's prompt too (`docs/models.md`).
 - **What code guarantees** (`Filer`, tested in WriterKit): every value, new
   page title and new page text is found in the message, in a sentence that
   isn't a question or hedged ("maybe", "might", "what if", "either"); a
@@ -435,3 +442,8 @@ page's own writing isn't read.
    how good a reply is.
 4. Only then move the text into `CompanionPrompt.swift`. Its tests pin the
    builds, so what was measured is what ships.
+
+`phone` rendering (AnyLanguageModel's, as the app sent E4B its prompt) or the
+model file's own template. Since the 26B the app renders the prompt itself
+(`TurboModel.chat`: no tools, and with thinking off its thought channel comes
+(`gemma_format.render_turbo`); measurements of the 26B use that.

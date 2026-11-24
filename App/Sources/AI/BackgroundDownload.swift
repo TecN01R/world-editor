@@ -47,7 +47,7 @@ enum BackgroundDownload {
         }
         let request = BGContinuedProcessingTaskRequest(
             identifier: identifier, title: "Companion Download",
-            subtitle: latest?.detail ?? "A one-time download, about 3 GB")
+            subtitle: latest?.detail ?? "A one-time download")
         try? BGTaskScheduler.shared.submit(request)
     }
 }

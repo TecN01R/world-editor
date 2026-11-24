@@ -14,8 +14,10 @@ research when a question is asked, and image and text upload and analysis.
   They never become a way for it to add to the writer's world.
 - **Frictionless.** Nothing to set up before writing. Looking something up is
   something the companion does when asked a question, not a mode to switch on.
-- **Stock parts.** Foundation Models' own tool-calling API (through
-  AnyLanguageModel, which follows it), `PhotosPicker`, `fileImporter`, PDFKit.
+- **Stock parts.** Gemma 4's own tool-call format through TurboFieldfare's
+  tool path (`GFTokenizer.encodeToolChat` renders the tools with the model's
+  chat template; `StructuredAssistantDecoder` reads its calls), `PhotosPicker`,
+  `fileImporter`, PDFKit.
 
 ## 1. Looking things up, starting with Wikipedia
 
@@ -32,12 +34,16 @@ shows where they came from.
 - **Why Wikipedia first:** no account, no key, no cost, and it covers most of
   what a worldbuilder asks (history, ships, climate, how things work). Kevin
   agreed to start here.
-- **How:** a `Tool` (`name`, `description`, one `query` argument) passed to the
-  session; Gemma 4's own tool-call format is already rendered and parsed by
-  AnyLanguageModel. `ToolExecutionDelegate` shows "Looking up …" while it runs.
-  One search per reply to begin with (`maximumToolRounds`), results trimmed to
-  about 1,500 tokens, and the tool's output cleaned the same way the writer's
-  text is (`Reasoned.gemmaPlain`), since it comes from outside.
+- **How:** one tool (`name`, `description`, one `query` argument) declared
+  through TurboFieldfare's tool path (`GFTokenizer.encodeToolChat`, a
+  `FunctionDefinition`); `StructuredAssistantDecoder` turns the model's output
+  into text and tool calls as it comes, and `TurboModel` runs the call, shows
+  "Looking up …" meanwhile, and goes on with its output in the model's turn.
+  One search per reply to begin with, results trimmed to about 1,500 tokens,
+  and the tool's output cleaned the same way the writer's text is
+  (`Reasoned.gemmaPlain`), since it comes from outside. TurboFieldfare's tool
+  rendering has no thinking, so a reply that may search is written with
+  thinking off.
 - **What the writer sees:** under the reply, a chip: *Searched Wikipedia for
   "trireme crew size"*, opening the sources. The exact words sent are always
   visible. The first time, one sheet says what looking up means and offers to
@@ -95,16 +101,17 @@ shows where they came from.
 ## 4. Images
 
 - **Bringing it in:** `PhotosPicker`, the camera, paste.
-- **Seeing it:** Gemma 4 reads images through a second file, its vision
-  projector (about 0.6 GB more to download for E2B, fetched the first time an
-  image is added). The image is scaled down first, placed before the words in
-  the turn, and described once; later turns carry the description, not the
-  image, to save room.
+- **Seeing it:** TurboFieldfare reads images through an optional image pack
+  beside the model (about 1.1 GB more to download, fetched the first time an
+  image is added; its makers name an M2 or newer Mac for it, so whether the
+  Duo runs it is unknown). The image is scaled down first, placed before the
+  words in the turn, and described once; later turns carry the description,
+  not the image, to save room.
 - **What it's for:** a map, a sketch, a reference photo, a page of handwritten
   notes. It says what it sees and answers questions about it. What it *means*
   in the writer's world is theirs to say.
-- **Unknown until measured:** memory with the projector loaded, and speed, on
-  the Duo; E2B is the weakest of its family on documents and small text.
+- **Unknown until measured:** whether the image pack runs on the Duo at all,
+  and its memory and speed there.
 - **Gate:** descriptions judged against the image for made-up detail.
 
 ## 5. Its own tools for the writer's pages
@@ -120,12 +127,14 @@ conversation in place of dropping its oldest turns. Same gates.
    first-time sheet).
 2. Text files and long pastes (needs: the **+** button; no new model files).
 3. The whole web (needs: a Brave key; the relay question can wait).
-4. Images (needs: projector download; memory and speed measured on the Duo).
+4. Images (needs: the image pack's download; whether it runs on the Duo, and
+   its memory and speed there).
 5. Page tools and conversation summary.
 
 Speed between turns also needs work before any of this adds to the prompt:
-the app builds a fresh session for every reply, so the model re-reads
-everything each time. AnyLanguageModel can keep one session for a conversation
-and re-read only what changed (`LanguageModelSession(profile:history:)` with a
-history transform that drops its earlier reasoning). That has to be tried on
-the phone.
+the model re-reads its whole prompt for most replies. TurboFieldfare keeps what
+it has read (its KV cache) and reads only what's new when a prompt adds to the
+last one (`Loaded.start` in `TurboModel`), but the companion's prompt changes
+near its start with each message (the background), and filing reads a prompt of
+its own in between. Keeping the background fixed through a conversation, and
+filing without losing the reply's cache, has to be tried on the phone.

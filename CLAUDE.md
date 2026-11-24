@@ -27,7 +27,8 @@ writing. Structure grows out of the writing, never ahead of it.
    with XcodeGen and the xtool package layout, and screenshots on the iPhone Duo
    simulator) run only on demand (`gh workflow run CI`), since the repo is
    private and Mac minutes are expensive. The simulator build uses Apple's
-   model: llama.cpp has no simulator slice. Screenshots live only on the
+   model: TurboFieldfare, the companion's engine, isn't built for the
+   simulator. Screenshots live only on the
    `ci-screenshots` branch: CI force-pushes the latest set there as a single
    orphan commit (never on `main`, never as artifacts). Kevin tests on the Duo
    himself, so don't run them or send screenshots by default; run them (then
