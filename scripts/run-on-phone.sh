@@ -26,11 +26,25 @@ unreachable() {
     echo "The iPhone isn't reachable (not on this network or plugged in), so nothing was installed." >&2
     exit 2
 }
+# The private netmuxd (USBMUXD_SOCKET_ADDRESS=127.0.0.1:27099, docs/fedora.md) loses the
+# phone after a while though it's still on the Wi-Fi (2026-11-24, several times): when the
+# phone still announces itself on the network, restart that netmuxd once and look again.
+revive() {
+    [[ "${USBMUXD_SOCKET_ADDRESS:-}" == "127.0.0.1:27099" ]] || return 1
+    timeout 8 avahi-browse -tp _apple-mobdev2._tcp 2>/dev/null | grep -q . || return 1
+    echo "The phone is on the network but netmuxd lost it: restarting netmuxd." >&2
+    pkill -u "$USER" -x netmuxd || true
+    sleep 1
+    nohup setsid /usr/local/bin/netmuxd --disable-usb --disable-unix --host 127.0.0.1 -p 27099 \
+        --plist-storage /var/lib/lockdown >/dev/null 2>&1 </dev/null &
+    sleep 6
+    reachable
+}
 if [[ "${1:-}" == "--no-launch" ]]; then
     shift
     xtool dev build --ipa "$@"
-    reachable || unreachable   # built, ready for when it is
+    reachable || revive || unreachable   # built, ready for when it is
     exec timeout 600 xtool install xtool/WorldEditor.ipa
 fi
-reachable || unreachable
+reachable || revive || unreachable
 exec timeout 900 xtool dev "$@"   # never waits for a phone that drops out for good

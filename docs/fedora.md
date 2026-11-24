@@ -64,6 +64,14 @@ opens with the new build the next time Kevin opens it.
   To re-pair over USB: `sudo systemctl stop netmuxd`, plug in, `idevicepair
   pair`, then `sudo systemctl start netmuxd`. Charging from this PC over USB
   pauses wireless installs until the cable is out.
+- **When `netmuxd` loses the phone** though it's still on the Wi-Fi
+  (`avahi-browse -tp _apple-mobdev2._tcp` lists it) and nobody can restart the
+  system one with sudo, run a private one and point the tools at it:
+  `netmuxd --disable-usb --disable-unix --host 127.0.0.1 -p 27099
+  --plist-storage /var/lib/lockdown &`, then
+  `USBMUXD_SOCKET_ADDRESS=127.0.0.1:27099 scripts/run-on-phone.sh --no-launch`.
+  The private one loses the phone too after a while; the script then restarts
+  it on its own.
 - The service checks GitHub every 90 s, within its 60-an-hour limit for
   anonymous use. Set `GITHUB_TOKEN` in the service to check more often.
 - **Untested here:** these steps were written without access to a Fedora

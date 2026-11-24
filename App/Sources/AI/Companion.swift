@@ -30,6 +30,9 @@ final class Companion {
     /// version keeps its own), for this session only: shown collapsed, never saved
     /// or sent back to the model (its makers' advice).
     private(set) var thoughts: [String: String] = [:]
+    /// The companion's message field has the keyboard: the page's Done and Focus aren't for
+    /// it (Kevin, 2026-11-24); its keyboard goes down by swiping the conversation down.
+    var composing = false
     /// The panel is showing: beside the page unfolded, a sheet folded. Opening it
     /// prepares the open page's reply, if one is due (`prepareSoon`).
     var isOpen = false {

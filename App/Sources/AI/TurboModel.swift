@@ -484,11 +484,19 @@ private final class Loaded: @unchecked Sendable {
     /// otherwise from the start.
     func start(for ids: [Int32]) -> RawCompletionStart {
         let common = min(zip(cached, ids).prefix { $0.0 == $0.1 }.count, ids.count - 1)
-        guard common > 0, runner.continuationPosition == cached.count else { return .reset }
-        if common < cached.count {
-            guard (try? runner.rewind(to: common)) != nil else { return .reset }
+        let start: RawCompletionStart
+        if common <= 0 || runner.continuationPosition != cached.count {
+            start = .reset
+        } else if common < cached.count, (try? runner.rewind(to: common)) == nil {
+            start = .reset
+        } else {
+            start = .resume(cachedPromptTokens: common)
         }
-        return .resume(cachedPromptTokens: common)
+        // TRIAL (Kevin, 2026-11-24: replies took 30 s, nearly all of it reading the prompt
+        // again): how much of it the cache already held, and why it was read from the start.
+        trialLog("CACHE \(ids.count) tokens, \(common) shared with the \(cached.count) cached, runner at "
+                 + "\(runner.continuationPosition): \(start == .reset ? "read from the start" : "went on from the cache")")
+        return start
     }
 }
 

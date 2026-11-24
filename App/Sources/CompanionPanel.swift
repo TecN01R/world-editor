@@ -13,6 +13,7 @@ struct CompanionPanel: View {
     @Environment(Companion.self) private var companion
     @Environment(\.scenePhase) private var scenePhase
     @State private var message = ""
+    @FocusState private var composing: Bool
     @State private var confirmingNew = false
     @State private var showingChanges = false
     /// Where the conversation is scrolled: the newest message, as in Messages.
@@ -22,7 +23,7 @@ struct CompanionPanel: View {
     @ScaledMetric(relativeTo: .body) private var barHeight: CGFloat = 44
     /// The system's standard margin, for the conversation and the message bar.
     private static let margin: CGFloat = 20
-    /// Folded, a sheet; unfolded, the column beside the page.
+    /// Folded, a sheet; unfolded, the inspector column beside the page.
     let inSheet: Bool
     /// A conversation about the whole world, beside (unfolded) or over (folded) the
     /// world's conversation list (`WorldConversationList`): its bar has Changes and the menu.
@@ -488,11 +489,16 @@ struct CompanionPanel: View {
         GlassEffectContainer {
             HStack(alignment: .bottom, spacing: 8) {
                 if !inSheet && !aboutWorld {
-                    more
-                        .labelStyle(.iconOnly)
-                        .frame(width: barHeight, height: barHeight)
-                        .glassEffect(.regular.interactive(), in: .circle)
-                        .tint(.primary)   // a menu's label takes the tint, not a foreground style
+                    // The whole circle is the menu's to tap, not only its dots (Kevin, 2026-11-24:
+                    // sized from outside, taps beside the dots did nothing while the glass reacted).
+                    Menu { moreItems } label: {
+                        Label("More", systemImage: "ellipsis")
+                            .labelStyle(.iconOnly)
+                            .frame(width: barHeight, height: barHeight)
+                            .contentShape(.circle)
+                    }
+                    .glassEffect(.regular.interactive(), in: .circle)
+                    .tint(.primary)   // a menu's label takes the tint, not a foreground style
                 }
                 // What they type is theirs (New York); the placeholder is the app's.
                 TextField("Message", text: $message, prompt: Text("Message").font(.body), axis: .vertical)
@@ -503,6 +509,9 @@ struct CompanionPanel: View {
                     .frame(minHeight: barHeight)
                     .glassEffect(.regular.interactive(), in: .rect(cornerRadius: barHeight / 2))
                     .disabled(!canWrite)
+                    .focused($composing)
+                    .onChange(of: composing) { _, now in companion.composing = now }
+                    .onDisappear { companion.composing = false }   // closed with the keyboard up: the page's again
                 Button(action: send) {
                     Image(systemName: "arrow.up")
                         .fontWeight(.semibold)
@@ -520,30 +529,31 @@ struct CompanionPanel: View {
 
     /// Everything that isn't the conversation itself.
     private var more: some View {
-        Menu {
-            Button("New Conversation", systemImage: "square.and.pencil") {
-                // A world conversation: another one, this one kept in the list; a page's: after confirming.
-                if let newConversation { newConversation() } else { confirmingNew = true }
-            }
+        Menu { moreItems } label: { Label("More", systemImage: "ellipsis") }
+    }
+
+    /// The menu's items: in the bar's menu, and in the one beside the message field.
+    @ViewBuilder private var moreItems: some View {
+        Button("New Conversation", systemImage: "square.and.pencil") {
+            // A world conversation: another one, this one kept in the list; a page's: after confirming.
+            if let newConversation { newConversation() } else { confirmingNew = true }
+        }
+        .disabled(companion.conversation.turns.isEmpty)
+        ShareLink("Share Conversation", item: transcript)
             .disabled(companion.conversation.turns.isEmpty)
-            ShareLink("Share Conversation", item: transcript)
-                .disabled(companion.conversation.turns.isEmpty)
-            if !inSheet && !aboutWorld { changesButton }   // the sheet (Kevin, 2026-11-24) and the world's screen have it beside the menu
-            // TRIAL (Kevin, 2026-11-24): the model on its own.
-            Toggle(isOn: Binding { companion.plain } set: { companion.plain = $0 }) {
-                Label("Plain Model", systemImage: "cube")
-                Text("No instructions or pages, only the conversation")
+        if !inSheet && !aboutWorld { changesButton }   // the sheet (Kevin, 2026-11-24) and the world's screen have it beside the menu
+        // TRIAL (Kevin, 2026-11-24): the model on its own.
+        Toggle(isOn: Binding { companion.plain } set: { companion.plain = $0 }) {
+            Label("Plain Model", systemImage: "cube")
+            Text("No instructions or pages, only the conversation")
+        }
+        Section {
+            // What it's running, as a line to read (a menu has no plain text).
+            Button {} label: {
+                Text(Companion.modelName)
+                Text([companion.modelVersion, Self.appVersion].compactMap { $0 }.joined(separator: " · "))
             }
-            Section {
-                // What it's running, as a line to read (a menu has no plain text).
-                Button {} label: {
-                    Text(Companion.modelName)
-                    Text([companion.modelVersion, Self.appVersion].compactMap { $0 }.joined(separator: " · "))
-                }
-                .disabled(true)
-            }
-        } label: {
-            Label("More", systemImage: "ellipsis")
+            .disabled(true)
         }
     }
 
