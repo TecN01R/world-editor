@@ -75,7 +75,8 @@ struct PageEditor: UIViewRepresentable {
         ])
         configuration.formattingStyles = [(ParagraphRole.title, "Title"), (.heading, "Heading"),
                                           (.subheading, "Subheading"), (.body, "Body")].map { role, title in
-            .init(styleKey: role.rawValue, title: LocalizedStringResource(stringLiteral: title), attributes: [.font: font(role)])
+            // Its face unscaled: the panel scales it itself (a font scaled twice crashed it).
+            .init(styleKey: role.rawValue, title: LocalizedStringResource(stringLiteral: title), attributes: [.font: face(role)])
         }
         return configuration
     }()
@@ -87,19 +88,37 @@ struct PageEditor: UIViewRepresentable {
     static var font: UIFont { newYork(19, weight: .regular, scaledAs: .body) }
 
     private static func newYork(_ size: CGFloat, weight: UIFont.Weight, scaledAs style: UIFont.TextStyle) -> UIFont {
-        let base = UIFont.systemFont(ofSize: size, weight: weight)
-        let serif = UIFont(descriptor: base.fontDescriptor.withDesign(.serif) ?? base.fontDescriptor, size: size)
-        return UIFontMetrics(forTextStyle: style).scaledFont(for: serif)
+        UIFontMetrics(forTextStyle: style).scaledFont(for: serif(size, weight: weight))
     }
 
-    /// Each text style's face: New York, scaled with Dynamic Type (the sizes of Notes' Title,
-    /// Heading, Subheading and Body, a little larger for a serif).
+    /// New York at `size`, unscaled.
+    private static func serif(_ size: CGFloat, weight: UIFont.Weight) -> UIFont {
+        let base = UIFont.systemFont(ofSize: size, weight: weight)
+        return UIFont(descriptor: base.fontDescriptor.withDesign(.serif) ?? base.fontDescriptor, size: size)
+    }
+
+    /// Each text style's face, New York, scaled with Dynamic Type.
     static func font(_ role: ParagraphRole) -> UIFont {
+        UIFontMetrics(forTextStyle: textStyle(role)).scaledFont(for: face(role))
+    }
+
+    /// Each text style's face at the default text size: the sizes of Notes' Title, Heading,
+    /// Subheading and Body, a little larger for a serif.
+    static func face(_ role: ParagraphRole) -> UIFont {
         switch role {
-        case .body: font
-        case .title: newYork(28, weight: .bold, scaledAs: .title1)
-        case .heading: newYork(23, weight: .bold, scaledAs: .title2)
-        case .subheading: newYork(20, weight: .semibold, scaledAs: .title3)
+        case .body: serif(19, weight: .regular)
+        case .title: serif(28, weight: .bold)
+        case .heading: serif(23, weight: .bold)
+        case .subheading: serif(20, weight: .semibold)
+        }
+    }
+
+    private static func textStyle(_ role: ParagraphRole) -> UIFont.TextStyle {
+        switch role {
+        case .body: .body
+        case .title: .title1
+        case .heading: .title2
+        case .subheading: .title3
         }
     }
 
@@ -133,7 +152,29 @@ struct PageEditor: UIViewRepresentable {
         var onWriting: (Bool) -> Void = { _ in }
         var onEditing: (Bool) -> Void = { _ in }
         private var observers: [NSObjectProtocol] = []
-        lazy var formatBar = FormatBar(onFormat: { [weak self] in self?.showFormatting() })
+        lazy var formatBar = FormatBar { [weak self] action in
+            switch action {
+            case .style(let style): self?.toggle(style)
+            case .list(let kind): self?.list(kind)
+            case .format: self?.showFormatting()
+            }
+        }
+
+        /// iOS's own Bold and Italic, as ⌘B and ⌘I: Undo takes them back, and with nothing
+        /// selected they're for what's typed next.
+        private func toggle(_ style: InlineStyle) {
+            guard let tv = textView else { return }
+            if style == .bold { tv.toggleBoldface(nil) } else { tv.toggleItalics(nil) }
+            if !selection.isEmpty { textViewDidChange(tv) }
+            updateFormatBar()
+            UISelectionFeedbackGenerator().selectionChanged()
+        }
+
+        private func list(_ kind: ParagraphKind) {
+            toggleKind(kind, in: selection)
+            updateFormatBar()
+            UISelectionFeedbackGenerator().selectionChanged()
+        }
 
         lazy var titleField: UITextField = {
             let f = UITextField()
@@ -412,6 +453,9 @@ struct PageEditor: UIViewRepresentable {
             }
             var host = tv.window?.rootViewController
             while let next = host?.presentedViewController { host = next }
+            // The keyboard steps aside while it shows, as for the edit menu's (it covered the
+            // panel folded); the selection stays, and the writing gets the keyboard back after.
+            tv.resignFirstResponder()
             host?.present(panel, animated: true)
         }
 
@@ -553,7 +597,12 @@ struct PageEditor: UIViewRepresentable {
                     self?.open(page.id)
                 }
             }
-            formatBar.update(open: open)
+            func on(_ style: InlineStyle) -> Bool {
+                guard let tv = textView else { return false }
+                return range.isEmpty ? RichText.style(of: tv.typingAttributes, base: PageEditor.font(p.role)).contains(style)
+                                     : doc.has(style, in: range)
+            }
+            formatBar.update(bold: on(.bold), italic: on(.italic), kind: p.kind, open: open)
             updateMentionMenu(at: caret)
         }
 
@@ -579,8 +628,8 @@ struct PageEditor: UIViewRepresentable {
     }
 }
 
-/// Format (iOS's Format panel) above the keyboard, plus Open while the
-/// caret is in a link. One glass capsule with a small gap below it, in
+/// Bold, Italic, the two lists and Format (iOS's Format panel) above the
+/// keyboard, plus Open while the caret is in a link. One glass capsule with a small gap below it, in
 /// the page's column, scrolling sideways when its buttons don't fit, as in Notes.
 /// Customised at Kevin's request: the stock toolbar folds extra items into
 /// "•••" and spans the whole keyboard.
@@ -601,11 +650,17 @@ final class FormatBar: UIView {
     private let capsule = UIVisualEffectView(effect: UIGlassEffect())
     private let scroll = UIScrollView()
     private let stack = UIStackView()
-    private let formatButton: UIButton
+    /// Bold, Italic, the two lists, and Format.
+    private let buttons: [UIButton]
 
-    /// - Parameter onFormat: opens iOS's Format panel.
-    init(onFormat: @escaping () -> Void) {
-        formatButton = Self.button(symbol: "textformat", label: "Format", action: onFormat)
+    enum Action { case style(InlineStyle), list(ParagraphKind), format }
+
+    init(onAction: @escaping (Action) -> Void) {
+        buttons = [Self.button(symbol: "bold", label: "Bold") { onAction(.style(.bold)) },
+                   Self.button(symbol: "italic", label: "Italic") { onAction(.style(.italic)) },
+                   Self.button(symbol: "list.bullet", label: "Bulleted List") { onAction(.list(.bullet)) },
+                   Self.button(symbol: "list.number", label: "Numbered List") { onAction(.list(.numbered)) },
+                   Self.button(symbol: "textformat", label: "Format") { onAction(.format) }]
         super.init(frame: CGRect(x: 0, y: 0, width: 320, height: 44 + Self.gap))
 
         capsule.cornerConfiguration = .capsule()
@@ -636,7 +691,7 @@ final class FormatBar: UIView {
             stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
             stack.heightAnchor.constraint(equalTo: scroll.frameLayoutGuide.heightAnchor),
         ])
-        show([formatButton])
+        show(buttons)
         tintAdjustmentMode = .normal   // stays bright while the @ menu is up, as in Notes
         addInteraction(UILargeContentViewerInteraction())   // press and hold at large text sizes
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (bar: FormatBar, _: UITraitCollection) in
@@ -670,6 +725,9 @@ final class FormatBar: UIView {
         b.largeContentImage = config.image
         b.widthAnchor.constraint(greaterThanOrEqualToConstant: 56).isActive = true   // even slots, as in Notes
         b.setContentCompressionResistancePriority(.required, for: .horizontal)   // scroll, never squeeze
+        b.configurationUpdateHandler = { b in   // on: shaded, as Notes' bar shows it
+            b.configuration?.background.backgroundColor = b.isSelected ? .tertiarySystemFill : .clear
+        }
         return b
     }
 
@@ -682,12 +740,13 @@ final class FormatBar: UIView {
     /// The extra button beside formatting, so the bar's only rebuilt when it changes.
     private var shownExtra: String?
 
-    /// Format, plus a button to open the link at the caret.
-    func update(open: OpenButton?) {
+    /// Bold, Italic and the lists as the selection is, plus a button to open the link at the caret.
+    func update(bold: Bool, italic: Bool, kind: ParagraphKind, open: OpenButton?) {
+        for (b, on) in zip(buttons, [bold, italic, kind == .bullet, kind == .numbered]) { b.isSelected = on }
         let key = open.map { "\($0.name) \($0.page)" }
         guard key != shownExtra else { return }
         shownExtra = key
-        show([formatButton] + (open.map { [Self.button(for: $0)] } ?? []))
+        show(buttons + (open.map { [Self.button(for: $0)] } ?? []))
     }
 
     private static func button(for open: OpenButton) -> UIButton {
