@@ -49,6 +49,15 @@ final class Companion {
         didSet { UserDefaults.standard.set(thinks, forKey: "companionThinks") }
     }
 
+    /// TRIAL (Kevin, 2026-11-24): the model with none of the app's instructions,
+    /// examples or pages, only the conversation (`CompanionPrompt.plain`), to see
+    /// how it does on its own.
+    var plain = UserDefaults.standard.bool(forKey: "companionPlain") {
+        didSet { UserDefaults.standard.set(plain, forKey: "companionPlain") }
+    }
+    /// The reply Try Again took back, kept as a version of the next one, or put back if that fails.
+    private var retracted: Conversation.Turn?
+
     // The one model the companion uses: the test's leader that runs on the
     // phone today (Kevin: one model, no choosing, as when it ships). Gemma,
     // set in `init`, wherever llama.cpp is; Apple's model elsewhere.
@@ -114,6 +123,7 @@ final class Companion {
         preparing?.cancel()
         store = library.conversationsDirectory.flatMap { try? ConversationStore(directory: $0) }
         conversation = store?.load(page.id) ?? Conversation(page: page.id)
+        retracted = nil
         state = .idle
         guard conversation.waiting == nil else { return }   // a blank page too: it helps you start
         preparing = Task {
@@ -145,16 +155,28 @@ final class Companion {
         }
     }
 
-    /// Asks again now, in place of any waiting reply.
+    /// Asks again now, in place of any waiting reply, which is kept as a version of the new one.
     func retry(page: WriterCore.Document, in library: Library) {
-        if conversation.waiting != nil { conversation.turns.removeLast() }
+        if let turn = conversation.retract() { retracted = turn }
         askNow(about: page, in: library)
+    }
+
+    /// Goes on from this version of a reply.
+    func choose(_ version: String, in turn: UUID) {
+        conversation.choose(version, in: turn)
+        save()
+    }
+
+    func delete(_ version: String, in turn: UUID) {
+        conversation.delete(version, in: turn)
+        save()
     }
 
     /// Forgets this page's conversation and starts afresh.
     func startOver(page: WriterCore.Document, in library: Library) {
         store?.delete(page.id)
         conversation = Conversation(page: page.id)
+        retracted = nil
         state = .idle
         askNow(about: page, in: library)
     }
@@ -189,10 +211,12 @@ final class Companion {
             // Unusual text takes more of the model's context than its length
             // suggests: a prompt that doesn't fit is rebuilt with less background.
             for room in [1, 2, 4] {
-                let prompt = CompanionPrompt(page: library.companionPage(page, open: true),
-                                             others: others.map { library.companionPage($0) },
-                                             earlier: earlier, conversation: conversation,
-                                             maxCharacters: 6000 / room, maxTurnCharacters: 6000 / room)
+                let prompt = plain
+                    ? CompanionPrompt.plain(conversation, maxTurnCharacters: 6000 / room)
+                    : CompanionPrompt(page: library.companionPage(page, open: true),
+                                      others: others.map { library.companionPage($0) },
+                                      earlier: earlier, conversation: conversation,
+                                      maxCharacters: 6000 / room, maxTurnCharacters: 6000 / room)
                 do {
                     for try await partial in model.stream(prompt, thinking: thinks) {
                         guard !Task.isCancelled else { break }
@@ -208,14 +232,16 @@ final class Companion {
         } catch {
             Self.log.error("Model failed: \(String(describing: error), privacy: .public)")
             trialLog("ERROR \(page.title): \(String(describing: error))")   // TRIAL
+            restoreRetracted()
             state = error is URLError ? .downloadPaused : .failed
             return
         }
-        guard !Task.isCancelled, conversation.page == page.id else { state = .idle; return }
-        trialLog("REPLY \(page.title): \(reply.reply)")   // TRIAL
-        guard !reply.reply.isEmpty else { state = .failed; return }   // ran out of room while thinking
+        guard !Task.isCancelled, conversation.page == page.id else { restoreRetracted(); state = .idle; return }
+        trialLog("REPLY\(plain ? " (plain)" : "") \(page.title): \(reply.reply)")   // TRIAL
+        guard !reply.reply.isEmpty else { restoreRetracted(); state = .failed; return }   // ran out of room while thinking
         if modelVersion == nil { modelVersion = model.version }   // just downloaded
-        conversation.ask(reply.reply)
+        conversation.ask(reply.reply, after: retracted)
+        retracted = nil
         if !reply.reasoning.isEmpty, let turn = conversation.turns.last { thoughts[turn.id] = reply.reasoning }
         save()
         state = .idle
@@ -258,6 +284,13 @@ final class Companion {
         guard var record = conversation.turns.first(where: { $0.id == turn })?.filed else { return }
         library.undo(action, of: &record)
         setFiled(record, turn: turn, page: conversation.page)   // kept when all undone, so it isn't filed again
+    }
+
+    /// Asking again failed or was dropped: the reply it would have replaced comes back.
+    private func restoreRetracted() {
+        guard let old = retracted else { return }   // cleared when another page opens
+        retracted = nil
+        if conversation.waiting == nil { conversation.turns.append(old) }
     }
 
     private func save() { try? store?.save(conversation) }

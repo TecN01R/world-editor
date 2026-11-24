@@ -266,6 +266,21 @@ or better. What is left, from the judges' notes:
   adventure is she on?") and on a critic's voice ("suggests a profound sense
   of duty").
 
+## Trying it again, and the plain model
+
+Try Again (hold the latest reply) keeps every try: "‹ 2 of 3 ›" under the
+reply goes back to one, and the one shown is what the conversation goes on
+from; hold a reply to delete one of its versions (`Conversation.Turn.versions`).
+Each reply draws a new seed: AnyLanguageModel otherwise draws one when the
+model loads and reuses it, so Try Again gave the same words (temperature was
+already Gemma's 1.0).
+
+Plain Model (TRIAL, in the menu; Kevin, 2026-11-24: "remove all your rules
+and context and prompts so I can see how this actually works as a model"):
+the model gets only the conversation, no instructions, examples or pages
+(`CompanionPrompt.plain`). It knows nothing of the page but what's been said.
+The menu's Changes lists everything filed from the conversation, with Undo.
+
 ## Filing: structure from the conversation
 
 Kevin, 2026-11-23: "Take a free flowing conversation and give it extreme

@@ -14,6 +14,7 @@ struct CompanionPanel: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var message = ""
     @State private var confirmingNew = false
+    @State private var showingChanges = false
     /// Where the conversation is scrolled: the newest message, as in Messages.
     @State private var position = ScrollPosition(edge: .bottom)
     /// One height for the whole message bar: the HIG's minimum touch size,
@@ -60,8 +61,7 @@ struct CompanionPanel: View {
                 // Until the model is here, only the download shows (over an empty panel).
                 ForEach(companion.needsDownload || companion.download != nil ? [] : companion.conversation.turns) { turn in
                     if let thought = companion.thoughts[turn.id] { reasoning(thought, done: true) }
-                    // Its latest reply, still unanswered, can be tried again (hold it).
-                    reply(turn.question, canRetry: turn.id == companion.conversation.waiting?.id && companion.state == .idle)
+                    reply(turn)
                     if let answer = turn.answer { mine(answer) }
                     if let record = turn.filed, !record.isEmpty { filed(record, from: turn.id) }
                 }
@@ -96,6 +96,7 @@ struct CompanionPanel: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, companion.state == .downloadPaused { resume() }
         }
+        .sheet(isPresented: $showingChanges) { changes }
         .confirmationDialog("Start a new conversation about this page?", isPresented: $confirmingNew,
                             titleVisibility: .visible) {
             Button("New Conversation", role: .destructive) {
@@ -108,15 +109,50 @@ struct CompanionPanel: View {
     }
 
     /// The companion's words: plain text, the width of the panel.
-    private func reply(_ text: String, canRetry: Bool = false) -> some View {
+    private func words(_ text: String) -> some View {
         Text(Self.markdown(text))
             .frame(maxWidth: .infinity, alignment: .leading)
-            .contextMenu {
-                copy(text)
-                if canRetry {
-                    Button("Try Again", systemImage: "arrow.clockwise", action: retry)
+    }
+
+    /// A reply. Hold its latest, unanswered one to try again; each try is kept, to go back to.
+    private func reply(_ turn: Conversation.Turn) -> some View {
+        let idle = companion.state == .idle
+        return VStack(alignment: .leading, spacing: 4) {
+            words(turn.question)
+                .contextMenu {
+                    copy(turn.question)
+                    if idle, turn.id == companion.conversation.waiting?.id {
+                        Button("Try Again", systemImage: "arrow.clockwise", action: retry)
+                    }
+                    if idle, turn.versions != nil {
+                        Button("Delete This Version", systemImage: "trash", role: .destructive) {
+                            companion.delete(turn.question, in: turn.id)
+                        }
+                    }
                 }
+            if let versions = turn.versions, let at = versions.firstIndex(of: turn.question) {
+                versionPicker(versions, at: at, of: turn.id)
+                    .disabled(!idle)
             }
+        }
+    }
+
+    /// "‹ 2 of 3 ›" under a reply tried more than once: the one shown is the one the conversation goes on from.
+    private func versionPicker(_ versions: [String], at: Int, of turn: UUID) -> some View {
+        HStack(spacing: 12) {
+            Button("Previous Version", systemImage: "chevron.left") { companion.choose(versions[at - 1], in: turn) }
+                .disabled(at == 0)
+            Text("\(at + 1) of \(versions.count)")
+                .monospacedDigit()
+            Button("Next Version", systemImage: "chevron.right") { companion.choose(versions[at + 1], in: turn) }
+                .disabled(at == versions.count - 1)
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.borderless)
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Version \(at + 1) of \(versions.count)")
     }
 
     /// The models write Markdown: bold, italics, code and links show as such
@@ -144,6 +180,55 @@ struct CompanionPanel: View {
             .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
+    /// Everything filed from this conversation, newest first, under the message
+    /// it came from, each with its Undo: the same lines as under each message.
+    private var changes: some View {
+        NavigationStack {
+            List {
+                ForEach(filedTurns.reversed()) { turn in
+                    Section {
+                        ForEach(library.describe(turn.filed ?? FilingRecord()), id: \.self) { line in
+                            HStack {
+                                filed(line)
+                                Spacer()
+                                undo(line, from: turn.id)
+                                    .buttonStyle(.borderless)
+                            }
+                        }
+                    } header: {
+                        Text(turn.answer ?? "").font(.authored(.footnote)).textCase(nil)
+                    }
+                }
+            }
+            .overlay {
+                if filedTurns.isEmpty {   // all undone while it's open
+                    ContentUnavailableView("No Changes", systemImage: "clock.arrow.circlepath",
+                                           description: Text("What the companion adds to your pages from this conversation shows here."))
+                }
+            }
+            .navigationTitle("Changes")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done", systemImage: "checkmark") { showingChanges = false }
+                }
+            }
+        }
+    }
+
+    /// The turns something is still filed from.
+    private var filedTurns: [Conversation.Turn] {
+        companion.conversation.turns.filter { !($0.filed?.isEmpty ?? true) }
+    }
+
+    private func undo(_ line: FilingLine, from turn: UUID) -> some View {
+        Button("Undo", systemImage: "arrow.uturn.backward") {
+            companion.undoFiling(line.action, from: turn, in: library)
+        }
+        .labelStyle(.iconOnly)
+        .accessibilityLabel(Text("Undo: \(filed(line))"))
+    }
+
     /// What was filed from the author's message, under it: each page made,
     /// type given and field filled, in their words (New York), with its own Undo.
     private func filed(_ record: FilingRecord, from turn: UUID) -> some View {
@@ -152,11 +237,7 @@ struct CompanionPanel: View {
             ForEach(library.describe(record), id: \.self) { line in
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     filed(line)
-                    Button("Undo", systemImage: "arrow.uturn.backward") {
-                        companion.undoFiling(line.action, from: turn, in: library)
-                    }
-                    .labelStyle(.iconOnly)
-                    .accessibilityLabel(Text("Undo: \(filed(line))"))
+                    undo(line, from: turn)
                 }
             }
         }
@@ -221,7 +302,7 @@ struct CompanionPanel: View {
                 // As it's written: new words fade in, and a pulsing dot shows it
                 // isn't done yet (as the AI apps show it).
                 VStack(alignment: .leading, spacing: 8) {
-                    reply(writing)
+                    words(writing)
                         .contentTransition(.opacity)
                         .animation(.easeOut(duration: 0.2), value: writing)
                     Image(systemName: "circle.fill")
@@ -374,8 +455,15 @@ struct CompanionPanel: View {
                 .disabled(companion.conversation.turns.isEmpty)
             ShareLink("Share Conversation", item: transcript)
                 .disabled(companion.conversation.turns.isEmpty)
+            Button("Changes", systemImage: "clock.arrow.circlepath") { showingChanges = true }
+                .disabled(filedTurns.isEmpty)
             Toggle("Think Before Replying", systemImage: "lightbulb",
                    isOn: Binding { companion.thinks } set: { companion.thinks = $0 })
+            // TRIAL (Kevin, 2026-11-24): the model on its own.
+            Toggle(isOn: Binding { companion.plain } set: { companion.plain = $0 }) {
+                Label("Plain Model", systemImage: "cube")
+                Text("No instructions or pages, only the conversation")
+            }
             Section {
                 if let update = companion.modelUpdate {
                     Button(action: companion.updateModel) {
@@ -406,7 +494,8 @@ struct CompanionPanel: View {
     /// which model replied (to compare how it's going).
     private var transcript: String {
         let title = library.document.title.isEmpty ? "Untitled page" : library.document.title
-        let header = "World Editor companion on “\(title)” (\(Companion.modelName), thinking \(companion.thinks ? "on" : "off"))"
+        let header = "World Editor companion on “\(title)” (\(Companion.modelName), thinking \(companion.thinks ? "on" : "off")"
+            + (companion.plain ? ", plain model" : "") + ")"
         let turns = companion.conversation.turns.flatMap { turn in
             ["Companion: \(turn.question)"] + (turn.answer.map { ["Me: \($0)"] } ?? [])
         }

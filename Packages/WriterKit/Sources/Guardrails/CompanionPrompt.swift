@@ -144,19 +144,36 @@ public struct CompanionPrompt: Equatable, Sendable {
         // an instruction better than a condition.
         if conversation.turns.isEmpty { system.append(Self.opening(page, alone: world.isEmpty)) }
         self.system = system.joined(separator: "\n\n")
+        turns = [Turn(speaker: .author, text: Self.opened)]
+            + Self.recent(conversation, maxTurns: maxTurns, maxTurnCharacters: maxTurnCharacters)
+    }
 
-        // The newest exchanges that fit; the last one always, cut down if it alone is too long.
+    /// The model with nothing of the app's (Kevin's trial, 2026-11-24: "remove all your rules and
+    /// context and prompts so I can see how this actually works as a model"): no instructions,
+    /// examples or pages, only the conversation. The opening line stays only before its first
+    /// reply, which has to answer something.
+    public static func plain(_ conversation: Conversation, maxTurns: Int = 12, maxTurnCharacters: Int = 6000) -> CompanionPrompt {
+        let turns = recent(conversation, maxTurns: maxTurns, maxTurnCharacters: maxTurnCharacters)
+        return CompanionPrompt(system: "", turns: turns.isEmpty ? [Turn(speaker: .author, text: opened)] : turns)
+    }
+
+    private init(system: String, turns: [Turn]) {
+        self.system = system
+        self.turns = turns
+    }
+
+    /// The newest exchanges that fit; the last one always, cut down if it alone is too long.
+    private static func recent(_ conversation: Conversation, maxTurns: Int, maxTurnCharacters: Int) -> [Turn] {
         var recent: [Conversation.Turn] = [], length = 0
         for turn in conversation.turns.suffix(maxTurns).reversed() {
             length += turn.question.count + (turn.answer?.count ?? 0)
             guard recent.isEmpty || length <= maxTurnCharacters else { break }
             recent.insert(turn, at: 0)
         }
-        func fitted(_ text: String) -> String { Self.excerpt(text, maxCharacters: maxTurnCharacters) ?? text }
-        turns = [Turn(speaker: .author, text: Self.opened)]
-        for turn in recent {
-            turns.append(Turn(speaker: .companion, text: fitted(turn.question)))
-            if let answer = turn.answer { turns.append(Turn(speaker: .author, text: fitted(answer))) }
+        func fitted(_ text: String) -> String { excerpt(text, maxCharacters: maxTurnCharacters) ?? text }
+        return recent.flatMap { turn in
+            [Turn(speaker: .companion, text: fitted(turn.question))]
+                + (turn.answer.map { [Turn(speaker: .author, text: fitted($0))] } ?? [])
         }
     }
 

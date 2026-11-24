@@ -132,9 +132,12 @@ final class GemmaModel: CompanionModel, @unchecked Sendable {
     /// Gemma's recommended sampling (its model card): temperature 1, top-p 0.95,
     /// top-k 64, and no repetition penalty (the library's default of 1.1 otherwise
     /// applies). Room for its reasoning as well as the reply: the longest it took
+    /// AnyLanguageModel otherwise draws one when the model loads and reuses it,
+    /// so Try Again gave the same reply word for word (Kevin, 2026-11-24).
     private static var options: GenerationOptions {
         var options = GenerationOptions(temperature: 1.0, maximumResponseTokens: 1500)
-        options[custom: LlamaLanguageModel.self] = .init(contextSize: 8192, topK: 64, topP: 0.95, repeatPenalty: 1.0)
+        options[custom: LlamaLanguageModel.self] = .init(contextSize: 8192, seed: .random(in: 0 ... .max), topK: 64,
+                                                         topP: 0.95, repeatPenalty: 1.0)
         return options
     }
 

@@ -49,6 +49,16 @@ final class CompanionPromptTests: XCTestCase {
         XCTAssertTrue(prompt.flattened.hasSuffix("You: Is \u{201C}maritime\u{201D} trade, or war?\nWriter: trade. she rows\n\nReply to the writer's last message."))
     }
 
+    /// The plain model (Kevin's trial): only the conversation, nothing of the app's.
+    func testThePlainModelGetsOnlyTheConversation() {
+        let prompt = CompanionPrompt.plain(talk(("Is \u{201C}maritime\u{201D} trade, or war?", "trade. she rows")))
+        XCTAssertEqual(prompt.system, "")
+        XCTAssertEqual(prompt.turns.map(\.speaker), [.companion, .author])
+        XCTAssertEqual(prompt.turns.map(\.text), ["Is \u{201C}maritime\u{201D} trade, or war?", "trade. she rows"])
+        // Before its first reply it has to answer something.
+        XCTAssertEqual(CompanionPrompt.plain(Conversation(page: UUID())).turns.map(\.text), [CompanionPrompt.opened])
+    }
+
     func testWhatToDoFirstFitsThePage() {
         func first(_ page: CompanionPrompt.Page, others: [CompanionPrompt.Page] = []) -> String {
             let system = CompanionPrompt(page: page, others: others, conversation: Conversation(page: UUID())).system

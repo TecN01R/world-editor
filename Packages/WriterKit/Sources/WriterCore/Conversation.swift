@@ -12,6 +12,9 @@ public struct Conversation: Codable, Hashable, Sendable {
         public var asked: Date
         /// What was filed from the answer (types, fields, new pages), until undone.
         public var filed: FilingRecord?
+        /// Every reply it gave here, oldest first, once Try Again made more than one;
+        /// `question` is the one chosen, which the conversation goes on from.
+        public var versions: [String]?
 
         public init(id: UUID = UUID(), question: String, answer: String? = nil, asked: Date = Date(),
                     filed: FilingRecord? = nil) {
@@ -40,6 +43,35 @@ public struct Conversation: Codable, Hashable, Sendable {
     public mutating func ask(_ question: String, at date: Date = Date()) {
         guard waiting == nil else { return }
         turns.append(Turn(question: question, asked: date))
+    }
+
+    /// Takes the waiting reply back to ask again: the turn, to restore if asking fails.
+    public mutating func retract() -> Turn? {
+        guard waiting != nil else { return nil }
+        return turns.removeLast()
+    }
+
+    /// The new reply in place of `retracted` (if Try Again took one back), which is kept with its versions.
+    public mutating func ask(_ question: String, after retracted: Turn?, at date: Date = Date()) {
+        ask(question, at: date)
+        guard let retracted else { return }
+        let earlier = (retracted.versions ?? [retracted.question]).filter { $0 != question }
+        if !earlier.isEmpty, let i = turns.indices.last { turns[i].versions = earlier + [question] }
+    }
+
+    /// Makes `version` the reply the conversation goes on from.
+    public mutating func choose(_ version: String, in turn: UUID) {
+        guard let i = turns.firstIndex(where: { $0.id == turn }), turns[i].versions?.contains(version) == true else { return }
+        turns[i].question = version
+    }
+
+    /// Deletes one of a turn's versions (never its last); if it was the chosen one, the one before it is chosen.
+    public mutating func delete(_ version: String, in turn: UUID) {
+        guard let i = turns.firstIndex(where: { $0.id == turn }), var versions = turns[i].versions,
+              versions.count > 1, let at = versions.firstIndex(of: version) else { return }
+        versions.remove(at: at)
+        if turns[i].question == version { turns[i].question = versions[max(at - 1, 0)] }
+        turns[i].versions = versions.count > 1 ? versions : nil
     }
 
     public mutating func answer(_ text: String) {
