@@ -55,6 +55,11 @@ final class Companion {
     #else
     static let modelName = "Apple's on-device model"   // the simulator: no llama.cpp there
     #endif
+    /// The model isn't on the phone, and the author hasn't asked for it yet:
+    /// the companion offers the download and does nothing else until then.
+    private(set) var needsDownload = false
+    /// The size of that download, once known.
+    private(set) var downloadSize: Int64?
     private var model: any CompanionModel = AppleModel()
     private var store: ConversationStore?
     private var preparing: Task<Void, Never>?
@@ -69,6 +74,14 @@ final class Companion {
             }
         }
         #endif
+        needsDownload = !model.isInstalled
+        if needsDownload { Task { downloadSize = await model.downloadSize() } }
+    }
+
+    /// The author asked for the model: download it, then reply about `page`.
+    func startDownload(page: WriterCore.Document, in library: Library) {
+        needsDownload = false
+        askNow(about: page, in: library)
     }
 
     /// The open page changed: load its conversation and, after a pause,
@@ -137,7 +150,7 @@ final class Companion {
 
     /// Asks the model for a reply about `page`, shown as it's written.
     private func ask(about page: WriterCore.Document, in library: Library) async {
-        guard conversation.waiting == nil, conversation.page == page.id else { return }
+        guard conversation.waiting == nil, conversation.page == page.id, !needsDownload else { return }
         if let reason = await model.unavailableReason { state = .unavailable(reason); return }
         state = .thinking
         defer { self.writing = nil; self.reasoning = nil }

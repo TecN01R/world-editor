@@ -78,17 +78,27 @@ final class GemmaModel: CompanionModel, @unchecked Sendable {
     func availableUpdate() async -> ModelUpdate? {
         // Only where the cache linked the file to its checksum can the two be compared.
         guard let cache = HubClient.default.cache, let local = Self.installed,
-              (try? FileManager.default.destinationOfSymbolicLink(atPath: local.path)) != nil else { return nil }
-        let build = Self.build
+              (try? FileManager.default.destinationOfSymbolicLink(atPath: local.path)) != nil,
+              let remote = await Self.remoteFile(), let checksum = remote.checksum, let revision = remote.revision
+        else { return nil }
+        guard Self.stored(local).lastPathComponent != cache.normalizeEtag(checksum) else { return nil }
+        return ModelUpdate(revision: revision, bytes: remote.bytes ?? 0)
+    }
+
+    var isInstalled: Bool { Self.installed != nil }
+
+    func downloadSize() async -> Int64? { await Self.remoteFile()?.bytes }
+
+    /// The model file as its repository has it now: checksum, revision and size.
+    /// One small request; its answer is in the headers of the redirect to the
+    /// file itself, so the redirect isn't followed.
+    private static func remoteFile() async -> (checksum: String?, revision: String?, bytes: Int64?)? {
         var request = URLRequest(url: HubClient.defaultHost.appending(path: "\(build.repo.namespace)/\(build.repo.name)/resolve/main/\(build.file)"))
         request.httpMethod = "HEAD"
         guard let (_, response) = try? await URLSession.shared.data(for: request, delegate: StayingPut()),
-              let headers = response as? HTTPURLResponse,
-              let checksum = headers.value(forHTTPHeaderField: "X-Linked-Etag"),
-              let revision = headers.value(forHTTPHeaderField: "X-Repo-Commit")
-        else { return nil }
-        guard Self.stored(local).lastPathComponent != cache.normalizeEtag(checksum) else { return nil }
-        return ModelUpdate(revision: revision, bytes: headers.value(forHTTPHeaderField: "X-Linked-Size").flatMap(Int64.init) ?? 0)
+              let headers = response as? HTTPURLResponse else { return nil }
+        return (headers.value(forHTTPHeaderField: "X-Linked-Etag"), headers.value(forHTTPHeaderField: "X-Repo-Commit"),
+                headers.value(forHTTPHeaderField: "X-Linked-Size").flatMap(Int64.init))
     }
 
     /// Takes a redirect's own response as the answer.

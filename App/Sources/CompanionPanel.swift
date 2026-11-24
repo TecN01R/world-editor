@@ -49,12 +49,13 @@ struct CompanionPanel: View {
     }
 
     /// The model is on the phone: until then there's nothing the menu could do.
-    private var ready: Bool { companion.download == nil && companion.state != .downloadPaused }
+    private var ready: Bool { companion.download == nil && companion.state != .downloadPaused && !companion.needsDownload }
 
     private var conversation: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                ForEach(companion.conversation.turns) { turn in
+                // Until the model is here, only the download shows (over an empty panel).
+                ForEach(companion.needsDownload || companion.download != nil ? [] : companion.conversation.turns) { turn in
                     if let thought = companion.thoughts[turn.id] { reasoning(thought, done: true) }
                     // Its latest reply, still unanswered, can be tried again (hold it).
                     reply(turn.question, canRetry: turn.id == companion.conversation.waiting?.id && companion.state == .idle)
@@ -73,6 +74,8 @@ struct CompanionPanel: View {
         .overlay {
             if let download = companion.download {
                 downloading(download)
+            } else if companion.needsDownload {
+                downloadOffer
             } else if companion.conversation.turns.isEmpty {
                 empty
             }
@@ -238,6 +241,20 @@ struct CompanionPanel: View {
             .foregroundStyle(.secondary)
             .symbolEffect(.variableColor.iterative, options: .repeating)
             .accessibilityLabel("Thinking")
+    }
+
+    /// Before the model is on the phone: what it is, how big, and the choice to
+    /// download it, never started unasked (it's gigabytes).
+    private var downloadOffer: some View {
+        ContentUnavailableView {
+            Label("Download the Companion", systemImage: "arrow.down.circle")
+        } description: {
+            Text("The companion runs on your phone, so nothing you write leaves it. It needs a one-time download"
+                 + (companion.downloadSize.map { " of \($0.formatted(.byteCount(style: .file)))" } ?? "") + ".")
+        } actions: {
+            Button("Download") { companion.startDownload(page: library.document, in: library) }
+                .buttonStyle(.borderedProminent)
+        }
     }
 
     /// The model's one-time download, centred like any of iOS's waiting states.

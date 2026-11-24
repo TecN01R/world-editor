@@ -15,6 +15,10 @@ protocol CompanionModel: Sendable {
 }
 
 extension CompanionModel {
+    /// The model is on the phone (or part of iOS): it can reply without downloading anything.
+    var isInstalled: Bool { true }
+    /// How much the model's download is, if it has one; asked once, before downloading.
+    func downloadSize() async -> Int64? { nil }
     /// When the model on the phone was downloaded, in words; nil if it hasn't been, or it's part of iOS.
     var version: String? { nil }
     /// A newer file than the one on the phone, if its maker has published one. Downloads nothing.
