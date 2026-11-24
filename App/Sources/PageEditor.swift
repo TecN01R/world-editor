@@ -7,19 +7,15 @@ import WriterCore
 /// autocorrect, dictation, selection all behave as iOS users expect).
 struct PageEditor: UIViewRepresentable {
     @Environment(Library.self) private var library
-    /// Steps into Focus mode: ⇧⌘F (the button is in the toolbar).
+    /// Steps into Focus mode: the button in the title's row (folded), or ⇧⌘F.
     private let onFocus: () -> Void
-    /// The title is in the top bar (folded), not at the top of the page.
-    private let titleInBar: Bool
-    /// A new page wants its title typed, and the title is in the top bar.
-    private let onTitleWanted: () -> Void
-    /// Bumped when the bar's title is done (Return): the writing takes over.
-    private let writeRequest: Int
+    /// Folded: Focus sits at the end of the title's row, as WhatsApp's header
+    /// has the name and its buttons on one row; a toolbar button kept at the
+    /// top would add a bar of its own and push the page down.
+    private let focusBesideTitle: Bool
 
-    init(titleInBar: Bool = false, writeRequest: Int = 0, onTitleWanted: @escaping () -> Void = {}, onFocus: @escaping () -> Void) {
-        self.titleInBar = titleInBar
-        self.writeRequest = writeRequest
-        self.onTitleWanted = onTitleWanted
+    init(focusBesideTitle: Bool = false, onFocus: @escaping () -> Void) {
+        self.focusBesideTitle = focusBesideTitle
         self.onFocus = onFocus
     }
 
@@ -39,10 +35,8 @@ struct PageEditor: UIViewRepresentable {
         fields.view.backgroundColor = .clear
         fields.safeAreaRegions = []
         tv.fieldsController = fields
-        tv.titleHidden = titleInBar
-        context.coordinator.titleInBar = titleInBar
-        context.coordinator.onTitleWanted = onTitleWanted
-        context.coordinator.writeRequest = writeRequest
+        tv.focusButton = context.coordinator.focusButton
+        tv.showsFocusButton = focusBesideTitle
         context.coordinator.textView = tv
         context.coordinator.render(selection: nil)
         context.coordinator.restoreCaret()
@@ -50,18 +44,8 @@ struct PageEditor: UIViewRepresentable {
     }
 
     func updateUIView(_ view: PageView, context: Context) {
-        let c = context.coordinator
-        c.onFocus = onFocus
-        c.onTitleWanted = onTitleWanted
-        if c.titleInBar != titleInBar {
-            c.titleInBar = titleInBar
-            if titleInBar { c.titleField.resignFirstResponder() } else { c.titleField.text = library.document.title }   // typed in the bar meanwhile
-            view.textView.titleHidden = titleInBar
-        }
-        if c.writeRequest != writeRequest {
-            c.writeRequest = writeRequest
-            view.textView.becomeFirstResponder()
-        }
+        context.coordinator.onFocus = onFocus
+        view.textView.showsFocusButton = focusBesideTitle
     }
 
     /// Bold New York, scaled with Dynamic Type.
@@ -95,10 +79,19 @@ struct PageEditor: UIViewRepresentable {
         /// Replacing the text moves the selection; that isn't the user moving the caret.
         private var isRendering = false
         var onFocus: () -> Void
-        var titleInBar = false
-        var onTitleWanted: () -> Void = {}
-        var writeRequest = 0
         lazy var formatBar = FormatBar(onAction: { [weak self] action in self?.perform(action) })
+
+        /// Focus Mode, a stock glass button, its arrows mirroring Exit Focus's.
+        lazy var focusButton: UIButton = {
+            var config = UIButton.Configuration.glass()
+            config.image = UIImage(systemName: "arrow.up.left.and.arrow.down.right")
+            config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .title3)
+            let b = UIButton(configuration: config, primaryAction: UIAction { [weak self] _ in self?.onFocus() })
+            b.accessibilityLabel = "Focus Mode"
+            b.showsLargeContentViewer = true
+            b.largeContentTitle = "Focus Mode"
+            return b
+        }()
 
         lazy var titleField: UITextField = {
             let f = UITextField()
@@ -343,11 +336,8 @@ struct PageEditor: UIViewRepresentable {
             // A new page starts in its title; otherwise carry on writing.
             let startInTitle = doc.isEmpty && !Screenshots.isActive
             guard !Screenshots.opensMara || Screenshots.showsMentions else { return }   // CI: the page at rest
-            DispatchQueue.main.async { [titleField, titleInBar, onTitleWanted] in
-                if startInTitle {
-                    if titleInBar { onTitleWanted() } else { titleField.becomeFirstResponder() }
-                    return
-                }
+            DispatchQueue.main.async { [titleField] in
+                if startInTitle { titleField.becomeFirstResponder(); return }
                 tv.becomeFirstResponder()
                 tv.scrollRangeToVisible(tv.selectedRange)
             }
@@ -573,12 +563,14 @@ final class PageTextView: PlainPasteTextView {
     }
     var fieldsHeight: CGFloat = 0 { didSet { if fieldsHeight != oldValue { setNeedsLayout() } } }
 
-
+    /// Focus Mode, at the end of the title's row while it's shown.
+    var focusButton: UIButton? {
+        didSet { oldValue?.removeFromSuperview(); focusButton.map(addSubview) }   // scrolls with the page, as the title does
+    }
+    var showsFocusButton = false { didSet { if showsFocusButton != oldValue { setNeedsLayout() } } }
 
     /// The format bar's height while it floats over the bottom of the page.
     var barHeight: CGFloat = 0 { didSet { setNeedsLayout() } }
-    /// Folded, the title is in the top bar: the page starts with its fields.
-    var titleHidden = false { didSet { if titleHidden != oldValue { setNeedsLayout() } } }
 
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -594,9 +586,16 @@ final class PageTextView: PlainPasteTextView {
         let titleHeight = ceil(title.font?.lineHeight ?? 34) + 8
         // Offset so the title's letters, not its field, land on that edge and
         // level with the list's title (also measured on the Duo).
-        title.frame = CGRect(x: lead - 1.0 / 3, y: 8 - 20.0 / 3, width: lineWidth, height: titleHeight)
-        title.isHidden = titleHidden
-        var top = titleHidden ? 2 : title.frame.maxY
+        // Folded, Focus at the row's end: as tall as a touch target, centred on
+        // the title, which stops short of it.
+        let button = UIFontMetrics.default.scaledValue(for: 44, compatibleWith: traitCollection)
+        let titleWidth = showsFocusButton ? max(0, lineWidth - button - 8) : lineWidth
+        title.frame = CGRect(x: lead - 1.0 / 3, y: 8 - 20.0 / 3, width: titleWidth, height: titleHeight)
+        if let focus = focusButton {
+            focus.isHidden = !showsFocusButton
+            focus.frame = CGRect(x: width - side - button, y: title.frame.midY - button / 2, width: button, height: button)
+        }
+        var top = title.frame.maxY
         if let fields = fieldsController?.view {
             fields.frame = CGRect(x: lead, y: top + 6, width: lineWidth, height: fieldsHeight)
             top = fields.frame.maxY
