@@ -461,7 +461,7 @@ struct EditorView: View {
     }
 
     private var folded: Bool { sizeClass == .compact }
-    /// The keyboard is up: Done shows, and Back, the sidebar button and Mentions don't.
+    /// The keyboard is up: the toolbar shows Done and Focus, and nothing else.
     @State private var typing = false
 
     /// A page field's "New Place…": the field it fills.
@@ -561,44 +561,36 @@ struct EditorView: View {
                     .keyboardShortcut(.cancelAction)
                 }
             } else {
-                // Typing: Done closes the keyboard (the iPhone keyboard has no key
-                // for it); Back, the sidebar button and Mentions step aside until
-                // it's down, Focus and the companion stay (Kevin, 2026-11-23).
+                // Two sets, swapped by the keyboard (Kevin, 2026-11-23). Typing: Done
+                // (the iPhone keyboard has no key to close it) and Focus, a writing
+                // tool, in its own glass. Not typing: Back, the sidebar button, the
+                // companion and Mentions.
                 if typing {
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Done", systemImage: "checkmark") {
                             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                         }
                     }
-                }
-                // Focus, stock in both postures (Kevin, 2026-11-23). Unfolded: kept in
-                // the top row the sidebar button already uses, at its right end.
-                // Folded: in the side column with the other buttons, as iOS places
-                // them (kept at the top it would add a row of its own).
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Focus Mode", systemImage: "arrow.up.left.and.arrow.down.right") {
-                        withAnimation(.smooth(duration: 0.3)) { focusMode = true }
-                    }
-                }
-                .axisBehavior(folded ? .automatic : .horizontalOnly)
-                // Its own glass, apart from the companion and Mentions: it changes
-                // the whole screen, they open things beside the page (Kevin).
-                ToolbarSpacer(.fixed, placement: .topBarTrailing)
-                // The companion, beside the page (unfolded) or a sheet (folded); on
-                // the Duo the side column, which stays in reach above the keyboard.
-                // ⌥⌘I is the system's shortcut for an inspector.
-                ToolbarItem(placement: .primaryAction) {
-                    Button(companionShown ? "Hide Companion" : "Companion", systemImage: "bubble.left.and.text.bubble.right") {
-                        if folded, !companionShown {   // the sheet would open behind the keyboard
-                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    ToolbarSpacer(.fixed, placement: .topBarTrailing)
+                    // Unfolded, kept in the top row at its right end; folded, in the
+                    // side column, as iOS places it.
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Focus Mode", systemImage: "arrow.up.left.and.arrow.down.right") {
+                            withAnimation(.smooth(duration: 0.3)) { focusMode = true }
                         }
-                        companion.isOpen = !companionShown
-                        onCompanionToggled(companion.isOpen)
                     }
-                    .keyboardShortcut("i", modifiers: [.command, .option])
-                }
-                // Shown when there's room; first into "•••" when there isn't.
-                if !typing {
+                    .axisBehavior(folded ? .automatic : .horizontalOnly)
+                } else {
+                    // The companion, beside the page (unfolded) or a sheet (folded); on
+                    // the Duo the side column. ⌥⌘I is the system's shortcut for an inspector.
+                    ToolbarItem(placement: .primaryAction) {
+                        Button(companionShown ? "Hide Companion" : "Companion", systemImage: "bubble.left.and.text.bubble.right") {
+                            companion.isOpen = !companionShown
+                            onCompanionToggled(companion.isOpen)
+                        }
+                        .keyboardShortcut("i", modifiers: [.command, .option])
+                    }
+                    // Shown when there's room; first into "•••" when there isn't.
                     ToolbarItem(placement: .primaryAction) {
                         Button("Mentions", systemImage: "at") { showMentions = true }
                     }
