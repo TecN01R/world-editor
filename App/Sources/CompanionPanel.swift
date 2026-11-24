@@ -14,6 +14,8 @@ struct CompanionPanel: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var message = ""
     @State private var confirmingNew = false
+    /// Where the conversation is scrolled: the newest message, as in Messages.
+    @State private var position = ScrollPosition(edge: .bottom)
     /// One height for the whole message bar: the HIG's minimum touch size,
     /// growing with Dynamic Type.
     @ScaledMetric(relativeTo: .body) private var barHeight: CGFloat = 44
@@ -70,6 +72,12 @@ struct CompanionPanel: View {
         .defaultScrollAnchor(.bottom)
         .defaultScrollAnchor(.top, for: .alignment)          // a short conversation starts at the top
         .defaultScrollAnchor(.bottom, for: .sizeChanges)     // follows new messages
+        .scrollPosition($position)
+        // Each new message (yours, then its reply as it starts) brings the
+        // conversation to the bottom (Kevin: sending left it where it was).
+        .onChange(of: companion.conversation.turns.count) { scrollToEnd() }
+        .onChange(of: companion.conversation.waiting == nil) { scrollToEnd() }
+        .onChange(of: partialReply == nil) { scrollToEnd() }
         .scrollDismissesKeyboard(.interactively)
         .overlay {
             if let download = companion.download {
@@ -374,5 +382,10 @@ struct CompanionPanel: View {
         guard canSend else { return }
         companion.answer(message, page: library.document, in: library)
         message = ""
+        scrollToEnd()
+    }
+
+    private func scrollToEnd() {
+        withAnimation { position.scrollTo(edge: .bottom) }
     }
 }
