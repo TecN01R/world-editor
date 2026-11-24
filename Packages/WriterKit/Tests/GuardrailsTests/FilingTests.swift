@@ -169,6 +169,16 @@ final class FilingTests: XCTestCase {
         _ = record.undo(try XCTUnwrap(record.actions.first), pages: &pages, schema: &schema)
         XCTAssertEqual(pages, [her])
 
+        // A polite correction is one; a guess isn't.
+        let polite = file(Filings(facts: [.init(page: "she", field: "Vessel", value: "bireme")]),
+                          "I think it was actually a bireme", pages: &pages, schema: &schema)
+        XCTAssertEqual(pages[0].values[vessel.id], .text("bireme"))
+        var undone = polite
+        _ = undone.undo(try XCTUnwrap(polite.actions.first), pages: &pages, schema: &schema)
+        XCTAssertEqual(pages, [her])
+        XCTAssertTrue(file(Filings(facts: [.init(page: "she", field: "Vessel", value: "bireme")]),
+                           "I think it was a bireme", pages: &pages, schema: &schema).isEmpty)
+
         // What was true once isn't a correction.
         let then = file(Filings(facts: [.init(page: "she", field: "Vessel", value: "galley")]),
                         "She rowed on a galley when she was sixteen.", pages: &pages, schema: &schema)

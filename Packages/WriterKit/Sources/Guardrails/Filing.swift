@@ -355,8 +355,10 @@ struct Statement {
     }
 
     /// Whether the sentence holds one of the author's words for uncertainty, as a whole word.
+    /// "I think it was actually a bireme" is a correction said politely, not a guess (Kevin, 2026-11-24).
     private static func hedges(_ text: String) -> Bool {
-        has(ProvenanceValidator.hedges.filter { $0 != "?" }, in: text)
+        let polite = has(["actually"], in: text)
+        return has(ProvenanceValidator.hedges.filter { $0 != "?" && !(polite && $0 == "i think") }, in: text)
     }
 
     /// Words that take something back: a filled field changes only in a message with one,
