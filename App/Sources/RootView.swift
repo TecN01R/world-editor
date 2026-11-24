@@ -90,6 +90,15 @@ struct RootView: View {
         // The pages list is left where iOS and the author put it as the Duo folds, unfolds
         // and rotates: moving it then too crashed iOS's split view (2026-11-24).
         .onChange(of: sizeClass, initial: true) { _, size in companion.folded = size == .compact }
+        // Unfolded, the pages list and the companion never show together: there's no room for
+        // both beside the page, and iOS slides the list over the page and dims it (Kevin,
+        // 2026-11-24: "I hate it"; before, the page squeezed to a sliver). Opening the list
+        // closes the companion; the companion's button puts the list away. A reaction to the
+        // list opening, not the companion's visibility worked out from it, which flipped
+        // while iOS laid out a rotation.
+        .onChange(of: columns) { _, now in
+            if sizeClass == .regular, now != .detailOnly, companion.isOpen, !focusMode { companion.isOpen = false }
+        }
         // Applied at the root: status bar visibility is decided by the top controller.
         .statusBarHidden(chromeHidden)
         // Files this version couldn't read (a newer version's, or damaged): said once, kept as they are.

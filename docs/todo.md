@@ -16,11 +16,11 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] 4 Smooth typing (pushed; waiting for the phone. Not done: the open page observed on its own, Focus caching its measurements; only if typing still lags)
 - [ ] 5 Smooth replies (pushed 7c046d4; waiting for the phone)
 - [ ] 6 Faster replies (pushed: background kept per conversation, earlier replies as cached, filing on a pause; Kevin to try 4–5 messages, then read the CACHE/SPEED lines)
-- [ ] 7 One companion
+- [ ] 7 One companion (needs Kevin's look on the phone; next after he's checked the current build)
 - [ ] 8 Format bar through stock (Bold/Italic are iOS's own, lists undoable, Open in the link's menu; iOS has no public way to show its "Aa" panel from a button)
 - [ ] 9 Stock swaps: bubbles and the menu's title done; left: a stack in the sidebar for conversations and filters, UIPageControl for Focus dots
-- [ ] 10 Focus with iOS's zoom
-- [ ] 11 Clean-up
+- [ ] 10 Focus with iOS's zoom (needs Kevin's look on the phone)
+- [ ] 11 Clean-up: download cancel/expiry and ordered progress done; TRIAL logging stays until the speed and Live Activity tests are read; thinking plumbing kept for search
 - [ ] 12 docs/stock-deviations.md (written; check it reads right)
 
 ## Your words into your pages (design: claude.ai/artifact/4GgWK8rCVJUdjwsTrVW9QT)
@@ -48,6 +48,9 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Does the companion speak first on pages too?
 
 ## Waiting on Kevin
+- [ ] The AI charter and CLAUDE.md name protections from code the app never runs (fact extractor,
+      knowledge base, model catalogue's checksum rule, creative-request and illustration guards):
+      remove that code and reword the charter to what actually guards it, or keep it?
 - [ ] Done in Focus mode: keep, or let Exit Focus also close the keyboard?
 - [ ] The one-time wobble of the pages list: folded or unfolded, once per launch or per install? A screen recording would settle it
 - [ ] Approve the his-words design, and three answers: fix spelling? turn "she" into the
