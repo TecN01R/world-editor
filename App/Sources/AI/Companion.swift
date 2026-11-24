@@ -46,12 +46,11 @@ final class Companion {
     /// When the model on the phone was downloaded, for the menu.
     private(set) var modelVersion: String?
 
-    /// It thinks before it replies, unless the author turns that off: replies
-    /// then start sooner. (Measured, thinking made no difference to how good
-    /// its replies are; it broke the rules a little less often with it.)
-    var thinks = UserDefaults.standard.object(forKey: "companionThinks") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(thinks, forKey: "companionThinks") }
-    }
+    /// Replies don't think first, and there's no switch for it (Kevin, 2026-11-24:
+    /// "remove the thinking switch, trigger as necessary"): on the 26B its thinking
+    /// drafted the reply four or five times at the phone's 7 tokens a second, minutes
+    /// were. A reply that needs it turns it on: search, once it's in the app, if the
+    private let thinks = false
 
     /// TRIAL (Kevin, 2026-11-24): the model with none of the app's instructions,
     /// examples or pages, only the conversation (`CompanionPrompt.plain`), to see

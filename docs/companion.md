@@ -70,14 +70,15 @@ the companion is open, and not while the phone is hot or in Low Power Mode,
 when the author begins instead (on the 26B a reply is minutes of the GPU's work).
 
 Sampling is Google's for Gemma 4: temperature 1.0, top-p 0.95, top-k 64, no
-repetition penalty. It thinks before it replies (Gemma's `<|think|>`) unless
-the author switches that off in the companion's menu, and its earlier thinking
-is never sent back to it. On the phone the thinking is the
-wait before a reply (4 to 8 seconds on E2B, measured; not yet on the 26B, which
-writes far slower, so it may take minutes). The app renders Gemma's chat format
-itself (`TurboModel.chat`) and reads its thought channel, so the thinking shows,
-collapsed, as it comes. Anything in the writer's text that
-Gemma would read as one of its control tokens is defused first
+repetition penalty. It doesn't think before replying, and there's no switch for
+it (Kevin, 2026-11-24: "remove the thinking switch, trigger as necessary"): on
+the 26B, Gemma's thinking (`<|think|>`) drafted each reply four or five times at
+the phone's 7 tokens a second, minutes before the first word (on E2B it had
+been 4 to 8 seconds). A reply that needs thinking turns it on (`Companion.thinks`):
+without it. Earlier thinking is never sent back to it. The app renders Gemma's
+chat format itself (`TurboModel.chat`) and reads its thought channel, so when
+it thinks, the thinking shows, collapsed, as it comes. Anything in the writer's
+text that Gemma would read as one of its control tokens is defused first
 (`Reasoned.gemmaPlain`).
 
 ## Why it's shaped this way

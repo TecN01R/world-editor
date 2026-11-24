@@ -42,8 +42,8 @@ shows where they came from.
   One search per reply to begin with, results trimmed to about 1,500 tokens,
   and the tool's output cleaned the same way the writer's text is
   (`Reasoned.gemmaPlain`), since it comes from outside. TurboFieldfare's tool
-  rendering has no thinking, so a reply that may search is written with
-  thinking off.
+  `search` run): if the 26B does too, a reply that may search has to think
+  (`docs/companion.md`), so it needs a rendering that can.
 - **What the writer sees:** under the reply, a chip: *Searched Wikipedia for
   "trireme crew size"*, opening the sources. The exact words sent are always
   visible. The first time, one sheet says what looking up means and offers to

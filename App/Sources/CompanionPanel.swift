@@ -529,8 +529,6 @@ struct CompanionPanel: View {
             ShareLink("Share Conversation", item: transcript)
                 .disabled(companion.conversation.turns.isEmpty)
             if !inSheet && !aboutWorld { changesButton }   // the sheet (Kevin, 2026-11-24) and the world's screen have it beside the menu
-            Toggle("Think Before Replying", systemImage: "lightbulb",
-                   isOn: Binding { companion.thinks } set: { companion.thinks = $0 })
             // TRIAL (Kevin, 2026-11-24): the model on its own.
             Toggle(isOn: Binding { companion.plain } set: { companion.plain = $0 }) {
                 Label("Plain Model", systemImage: "cube")
@@ -565,8 +563,7 @@ struct CompanionPanel: View {
         } else {
             title = library.document.title.isEmpty ? "Untitled page" : library.document.title
         }
-        let header = "World Editor companion on “\(title)” (\(Companion.modelName), thinking \(companion.thinks ? "on" : "off")"
-            + (companion.plain ? ", plain model" : "") + ")"
+        let header = "World Editor companion on “\(title)” (\(Companion.modelName)" + (companion.plain ? ", plain model" : "") + ")"
         let turns = companion.conversation.turns.flatMap { turn in
             (turn.question.isEmpty ? [] : ["Companion: \(turn.question)"]) + (turn.answer.map { ["Me: \($0)"] } ?? [])
         }
