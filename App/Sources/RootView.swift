@@ -461,7 +461,7 @@ struct EditorView: View {
     }
 
     private var folded: Bool { sizeClass == .compact }
-    /// The keyboard is up: the toolbar shows only Done.
+    /// The keyboard is up: Done shows, and Back, the sidebar button and Mentions don't.
     @State private var typing = false
 
     /// A page field's "New Place…": the field it fills.
@@ -509,7 +509,7 @@ struct EditorView: View {
         .toolbar(chromeHidden ? .hidden : .automatic, for: .navigationBar)
         .navigationBarBackButtonHidden(focusMode || typing)
         .toolbar(removing: focusMode || typing ? .sidebarToggle : nil)
-        // While the keyboard is up, the bar holds only Done, as in Notes.
+        // While the keyboard is up, Done shows, as in Notes.
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in typing = true }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in typing = false }
         .animation(.easeInOut(duration: 0.25), value: chromeHidden)
@@ -560,15 +560,17 @@ struct EditorView: View {
                     }
                     .keyboardShortcut(.cancelAction)
                 }
-            } else if typing {
+            } else {
                 // Typing: Done closes the keyboard (the iPhone keyboard has no key
-                // for it), and nothing else shows (Kevin, 2026-11-23).
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done", systemImage: "checkmark") {
-                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                // for it); Back, the sidebar button and Mentions step aside until
+                // it's down, Focus and the companion stay (Kevin, 2026-11-23).
+                if typing {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done", systemImage: "checkmark") {
+                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                        }
                     }
                 }
-            } else {
                 // Focus, stock in both postures (Kevin, 2026-11-23). Unfolded: kept in
                 // the top row the sidebar button already uses, at its right end.
                 // Folded: in the side column with the other buttons, as iOS places
@@ -596,10 +598,12 @@ struct EditorView: View {
                     .keyboardShortcut("i", modifiers: [.command, .option])
                 }
                 // Shown when there's room; first into "•••" when there isn't.
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Mentions", systemImage: "at") { showMentions = true }
+                if !typing {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("Mentions", systemImage: "at") { showMentions = true }
+                    }
+                    .visibilityPriority(.low)
                 }
-                .visibilityPriority(.low)
             }
         }
         .task {
