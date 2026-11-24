@@ -61,13 +61,24 @@ struct PageEditor: UIViewRepresentable {
         context.coordinator.showChanges()
     }
 
-    /// What iOS's Format panel offers on a page (the edit menu's, and the bar's button's): the
-    /// four text styles and the lists, which pages keep. No fonts, sizes, colours or alignment:
-    /// the writing is New York, sized by Dynamic Type, and a page keeps none of them.
-    static let formatting = UITextFormattingViewController.Configuration(groups: [
-        .group([.component(.fontAttributes, .automatic)]),
-        .group([.component(.listStyles, .automatic)]),
-    ])
+    /// What iOS's Format panel offers on a page (the edit menu's, and the bar's button's), all
+    /// of which pages keep (Kevin, 2026-11-24): Notes' text styles (Title, Heading, Subheading,
+    /// Body: New York, growing with Dynamic Type), the four styles for text and its highlight,
+    /// alignment, lists and indent. No fonts, sizes or colours: the writing is always New York,
+    /// sized by Dynamic Type, and a fixed colour can vanish in dark mode.
+    static let formatting: UITextFormattingViewController.Configuration = {
+        let configuration = UITextFormattingViewController.Configuration(groups: [
+            .group([.component(.formattingStyles, .automatic)]),
+            .group([.component(.fontAttributes, .automatic), .component(.highlight, .automatic)]),
+            .group([.component(.textAlignment, .automatic), .component(.listStyles, .automatic),
+                    .component(.textIndentation, .automatic)]),
+        ])
+        configuration.formattingStyles = [(ParagraphRole.title, "Title"), (.heading, "Heading"),
+                                          (.subheading, "Subheading"), (.body, "Body")].map { role, title in
+            .init(styleKey: role.rawValue, title: LocalizedStringResource(stringLiteral: title), attributes: [.font: font(role)])
+        }
+        return configuration
+    }()
 
     /// Bold New York, scaled with Dynamic Type.
     static var titleFont: UIFont { newYork(34, weight: .bold, scaledAs: .largeTitle) }   // the size of the world's title
@@ -81,12 +92,27 @@ struct PageEditor: UIViewRepresentable {
         return UIFontMetrics(forTextStyle: style).scaledFont(for: serif)
     }
 
-    static func attributes(_ kind: ParagraphKind) -> [NSAttributedString.Key: Any] {
+    /// Each text style's face: New York, scaled with Dynamic Type (the sizes of Notes' Title,
+    /// Heading, Subheading and Body, a little larger for a serif).
+    static func font(_ role: ParagraphRole) -> UIFont {
+        switch role {
+        case .body: font
+        case .title: newYork(28, weight: .bold, scaledAs: .title1)
+        case .heading: newYork(23, weight: .bold, scaledAs: .title2)
+        case .subheading: newYork(20, weight: .semibold, scaledAs: .title3)
+        }
+    }
+
+    /// How a paragraph is set: its text style, list, alignment and indent.
+    static func attributes(_ paragraph: Paragraph) -> [NSAttributedString.Key: Any] {
         let p = NSMutableParagraphStyle()
-        p.lineHeightMultiple = 1.35
-        p.paragraphSpacing = kind.isList ? 4 : 14
-        if let list = RichText.list(for: kind) { p.textLists = [list] }
-        return [.font: font, .foregroundColor: ink, .paragraphStyle: p]
+        p.lineHeightMultiple = paragraph.role == .body ? 1.35 : 1.15
+        p.paragraphSpacing = paragraph.kind.isList ? 4 : 14
+        if let list = RichText.list(for: paragraph.kind) { p.textLists = [list] }
+        p.alignment = RichText.alignments.first { $0.alignment == paragraph.alignment }?.text ?? .natural
+        p.firstLineHeadIndent = CGFloat(paragraph.indent) * RichText.indentStep
+        p.headIndent = p.firstLineHeadIndent
+        return [.font: font(paragraph.role), .foregroundColor: ink, .paragraphStyle: p]
     }
 
     /// The writing's colour: a touch off-white in dark mode (88%; pure white
@@ -192,7 +218,7 @@ struct PageEditor: UIViewRepresentable {
             let doc = library.document
             let s = NSMutableAttributedString()
             for (i, p) in doc.paragraphs.enumerated() {
-                let attrs = PageEditor.attributes(p.kind)
+                let attrs = PageEditor.attributes(p)
                 s.append(RichText.attributed(p, attributes: attrs))
                 if i < doc.paragraphs.count - 1 { s.append(NSAttributedString(string: "\n", attributes: attrs)) }
             }
@@ -221,8 +247,8 @@ struct PageEditor: UIViewRepresentable {
             guard let tv = textView else { return }
             let (i, offset) = library.document.locate(tv.selectedRange.location)
             let p = library.document.paragraphs[i]
-            var attrs = PageEditor.attributes(p.kind)
-            attrs.merge(RichText.attributes(p.style(at: offset), base: PageEditor.font)) { $1 }
+            var attrs = PageEditor.attributes(p)
+            attrs.merge(RichText.attributes(p.style(at: offset), base: PageEditor.font(p.role))) { $1 }
             tv.typingAttributes = attrs
         }
 
@@ -230,21 +256,26 @@ struct PageEditor: UIViewRepresentable {
 
         func textView(_ tv: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
             if RichText.unlinkIfEditing(tv, range: range, replacement: text) { return false }
-            // Return on an empty list item ends the list, as in Notes.
             guard text == "\n", range.length == 0 else { return true }
-            let p = library.document.paragraphs[library.document.locate(range.location).index]
-            guard p.kind.isList, p.text.isEmpty else { return true }
-            toggleKind(p.kind, in: range.location..<range.location)
+            let (i, offset) = library.document.locate(range.location)
+            let p = library.document.paragraphs[i]
+            // Return on an empty list item ends the list, as in Notes.
+            if p.kind.isList, p.text.isEmpty {
+                toggleKind(p.kind, in: range.location..<range.location)
+                return false
+            }
+            // Return at the end of a title or heading: the next line is writing, as in Notes.
+            guard p.role != .body, offset == p.length else { return true }
+            change("New Line", caret: range.location + 1) { _ = $0.split(at: i, offset: offset) }
             return false
         }
 
         func textViewDidChange(_ tv: UITextView) {
-            // An empty last line has no character to carry its list: the typing attributes
-            // say it while the caret is there; otherwise it stays as it was.
+            // An empty last line has no character to carry its style, list, alignment or indent:
+            // the typing attributes say them while the caret is there; otherwise they stay.
             let atEnd = tv.selectedRange.location == tv.textStorage.length
-            let trailing = atEnd ? RichText.kind(of: tv.typingAttributes[.paragraphStyle] as? NSParagraphStyle)
-                                 : library.document.paragraphs.last?.kind ?? .body
-            let paragraphs = RichText.paragraphs(from: tv.attributedText, trailingKind: trailing)
+            let trailing = atEnd ? RichText.layout(of: tv.typingAttributes) : library.document.paragraphs.last ?? Paragraph()
+            let paragraphs = RichText.paragraphs(from: tv.attributedText, trailing: trailing)
             library.update { $0.setParagraphs(paragraphs) }
             shown = library.document.paragraphs
             updateFormatBar()
@@ -386,17 +417,22 @@ struct PageEditor: UIViewRepresentable {
 
         /// What the selection (or, with none, what's typed next) has, for the panel to show.
         private func formattingNow(_ tv: UITextView) -> UITextFormattingViewController.FormattingDescriptor {
-            tv.selectedRange.length > 0
+            var now: UITextFormattingViewController.FormattingDescriptor = tv.selectedRange.length > 0
                 ? .init(string: tv.textStorage, range: tv.selectedRange)
                 : .init(attributes: tv.typingAttributes)
+            now.formattingStyleKey = paragraph.role.rawValue
+            return now
         }
 
+        /// The paragraph the selection starts in.
+        private var paragraph: Paragraph { library.document.paragraphs[library.document.locate(selection.lowerBound).index] }
+
         func textFormattingViewController(_ panel: UITextFormattingViewController,
-                                          didChangeValue change: UITextFormattingViewController.ChangeValue) {
+                                          didChangeValue value: UITextFormattingViewController.ChangeValue) {
             guard let tv = textView else { return }
             // iOS's own Bold, Italic and Underline, as ⌘B, ⌘I, ⌘U: Undo takes them back, and
             // with nothing selected they're for what's typed next.
-            switch change {
+            switch value {
             case .bold: tv.toggleBoldface(nil)
             case .italic: tv.toggleItalics(nil)
             case .underline: tv.toggleUnderline(nil)
@@ -407,9 +443,18 @@ struct PageEditor: UIViewRepresentable {
                 case .decimal?: .numbered
                 default: .bullet
                 }
-                let current = library.document.paragraphs[library.document.locate(selection.lowerBound).index].kind
+                let current = paragraph.kind
                 // No list: the current one toggled off.
                 if kind != current { toggleKind(kind == .body ? current : kind, in: selection) }
+            case .formattingStyle(let key):
+                if let role = ParagraphRole(rawValue: key) { change("Text Style") { $0.setRole(role, in: self.selection) } }
+            case .textAlignment(let alignment):
+                let alignment = RichText.alignments.first { $0.panel == alignment }?.alignment ?? .natural
+                change("Alignment") { $0.setAlignment(alignment, in: self.selection) }
+            case .increaseIndentation: change("Indent") { $0.indent(by: 1, in: self.selection) }
+            case .decreaseIndentation: change("Indent") { $0.indent(by: -1, in: self.selection) }
+            case .highlight(let highlight):
+                mark(RichText.highlights.first { $0.panel == highlight }?.highlight, in: tv)
             default: break   // not offered (`PageEditor.formatting`)
             }
             if !selection.isEmpty { textViewDidChange(tv) }
@@ -421,9 +466,34 @@ struct PageEditor: UIViewRepresentable {
             textView?.becomeFirstResponder()
         }
 
-        /// The edit menu's Format panel, iOS's own, changed the text itself: the page as shown.
+        /// The edit menu's Format panel, iOS's own, changed the text itself: the page as shown,
+        /// then shown as pages set it (its spacing, its indent's steps).
         func textView(_ tv: UITextView, didEndFormattingWith viewController: UITextFormattingViewController) {
             textViewDidChange(tv)
+            render(selection: tv.selectedRange)
+        }
+
+        /// Highlight (iOS's, in one of its colours; nil: none), on the selection, as one step
+        /// Undo takes back, or with none, on what's typed next.
+        private func mark(_ highlight: InlineStyle.Highlight?, in tv: UITextView) {
+            var style = InlineStyle()
+            style.highlight = highlight
+            let marks = RichText.attributes(style, base: PageEditor.font)
+            let range = tv.selectedRange
+            guard range.length > 0 else {
+                for key in [NSAttributedString.Key.textHighlightStyle, .textHighlightColorScheme] {
+                    tv.typingAttributes[key] = marks[key]
+                }
+                return
+            }
+            let before = library.document.paragraphs
+            tv.textStorage.removeAttribute(.textHighlightStyle, range: range)
+            tv.textStorage.removeAttribute(.textHighlightColorScheme, range: range)
+            for key in [NSAttributedString.Key.textHighlightStyle, .textHighlightColorScheme] {
+                if let value = marks[key] { tv.textStorage.addAttribute(key, value: value, range: range) }
+            }
+            textViewDidChange(tv)
+            undoably(back: before, named: "Highlight")
         }
 
         /// Strikethrough (iOS has no command for it): on the selection, as one step Undo takes
@@ -448,10 +518,16 @@ struct PageEditor: UIViewRepresentable {
         /// Makes the paragraphs in `range` a `kind` list, or plain when all already are, as one
         /// step Undo takes back.
         private func toggleKind(_ kind: ParagraphKind, in range: Range<Int>) {
+            change(kind == .numbered ? "Numbered List" : "Bulleted List") { $0.toggleKind(kind, in: range) }
+        }
+
+        /// Changes the page's paragraphs (a list, a text style, alignment, indent, a new line)
+        /// and shows them, as one step Undo takes back named `name`; the caret then at `caret`.
+        private func change(_ name: String, caret: Int? = nil, _ edit: (inout WriterCore.Document) -> Void) {
             let before = library.document.paragraphs
-            library.update { $0.toggleKind(kind, in: range) }
-            render(selection: textView?.selectedRange)
-            undoably(back: before, named: kind == .numbered ? "Numbered List" : "Bulleted List")
+            library.update(edit)
+            render(selection: caret.map { NSRange(location: $0, length: 0) } ?? textView?.selectedRange)
+            undoably(back: before, named: name)
         }
 
         /// Registers putting the page's paragraphs back as they were, and redoing it the same way.

@@ -99,6 +99,43 @@ final class RichTextTests: XCTestCase {
         XCTAssertEqual(saved.paragraphs[0].runs, d.paragraphs[0].runs)
     }
 
+    /// Text styles, alignment and indent (iOS's Format panel's) are the paragraph's, kept
+    /// with the page; pages from before them load as body, natural, no indent.
+    func testParagraphStylesAreKeptAndOldPagesLoad() throws {
+        var d = Document(paragraphs: [Paragraph(text: "Harbour"), Paragraph(text: "Grey water.")])
+        d.setRole(.heading, in: 0..<0)
+        d.setAlignment(.center, in: 0..<9)
+        d.indent(by: 2, in: 8..<9)
+        d.indent(by: 20, in: 0..<0)
+        XCTAssertEqual(d.paragraphs.map(\.role), [.heading, .body])
+        XCTAssertEqual(d.paragraphs.map(\.alignment), [.center, .center])
+        XCTAssertEqual(d.paragraphs.map(\.indent), [Document.maxIndent, 2])
+        let saved = try JSONDecoder().decode(Document.self, from: JSONEncoder().encode(d))
+        XCTAssertEqual(saved.paragraphs, d.paragraphs)
+        let old = try JSONDecoder().decode(Paragraph.self, from: Data(#"{"id":"\#(UUID().uuidString)","text":"x"}"#.utf8))
+        XCTAssertEqual([old.role.rawValue, old.alignment.rawValue, String(old.indent)], ["body", "natural", "0"])
+    }
+
+    /// Return at the end of a heading starts writing; in its middle, both halves stay headings.
+    func testReturnAfterAHeadingStartsWriting() {
+        var d = Document(paragraphs: [Paragraph(text: "Harbour", role: .heading, alignment: .center, indent: 1)])
+        d.split(at: 0, offset: 7)
+        XCTAssertEqual(d.paragraphs.map(\.role), [.heading, .body])
+        XCTAssertEqual(d.paragraphs.map(\.alignment), [.center, .center])
+        d.split(at: 0, offset: 3)
+        XCTAssertEqual(d.paragraphs.map(\.role), [.heading, .heading, .body])
+    }
+
+    /// A highlight's colour sits beside bold and the rest without disturbing them.
+    func testHighlightKeepsItsColourBesideOtherStyles() {
+        var style: InlineStyle = [.bold, .strikethrough]
+        style.highlight = .mint
+        XCTAssertEqual(style.highlight, .mint)
+        XCTAssertTrue(style.contains([.bold, .strikethrough]))
+        style.highlight = nil
+        XCTAssertEqual(style, [.bold, .strikethrough])
+    }
+
     func testTogglePartlyStyledSelectionStylesAll() {
         var d = Document(paragraphs: [Paragraph(text: "abcd", runs: [StyleRun(location: 0, length: 2, style: .italic)])])
         d.toggle(.italic, in: 0..<4)
