@@ -227,6 +227,8 @@ final class Library {
                 return FilingLine(action: action, page: page, detail: nil, type: schema.type(type)?.name)
             case .typed(_, let type):
                 return FilingLine(action: action, page: page, detail: schema.type(type)?.name ?? "Deleted type", type: nil)
+            case .described(_, let text):
+                return FilingLine(action: action, page: page, detail: "\u{201C}\(text)\u{201D}", type: nil)
             case .renamed:
                 return FilingLine(action: action, page: page, detail: nil, type: nil)
             case .value(_, let fieldID, let value), .replaced(_, let fieldID, _, let value):
@@ -556,7 +558,7 @@ enum Screenshots {
 struct FilingLine: Hashable {
     var action: FilingRecord.Entry
     var page: String
-    /// The type given, or "Field: value"; nil for a new page.
+    /// The type given, "Field: value", or the page text filed (quoted); nil for a new page.
     var detail: String?
     /// A new page's type.
     var type: String?

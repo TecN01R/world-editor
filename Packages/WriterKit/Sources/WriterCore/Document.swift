@@ -317,6 +317,13 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
         return changed   // not an edit of this page, so `modified` stays
     }
 
+    /// Filing gives a page with no writing the author's description of it as its text
+    /// (`FilingRecord.Entry.described`), or takes it back (""): filing's doing, not the
+    /// author's edit, so `modified` stays.
+    public mutating func fileDescription(_ text: String) {
+        paragraphs = [Paragraph(text: text)]
+    }
+
     /// Whether any `@` link or page field on this page points at `page` (backlinks).
     public func mentions(_ page: UUID) -> Bool {
         paragraphs.contains { $0.links.contains { $0.page == page } } || values.values.contains(.page(page))

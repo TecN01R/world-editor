@@ -14,8 +14,12 @@ public struct FilingRecord: Codable, Hashable, Sendable {
         case value(page: UUID, field: UUID, value: FieldValue)
         /// A field's value was corrected ("Actually it's a bireme"); `was` comes back on Undo.
         case replaced(page: UUID, field: UUID, was: FieldValue, value: FieldValue)
-        /// The open page was renamed: the author named its subject ("Her name is Florica").
+        /// The open page was renamed: the author named its subject ("Her name is Mara").
         case renamed(page: UUID, was: String, title: String)
+        /// A page with no writing got the author's description of it as its text
+        /// ("an island republic of glassblowers"; Kevin, 2026-11-24: "Put that in the page
+        /// content, not the type").
+        case described(page: UUID, text: String)
         case newType(UUID)
         case newField(UUID)
         /// An existing or new field added to a type.
@@ -60,7 +64,7 @@ public struct FilingRecord: Codable, Hashable, Sendable {
     public var actions: [Entry] {
         entries.filter {
             switch $0 {
-            case .created, .typed, .value, .replaced, .renamed: true
+            case .created, .typed, .value, .replaced, .renamed, .described: true
             case .newType, .newField, .fieldAdded: false
             }
         }
@@ -101,6 +105,8 @@ public struct FilingRecord: Codable, Hashable, Sendable {
             if let i = index(page), pages[i].type == type { pages[i].type = nil }
         case .renamed(let page, let was, let title):
             if let i = index(page), pages[i].title == title { pages[i].title = was }
+        case .described(let page, let text):
+            if let i = index(page), pages[i].paragraphs.map(\.text) == [text] { pages[i].fileDescription("") }
         case .created(let page, let modified):
             if let i = index(page) {
                 // What this message filed on it, value by value: anything else, or a value
@@ -145,7 +151,7 @@ public struct FilingRecord: Codable, Hashable, Sendable {
                 }
             case .newType(let type):
                 if !pages.contains(where: { $0.type == type }) { schema.removeType(type) }
-            case .created, .typed, .value, .replaced, .renamed:
+            case .created, .typed, .value, .replaced, .renamed, .described:
                 break
             }
         }
@@ -157,7 +163,7 @@ extension FilingRecord.Entry {
     public var page: UUID? {
         switch self {
         case .created(let page, _), .typed(let page, _), .value(let page, _, _), .replaced(let page, _, _, _),
-             .renamed(let page, _, _): page
+             .renamed(let page, _, _), .described(let page, _): page
         case .newType, .newField, .fieldAdded: nil
         }
     }
@@ -204,6 +210,8 @@ extension FilingRecord.Entry {
             later.page == page && later.field != nil
         case .renamed(let page, _, _):
             if case .renamed(page, _, _) = later { true } else { false }
+        case .described:
+            false   // only a page with no writing is described, so nothing filed later changes it
         case .created(let page, _):
             !sameMessage && (later.page == page || later.linked == page || later.was == .page(page))
         case .newType, .newField, .fieldAdded:

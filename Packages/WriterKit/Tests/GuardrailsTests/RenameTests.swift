@@ -114,3 +114,38 @@ final class RenameTests: XCTestCase {
         XCTAssertFalse(talk.changedLater(second.actions[0], in: talk.turns[1].id))
     }
 }
+
+/// A description filed as a "Type" or "Description" field is the page's text when it has none
+/// (Kevin, 2026-11-24: "Put that in the page content, not the type").
+final class DescribedTests: XCTestCase {
+    func testADescriptionBecomesAnEmptyPagesText() throws {
+        let place = PageType(name: "Place")
+        var isles = Document(title: "The Isles", paragraphs: [Paragraph(text: "")])
+        isles.type = place.id
+        var pages = [isles], schema = Schema(types: [place])
+        var record = Filer.file(Filings(facts: [.init(page: "The Isles", field: "Type", value: "island republic of glassblowers")],
+                                        pages: [.init(title: "The Isles", type: "Place")]),
+                                message: "It's a island republic of glassblowers", open: isles.id,
+                                pages: &pages, schema: &schema)
+        XCTAssertEqual(pages[0].paragraphs.map(\.text), ["Island republic of glassblowers"])
+        XCTAssertTrue(schema.fields.isEmpty)   // no "Type" field
+        _ = record.undo(try XCTUnwrap(record.actions.first), pages: &pages, schema: &schema)
+        XCTAssertEqual(pages[0].paragraphs.map(\.text), [""])
+    }
+
+    /// A page with writing keeps it, and no description field is made; one word is a type, not a description.
+    func testWritingIsKeptAndOneWordIsntADescription() {
+        let place = PageType(name: "Place")
+        for (writing, field, value, message) in [("Islands of salt.", "Description", "an island republic", "It's an island republic"),
+                                                 ("", "Kind", "nation", "It's a nation")] {
+            var isles = Document(title: "The Isles", paragraphs: [Paragraph(text: writing)])
+            isles.type = place.id
+            var pages = [isles], schema = Schema(types: [place])
+            let record = Filer.file(Filings(facts: [.init(page: "The Isles", field: field, value: value)]),
+                                    message: message, open: isles.id, pages: &pages, schema: &schema)
+            XCTAssertTrue(record.isEmpty, field)
+            XCTAssertEqual(pages[0].paragraphs.map(\.text), [writing], field)
+            XCTAssertTrue(schema.fields.isEmpty, field)
+        }
+    }
+}

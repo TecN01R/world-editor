@@ -44,10 +44,10 @@ struct ChangesView: View {
         }
     }
 
-    /// One thing changed on a page (made it, renamed it, typed it, or one field), with
-    /// every change to it from this conversation, oldest first.
+    /// One thing changed on a page (made it, renamed it, gave it text, typed it, or one
+    /// field), with every change to it from this conversation, oldest first.
     private struct Row {
-        enum Key: Hashable { case created, renamed, typed, field(UUID) }
+        enum Key: Hashable { case created, renamed, described, typed, field(UUID) }
         typealias Filing = (action: FilingRecord.Entry, turn: UUID, date: Date)
         let key: Key
         /// Where its first change comes among the conversation's filings.
@@ -60,7 +60,7 @@ struct ChangesView: View {
     /// each, come newest first by when this conversation first changed them, so no two
     /// tie, and Undo, which takes back a row's latest change (never its first while it
     /// has others), doesn't move a row it leaves or that row's section. On each page,
-    /// the page itself (made, renamed, typed) comes before its fields.
+    /// the page itself (made, renamed, given text, typed) comes before its fields.
     private var history: [(page: UUID, rows: [Row])] {
         var rows: [UUID: [Row.Key: Row]] = [:]
         var pages: [UUID] = []   // in the order first changed
@@ -71,6 +71,7 @@ struct ChangesView: View {
                 let key: Row.Key = switch action {
                 case .created: .created
                 case .renamed: .renamed
+                case .described: .described
                 case .value(_, let field, _), .replaced(_, let field, _, _): .field(field)
                 default: .typed   // the only other with a page
                 }
@@ -81,7 +82,7 @@ struct ChangesView: View {
             }
         }
         func rank(_ key: Row.Key) -> Int {
-            switch key { case .created: 0; case .renamed: 1; case .typed: 2; case .field: 3 }
+            switch key { case .created: 0; case .renamed: 1; case .described: 2; case .typed: 3; case .field: 4 }
         }
         return pages.reversed().map { page in
             (page: page, rows: rows[page, default: [:]].values.sorted {
@@ -319,6 +320,9 @@ private struct Change {
         case .renamed(_, let was, _):
             symbol = "character.cursor.ibeam"
             detail = Text("Renamed, was \(was.isEmpty ? Text("untitled") : authored(was))")
+        case .described(_, let text):
+            symbol = "text.alignleft"
+            detail = Text("Page text: \(authored(text))")
         case .value(_, let fieldID, let value), .replaced(_, let fieldID, _, let value):
             let field = library.schema.fields.first { $0.id == fieldID }?.name ?? "Deleted field"
             if case .replaced(_, _, let was, _) = action {

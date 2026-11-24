@@ -200,7 +200,8 @@ extension FilingPrompt {
 /// the model may choose (docs/ai-charter.md). A field that has a value gets
 /// a new one only from a message that corrects something ("Actually it's a
 /// bireme"), kept in the record so Undo puts the old one back. Only untyped
-/// pages get a type, and an existing page's text is never touched. What's
+/// pages get a type, and an existing page's writing is never touched (one
+/// with none yet may get the author's description of it as its text). What's
 /// dropped is dropped, not repaired.
 public enum Filer {
     /// Whether `message` states anything: not only questions, guesses and musing. Filing
@@ -307,6 +308,20 @@ public enum Filer {
         for fact in filings.facts {
             // The open page's name is its title (above), never a field.
             if Self.nameFields.contains(Self.key(fact.field)), isOpen(index(named: fact.page)) { continue }
+            // What a page is ("Type: an island republic of glassblowers") is its text when it has
+            // none yet, never a field (Kevin, 2026-11-24: "Put that in the page content, not the type").
+            // One word ("Kind: nation") or the page's own name isn't a description.
+            if Self.descriptionFields.contains(Self.key(fact.field)) {
+                if let i = index(named: fact.page),
+                   pages[i].paragraphs.allSatisfy({ $0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }),
+                   let hit = found(fact.value), hit.words.split(separator: " ").count > 1,
+                   Self.key(hit.words) != Self.key(pages[i].title) {
+                    let text = hit.words.prefix(1).uppercased() + hit.words.dropFirst()
+                    pages[i].fileDescription(text)
+                    record.entries.append(.described(page: pages[i].id, text: text))
+                }
+                continue
+            }
             guard let i = index(named: fact.page), let typeID = pages[i].type,
                   let t = schema.types.firstIndex(where: { $0.id == typeID }),
                   let fieldName = name(fact.field), let hit = found(fact.value),
@@ -354,6 +369,9 @@ public enum Filer {
 
     /// Field names that mean the page's own name.
     static let nameFields: Set = ["name", "full name", "called", "named"]
+
+    /// Field names that mean what the page is: its text, not a field.
+    static let descriptionFields: Set = ["type", "kind", "description", "about", "what it is", "summary", "overview"]
 
     /// Every word capitalised, but for the small ones inside ("Treaty of Gull Rock", "Mercy").
     static func looksLikeAName(_ words: String) -> Bool {
