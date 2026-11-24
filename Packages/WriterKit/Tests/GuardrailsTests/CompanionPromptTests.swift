@@ -28,7 +28,7 @@ final class CompanionPromptTests: XCTestCase {
             - Verran (Place): A seafaring nation of rowers and traders
 
             The page they have open now:
-            A Character page titled \u{201C}Ilsa\u{201D}.
+            \u{201C}Ilsa\u{201D}, a character: Ilsa is who or what this page is about, and the title is Ilsa's name.
             What they've written on it so far:
             A maritime adventurer
             """,
@@ -69,7 +69,12 @@ final class CompanionPromptTests: XCTestCase {
         XCTAssertEqual(CompanionPrompt.describe(.init(name: "", writing: ""), maxCharacters: 100),
                        "A page with no title yet.\nNothing is written on it yet.")
         XCTAssertEqual(CompanionPrompt.describe(.init(name: "The Storm", type: "Event", fields: "When: autumn", writing: "Four days."), maxCharacters: 100),
-                       "An Event page titled \u{201C}The Storm\u{201D}.\nIts fields:\nWhen: autumn\nWhat they've written on it so far:\nFour days.")
+                       "\u{201C}The Storm\u{201D}, an event: The Storm is who or what this page is about, and the title is The Storm's name.\n"
+                       + "Its fields:\nWhen: autumn\nWhat they've written on it so far:\nFour days.")
+        XCTAssertTrue(CompanionPrompt.describe(.init(name: "Hal", type: "AI", writing: ""), maxCharacters: 100).hasPrefix("\u{201C}Hal\u{201D}, an AI:"))
+        XCTAssertTrue(CompanionPrompt.describe(.init(name: "", type: "Place", writing: ""), maxCharacters: 100).hasPrefix("A Place page with no title yet."))
+        XCTAssertTrue(CompanionPrompt.describe(.init(name: "App ideas", writing: "x"), maxCharacters: 100)
+            .hasPrefix("\u{201C}App ideas\u{201D}: the title is the name of who or what this page is about."))
     }
 
     /// A page too long to show whole: how it opens and where the author is working.
@@ -81,7 +86,7 @@ final class CompanionPromptTests: XCTestCase {
         XCTAssertTrue(page.contains("(it's long: this is how it opens and, after [\u{2026}], its latest part):\nIt began in Halen. middle"))
         XCTAssertTrue(page.contains("middle\n[\u{2026}]\nmiddle"))                         // cut at words, not through them
         XCTAssertTrue(page.contains("He stops counting at forty.\n\nRight now:"))
-        XCTAssertLessThan(page.distance(from: page.startIndex, to: page.range(of: "\n\nRight now:")!.lowerBound), 1000)
+        XCTAssertLessThan(page.distance(from: page.startIndex, to: page.range(of: "\n\nRight now:")!.lowerBound), 1100)
         XCTAssertNil(CompanionPrompt.excerpt("short", maxCharacters: 5))
     }
 

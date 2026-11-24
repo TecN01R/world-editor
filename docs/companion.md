@@ -48,7 +48,11 @@ system turn, in this order, then the conversation:
    answer, a two-word reaction to a joke, a gathering-up when the writer is
    stuck, an honest opinion, a goodbye that doesn't push another question.
 3. **Background**, labelled as what the app shows it, not something the writer
-   just said: the opening of the writer's other pages (those sharing words
+   just said. The open page is introduced by name, saying outright that its
+   title is the name of who or what it is about: told only "a Character page
+   titled Casperica", E4B said the page gave no name and asked whether
+   Casperica was a place (Kevin's conversation, 2026-11-23); said outright,
+   it named her 7 times in 8 where it had 2 in 8, and never asked again. Then: the opening of the writer's other pages (those sharing words
    with this page first), what the writer told it on other pages that bears on
    this one, and the open page (a long page as its opening and its latest
    part).

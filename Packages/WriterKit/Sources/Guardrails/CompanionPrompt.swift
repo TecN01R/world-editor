@@ -191,12 +191,23 @@ public struct CompanionPrompt: Equatable, Sendable {
     /// than `maxCharacters` is shown as its opening and its latest part, which
     /// is where the author is working.
     static func describe(_ page: Page, maxCharacters: Int) -> String {
-        var kind = "A page"
+        // The title is the name of who or what the page is about, said outright:
+        // given only "a Character page titled …", the model said the page gave no
+        // name, and asked whether the character was a place (Kevin, 2026-11-23).
+        let name = page.name
+        var lines: [String]
         if let type = page.type {
-            let vowel = type.first.map { "aeiouAEIOU".contains($0) } ?? false
-            kind = (vowel ? "An " : "A ") + type + " page"
+            let a = (type.first.map { "aeiouAEIOU".contains($0) } ?? false) ? "an" : "a"
+            if name.isEmpty {
+                lines = ["\(a.capitalized) \(type) page with no title yet."]
+            } else {
+                lines = ["\u{201C}\(name)\u{201D}, \(a) \(lowercasedWord(type)): \(name) is who or what this page is about, "
+                         + "and the title is \(name)'s name."]
+            }
+        } else {
+            lines = [name.isEmpty ? "A page with no title yet."
+                     : "\u{201C}\(name)\u{201D}: the title is the name of who or what this page is about."]
         }
-        var lines = [page.name.isEmpty ? "\(kind) with no title yet." : "\(kind) titled \u{201C}\(page.name)\u{201D}."]
         if !page.fields.isEmpty { lines += ["Its fields:", page.fields] }
         if page.writing.isEmpty {
             lines.append("Nothing is written on it yet.")
@@ -206,6 +217,12 @@ public struct CompanionPrompt: Equatable, Sendable {
             lines += ["What they've written on it so far:", page.writing]
         }
         return lines.joined(separator: "\n")
+    }
+
+    /// "Character" as a common noun, "character"; "NPC" stays as written.
+    private static func lowercasedWord(_ word: String) -> String {
+        guard let first = word.first, word.dropFirst().first?.isLowercase ?? true else { return word }
+        return first.lowercased() + word.dropFirst()
     }
 
     /// A text longer than `maxCharacters` as how it opens (a quarter of the
