@@ -70,3 +70,5 @@ TextKit measures; `FocusLayout` (shared, tested) holds the size search
 - Swipe up/down anywhere to move between pages, except on the caret or a
   selection handle, where a drag moves them. VoiceOver can adjust the dots.
 - Switching between Edit mode and Focus mode keeps the caret position.
+- Focus is offered only while the page's writing has the keyboard. Putting
+  the keyboard away (Done, or swiping it down) leaves Focus.

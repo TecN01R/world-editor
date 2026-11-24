@@ -527,9 +527,13 @@ struct EditorView: View {
         .toolbar(chromeHidden ? .hidden : .automatic, for: .navigationBar)
         .navigationBarBackButtonHidden(focusMode || typing)
         .toolbar(removing: focusMode || typing ? .sidebarToggle : nil)
-        // While the keyboard is up, Done shows, as in Notes.
+        // While the keyboard is up, Done shows, as in Notes. Focus is for
+        // writing, so the keyboard going down (Done, or swiped away) leaves it (Kevin).
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in typing = true }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in typing = false }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            typing = false
+            if focusMode { withAnimation(.smooth(duration: 0.3)) { focusMode = false } }
+        }
         .animation(.easeInOut(duration: 0.25), value: chromeHidden)
         .sheet(isPresented: $showMentions) { MentionsView() }
         .sheet(item: fieldSheet) { request in
