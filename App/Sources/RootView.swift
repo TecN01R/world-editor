@@ -460,6 +460,15 @@ struct EditorView: View {
     }
 
     private var folded: Bool { sizeClass == .compact }
+    /// The title in the top bar (folded) has the keyboard.
+    @FocusState private var titleFocused: Bool
+    /// Return in the bar's title: the writing takes over.
+    @State private var writeRequest = 0
+
+    /// The page's title, as typed in the top bar.
+    private var title: Binding<String> {
+        Binding { library.document.title } set: { new in library.update { $0.setTitle(new) } }
+    }
 
     /// A page field's "New Place…": the field it fills.
     private var newPageField: FieldDefinition? {
@@ -492,9 +501,11 @@ struct EditorView: View {
                     .ignoresSafeArea()   // the whole display; bars appear over it
                     .transition(.opacity)
             } else {
-                PageEditor {   // stops at the keyboard, as iOS lays pages out
+                // Folded, the title moves up into the top bar beside Focus: one row
+                // for both, as WhatsApp's header holds the name and its buttons.
+                PageEditor(titleInBar: folded, writeRequest: writeRequest, onTitleWanted: { titleFocused = true }) {
                     withAnimation(.smooth(duration: 0.3)) { focusMode = true }
-                }
+                }   // stops at the keyboard, as iOS lays pages out
                     .transition(.opacity)
             }
         }
@@ -555,15 +566,26 @@ struct EditorView: View {
                     .keyboardShortcut(.cancelAction)
                 }
             } else {
-                // Focus with the other buttons: in the side column when the Duo is
-                // folded. Kept at the top (axisBehavior .horizontalOnly), it cost a
-                // whole bar and pushed the page down a row (Kevin, 2026-11-23). Its
-                // arrows mirror Exit Focus's.
+                // Folded: the title and Focus share the top row; the other buttons
+                // go into the side column. A bar for Focus alone cost the page a row
+                // (Kevin, 2026-11-23). Unfolded, Focus sits with the other buttons.
+                if folded {
+                    ToolbarItem(placement: .principal) {
+                        TextField("Title", text: title)
+                            .font(.authored(.title3).bold())   // the author's words: New York
+                            .focused($titleFocused)
+                            .submitLabel(.next)
+                            .onSubmit { writeRequest += 1 }   // Return moves on to the writing, as on the page
+                            .accessibilityLabel("Title")
+                    }
+                    .sharedBackgroundVisibility(.hidden)
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Button("Focus Mode", systemImage: "arrow.up.left.and.arrow.down.right") {
                         withAnimation(.smooth(duration: 0.3)) { focusMode = true }
                     }
                 }
+                .axisBehavior(folded ? .horizontalOnly : .automatic)
                 // The companion, beside the page (unfolded) or a sheet (folded); on
                 // the Duo the side column, which stays in reach above the keyboard.
                 // ⌥⌘I is the system's shortcut for an inspector.

@@ -7,10 +7,21 @@ import WriterCore
 /// autocorrect, dictation, selection all behave as iOS users expect).
 struct PageEditor: UIViewRepresentable {
     @Environment(Library.self) private var library
-    /// Steps into Focus mode: the button beside the format bar, or ⇧⌘F.
+    /// Steps into Focus mode: ⇧⌘F (the button is in the toolbar).
     private let onFocus: () -> Void
+    /// The title is in the top bar (folded), not at the top of the page.
+    private let titleInBar: Bool
+    /// A new page wants its title typed, and the title is in the top bar.
+    private let onTitleWanted: () -> Void
+    /// Bumped when the bar's title is done (Return): the writing takes over.
+    private let writeRequest: Int
 
-    init(onFocus: @escaping () -> Void) { self.onFocus = onFocus }
+    init(titleInBar: Bool = false, writeRequest: Int = 0, onTitleWanted: @escaping () -> Void = {}, onFocus: @escaping () -> Void) {
+        self.titleInBar = titleInBar
+        self.writeRequest = writeRequest
+        self.onTitleWanted = onTitleWanted
+        self.onFocus = onFocus
+    }
 
     func makeCoordinator() -> Coordinator { Coordinator(library: library, onFocus: onFocus) }
 
@@ -28,13 +39,30 @@ struct PageEditor: UIViewRepresentable {
         fields.view.backgroundColor = .clear
         fields.safeAreaRegions = []
         tv.fieldsController = fields
+        tv.titleHidden = titleInBar
+        context.coordinator.titleInBar = titleInBar
+        context.coordinator.onTitleWanted = onTitleWanted
+        context.coordinator.writeRequest = writeRequest
         context.coordinator.textView = tv
         context.coordinator.render(selection: nil)
         context.coordinator.restoreCaret()
         return PageView(textView: tv, bar: context.coordinator.formatBar)
     }
 
-    func updateUIView(_ view: PageView, context: Context) { context.coordinator.onFocus = onFocus }
+    func updateUIView(_ view: PageView, context: Context) {
+        let c = context.coordinator
+        c.onFocus = onFocus
+        c.onTitleWanted = onTitleWanted
+        if c.titleInBar != titleInBar {
+            c.titleInBar = titleInBar
+            if titleInBar { c.titleField.resignFirstResponder() } else { c.titleField.text = library.document.title }   // typed in the bar meanwhile
+            view.textView.titleHidden = titleInBar
+        }
+        if c.writeRequest != writeRequest {
+            c.writeRequest = writeRequest
+            view.textView.becomeFirstResponder()
+        }
+    }
 
     /// Bold New York, scaled with Dynamic Type.
     static var titleFont: UIFont { newYork(34, weight: .bold, scaledAs: .largeTitle) }   // the size of the world's title
@@ -67,6 +95,9 @@ struct PageEditor: UIViewRepresentable {
         /// Replacing the text moves the selection; that isn't the user moving the caret.
         private var isRendering = false
         var onFocus: () -> Void
+        var titleInBar = false
+        var onTitleWanted: () -> Void = {}
+        var writeRequest = 0
         lazy var formatBar = FormatBar(onAction: { [weak self] action in self?.perform(action) })
 
         lazy var titleField: UITextField = {
@@ -312,8 +343,11 @@ struct PageEditor: UIViewRepresentable {
             // A new page starts in its title; otherwise carry on writing.
             let startInTitle = doc.isEmpty && !Screenshots.isActive
             guard !Screenshots.opensMara || Screenshots.showsMentions else { return }   // CI: the page at rest
-            DispatchQueue.main.async { [titleField] in
-                if startInTitle { titleField.becomeFirstResponder(); return }
+            DispatchQueue.main.async { [titleField, titleInBar, onTitleWanted] in
+                if startInTitle {
+                    if titleInBar { onTitleWanted() } else { titleField.becomeFirstResponder() }
+                    return
+                }
                 tv.becomeFirstResponder()
                 tv.scrollRangeToVisible(tv.selectedRange)
             }
@@ -543,6 +577,8 @@ final class PageTextView: PlainPasteTextView {
 
     /// The format bar's height while it floats over the bottom of the page.
     var barHeight: CGFloat = 0 { didSet { setNeedsLayout() } }
+    /// Folded, the title is in the top bar: the page starts with its fields.
+    var titleHidden = false { didSet { if titleHidden != oldValue { setNeedsLayout() } } }
 
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -559,7 +595,8 @@ final class PageTextView: PlainPasteTextView {
         // Offset so the title's letters, not its field, land on that edge and
         // level with the list's title (also measured on the Duo).
         title.frame = CGRect(x: lead - 1.0 / 3, y: 8 - 20.0 / 3, width: lineWidth, height: titleHeight)
-        var top = title.frame.maxY
+        title.isHidden = titleHidden
+        var top = titleHidden ? 2 : title.frame.maxY
         if let fields = fieldsController?.view {
             fields.frame = CGRect(x: lead, y: top + 6, width: lineWidth, height: fieldsHeight)
             top = fields.frame.maxY
