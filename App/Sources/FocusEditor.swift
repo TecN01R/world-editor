@@ -16,7 +16,8 @@ struct FocusEditor: UIViewControllerRepresentable {
 
     func makeUIViewController(context: Context) -> FocusViewController {
         let vc = FocusViewController(library: library)
-        vc.onControlsChange = { shown in showsControls = shown }
+        // Animated here so only the bars fade with the controls, not the whole page's layout.
+        vc.onControlsChange = { shown in withAnimation(.easeInOut(duration: 0.25)) { showsControls = shown } }
         return vc
     }
     func updateUIViewController(_ vc: FocusViewController, context: Context) {

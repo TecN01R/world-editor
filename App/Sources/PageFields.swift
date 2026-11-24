@@ -43,8 +43,8 @@ struct PageFields: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .animation(.default, value: type?.id)
-        .animation(.default, value: fields.map(\.id))
+        // Not animated: the page's writing below moves to the fields' new height at once, so
+        // rows growing or fading in overlapped it until they settled.
         .fixedSize(horizontal: false, vertical: true)   // its own height, whatever the frame
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onHeight($0) }
     }

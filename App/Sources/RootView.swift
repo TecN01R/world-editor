@@ -665,7 +665,6 @@ struct EditorView: View {
             typing = false
             if focusMode { withAnimation(.smooth(duration: 0.3)) { focusMode = false } }
         }
-        .animation(.easeInOut(duration: 0.25), value: chromeHidden)
         .sheet(isPresented: $showMentions) { MentionsView() }
         .sheet(item: fieldSheet) { request in
             switch request {

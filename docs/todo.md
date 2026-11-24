@@ -13,7 +13,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] 1 Data safety and filing accuracy (pushed 5931105; waiting for the phone)
 - [ ] 2 The two bugs and the rotation crash (pushed 484d2ab; waiting for the phone)
 - [ ] 3 Open page in sync; editing crash risks (pushed 606a88a; waiting for the phone)
-- [ ] 4 Smooth typing (saving off the main thread pushed 7c046d4; fields animation and Focus controls fade still to do)
+- [ ] 4 Smooth typing (pushed; waiting for the phone. Not done: the open page observed on its own, Focus caching its measurements; only if typing still lags)
 - [ ] 5 Smooth replies (pushed 7c046d4; waiting for the phone)
 - [ ] 6 Faster replies (unload policy, then append-only history and filing)
 - [ ] 7 One companion

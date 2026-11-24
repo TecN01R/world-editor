@@ -570,12 +570,16 @@ final class PageView: UIView {
 /// The page's text view. Lays out the title above the writing whenever its
 /// width changes (rotation, fold), in a readable column of ~33 em.
 final class PageTextView: PlainPasteTextView {
+    /// HIG text fields: a Clear button at the trailing end. SwiftUI has no modifier for it,
+    /// so the page's fields take UIKit's own, set once for every page.
+    private static let clearButtons: Void = {
+        UITextField.appearance(whenContainedInInstancesOf: [PageTextView.self]).clearButtonMode = .whileEditing
+    }()
+
     override init(frame: CGRect, textContainer: NSTextContainer?) {
         super.init(frame: frame, textContainer: textContainer)
         keyboardLayoutGuide.followsUndockedKeyboard = true
-        // HIG text fields: a Clear button at the trailing end. SwiftUI has no
-        // modifier for it, so the page's fields take UIKit's own.
-        UITextField.appearance(whenContainedInInstancesOf: [PageTextView.self]).clearButtonMode = .whileEditing
+        _ = Self.clearButtons
     }
     required init?(coder: NSCoder) { fatalError() }
 
