@@ -87,7 +87,7 @@ struct CompanionPanel: View {
         .task { companion.checkModel() }
         // Back in the app after the download dropped: it picks up where it stopped.
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active, companion.state == .downloadPaused { retry() }
+            if phase == .active, companion.state == .downloadPaused { resume() }
         }
         .confirmationDialog("Start a new conversation about this page?", isPresented: $confirmingNew,
                             titleVisibility: .visible) {
@@ -284,11 +284,12 @@ struct CompanionPanel: View {
     }
 
     private var resumeDownload: some View {
-        Button("Resume Download", systemImage: "arrow.clockwise", action: retry)
+        Button("Resume Download", systemImage: "arrow.clockwise", action: resume)
             .buttonStyle(.bordered)
     }
 
     private func retry() { companion.retry(page: library.document, in: library) }
+    private func resume() { companion.startDownload(page: library.document, in: library) }
 
     /// The message field in Liquid Glass: the field and send, one height
     /// (the stock glass button styles each come in a different one).

@@ -79,9 +79,28 @@ final class Companion {
     }
 
     /// The author asked for the model: download it, then reply about `page`.
+    /// Also resumes a download that lost its connection.
     func startDownload(page: WriterCore.Document, in library: Library) {
+        // The download shows from the tap: the first progress report comes a
+        // moment later, and in between the conversation would flash up (Kevin).
+        download = Download(done: 0, total: downloadSize ?? 0, detail: "Starting…")
         needsDownload = false
-        askNow(about: page, in: library)
+        state = .idle
+        preparing?.cancel()
+        preparing = Task {
+            do {
+                try await model.prepare()
+                download = nil
+                modelVersion = model.version
+                await ask(about: page, in: library)   // if a reply is due (a new or blank page)
+            } catch {
+                download = nil
+                Self.log.error("Download failed: \(String(describing: error), privacy: .public)")
+                // A dropped connection shows Download Paused, which resumes; anything
+                // else goes back to offering the download, never starting it unasked.
+                if error is URLError { state = .downloadPaused } else { needsDownload = !model.isInstalled }
+            }
+        }
     }
 
     /// The open page changed: load its conversation and, after a pause,

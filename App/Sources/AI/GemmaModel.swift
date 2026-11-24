@@ -107,6 +107,11 @@ final class GemmaModel: CompanionModel, @unchecked Sendable {
                         newRequest request: URLRequest) async -> URLRequest? { nil }
     }
 
+    func prepare() async throws {
+        _ = try await model()
+        try? FileManager.default.removeItem(at: Self.trialLoading)   // TRIAL: loaded without ending the app
+    }
+
     func install(_ update: ModelUpdate) async throws {
         let old = Self.installed
         let new = try await download(revision: update.revision)

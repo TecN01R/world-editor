@@ -17,6 +17,8 @@ protocol CompanionModel: Sendable {
     // requirement is always the one used, whatever the model).
     var isInstalled: Bool { get }
     func downloadSize() async -> Int64?
+    /// Downloads the model if it isn't on the phone yet; nothing else.
+    func prepare() async throws
     var version: String? { get }
     func availableUpdate() async -> ModelUpdate?
     func install(_ update: ModelUpdate) async throws
@@ -27,6 +29,7 @@ extension CompanionModel {
     var isInstalled: Bool { true }
     /// How much the model's download is, if it has one; asked once, before downloading.
     func downloadSize() async -> Int64? { nil }
+    func prepare() async throws {}
     /// When the model on the phone was downloaded, in words; nil if it hasn't been, or it's part of iOS.
     var version: String? { nil }
     /// A newer file than the one on the phone, if its maker has published one. Downloads nothing.
