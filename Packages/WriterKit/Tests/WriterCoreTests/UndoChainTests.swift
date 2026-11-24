@@ -57,4 +57,34 @@ final class UndoChainTests: XCTestCase {
         XCTAssertNil(mine.undoChain(trireme, in: mine.turns[0].id, elsewhere: [other]))
         XCTAssertEqual(mine.undoChain(trireme, in: mine.turns[0].id)?.count, 1)
     }
+
+    /// The timeline's Undo on a message: what it filed and everything filed after it,
+    /// related or not, newest first; messages before it stay.
+    func testRewindTakesEverythingFromThatMessageOn() throws {
+        let trireme = FilingRecord.Entry.value(page: page, field: vessel, value: .text("trireme"))
+        let council = FilingRecord.Entry.value(page: page, field: ruler, value: .text("a council"))
+        let typed = FilingRecord.Entry.typed(page: page, type: UUID())
+        let bireme = FilingRecord.Entry.replaced(page: page, field: vessel, was: .text("trireme"), value: .text("bireme"))
+        let conversation = talk([FilingRecord(entries: [trireme]), FilingRecord(entries: [council, typed]),
+                                 FilingRecord(), FilingRecord(entries: [bireme])])
+        let rewind = try XCTUnwrap(conversation.rewind(to: conversation.turns[1].id))
+        XCTAssertEqual(rewind.map(\.action), [bireme, typed, council])
+        XCTAssertEqual(rewind.map(\.turn), [conversation.turns[3].id, conversation.turns[1].id, conversation.turns[1].id])
+        XCTAssertEqual(try XCTUnwrap(conversation.rewind(to: conversation.turns[3].id)).map(\.action), [bireme])
+        XCTAssertNil(conversation.rewind(to: UUID()))
+    }
+
+    /// Built on from another conversation after it: undone there first.
+    func testRewindStopsWhenBuiltOnElsewhere() {
+        let trireme = FilingRecord.Entry.value(page: page, field: vessel, value: .text("trireme"))
+        let council = FilingRecord.Entry.value(page: page, field: ruler, value: .text("a council"))
+        var mine = talk([FilingRecord(entries: [trireme]), FilingRecord(entries: [council])])
+        mine.turns[0].filed?.date = Date(timeIntervalSince1970: 100)
+        mine.turns[1].filed?.date = Date(timeIntervalSince1970: 300)
+        var later = FilingRecord(entries: [.replaced(page: page, field: vessel, was: .text("trireme"), value: .text("bireme"))])
+        later.date = Date(timeIntervalSince1970: 200)
+        let other = Conversation(page: UUID(), turns: [Conversation.Turn(question: "?", answer: "!", filed: later)])
+        XCTAssertNil(mine.rewind(to: mine.turns[0].id, elsewhere: [other]))
+        XCTAssertEqual(mine.rewind(to: mine.turns[1].id, elsewhere: [other])?.count, 1)
+    }
 }

@@ -94,7 +94,7 @@ public struct Conversation: Codable, Hashable, Sendable {
     /// can't be undone until that is: Undo goes newest first for each field and page
     /// (Kevin, 2026-11-24), so taking back an old value never revives one already undone.
     /// `elsewhere`: the world's other conversations, whose filings can change this page too.
-    /// - Parameter except: changes to leave out (being undone with it, `undoChain`).
+    /// - Parameter except: changes to leave out (being undone with it: `undoChain`, `rewind`).
     public func changedLater(_ action: FilingRecord.Entry, in turn: UUID, elsewhere: [Conversation] = [],
                              except: Set<Filed> = []) -> Bool {
         guard let t = turns.firstIndex(where: { $0.id == turn }), let actions = turns[t].filed?.actions,
@@ -136,6 +136,20 @@ public struct Conversation: Codable, Hashable, Sendable {
         guard !undone.contains(where: { changedLater($0.action, in: $0.turn, elsewhere: elsewhere, except: undone) })
         else { return nil }
         return chain.reversed().map { $0.filed }
+    }
+
+    /// What going back to before `turn`'s answer takes back: everything filed from it and
+    /// from every answer since, newest first (Changes' timeline, Kevin, 2026-11-24: "it
+    /// should be a timeline"). nil when something filed from another conversation built
+    /// on one of them: that's undone there first.
+    public func rewind(to turn: UUID, elsewhere: [Conversation] = []) -> [Filed]? {
+        guard let t = turns.firstIndex(where: { $0.id == turn }) else { return nil }
+        let chain = turns[t...].flatMap { turn in (turn.filed?.actions ?? []).map { Filed(action: $0, turn: turn.id) } }
+        let undone = Set(chain)
+        // Everything later here goes with them, so only another conversation's filings can stop it.
+        guard !chain.contains(where: { changedLater($0.action, in: $0.turn, elsewhere: elsewhere, except: undone) })
+        else { return nil }
+        return chain.reversed()
     }
 
     /// Everything the author said here, in their words.

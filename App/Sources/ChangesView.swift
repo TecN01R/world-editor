@@ -2,33 +2,53 @@ import SwiftUI
 import WriterCore
 
 /// Everything the companion filed into the pages from this conversation (Changes,
-/// beside the menu), as a history of the world rather than of the messages (each
-/// reply already shows what its message did): a stock grouped list, a section per
-/// page and a row per thing changed on it (new page, name, type, each field)
-/// showing its latest change, with Undo for it. Undo goes newest first, so a change
-/// something filed since built on says "Changed since", and its Undo… takes that back
-/// too, after saying what. A field changed more than once opens its timeline (Kevin,
-/// 2026-11-24).
+/// beside the menu), as a timeline (Kevin, 2026-11-24: "it should be a timeline"):
+/// newest at the top, a point for each of the author's messages that changed
+/// something, with what it changed under it. A field's change shows the value it
+/// replaced, and opens that field's own timeline. Undo on a point takes back what
+/// that message filed and everything filed after it, after listing them when it's
+/// more than one. The rail is custom (Kevin asked for a timeline; iOS has no stock
+/// one); the rest is a stock plain list.
 struct ChangesView: View {
     @Environment(Library.self) private var library
     @Environment(Companion.self) private var companion
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.dynamicTypeSize) private var textSize
 
     var body: some View {
-        let pages = history
+        let conversation = companion.conversation
+        // The author's messages that changed something, newest first.
+        let moments = conversation.turns.reversed().filter { $0.filed?.isEmpty == false }
         NavigationStack {
             List {
-                ForEach(pages, id: \.page) { page in
-                    Section {
-                        ForEach(page.rows, id: \.key) { row($0) }
-                    } header: {
-                        library.pageName(page.page).font(.subheadline).textCase(nil)
+                ForEach(Array(moments.enumerated()), id: \.element.id) { i, turn in
+                    let message = turn.answer ?? ""
+                    TimelineRow(mark: .point, top: i > 0) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Ago(date: turn.filed?.date ?? turn.answered ?? turn.asked)
+                                .font(.subheadline).foregroundStyle(.secondary)
+                            Spacer(minLength: 8)
+                            UndoPointButton(newest: i == 0, label: Text("what “\(message)” changed")) {
+                                companion.rewindChain(to: turn.id)
+                            }
+                        }
+                        Text("“\(message)”").font(.authored(.body))
+                    }
+                    ForEach(turn.filed?.actions ?? [], id: \.self) { action in
+                        change(action, on: conversation.page)
                     }
                 }
+                if !moments.isEmpty, let first = conversation.turns.first {
+                    TimelineRow(mark: .start, bottom: false) {
+                        Text("Conversation began").font(.subheadline)
+                        Ago(date: first.asked).font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
             }
+            .listStyle(.plain)
+            .environment(\.defaultMinListRowHeight, 0)
             .overlay {
-                if pages.isEmpty {   // all undone while it's open
+                if moments.isEmpty {   // all undone while it's open
                     ContentUnavailableView("No Changes", systemImage: "clock.arrow.circlepath",
                                            description: Text("What the companion adds to your pages from this conversation shows here."))
                 }
@@ -44,159 +64,91 @@ struct ChangesView: View {
         }
     }
 
-    /// One thing changed on a page (made it, renamed it, gave it text, typed it, or one
-    /// field), with every change to it from this conversation, oldest first.
-    private struct Row {
-        enum Key: Hashable { case created, renamed, described, typed, field(UUID) }
-        typealias Filing = (action: FilingRecord.Entry, turn: UUID, date: Date)
-        let key: Key
-        /// Where its first change comes among the conversation's filings.
-        let first: Int
-        var changes: [Filing] = []
-        var latest: Filing { changes[changes.count - 1] }
-    }
-
-    /// The conversation's filings by page and thing changed. Pages, and the fields on
-    /// each, come newest first by when this conversation first changed them, so no two
-    /// tie, and Undo, which takes back a row's latest change (never its first while it
-    /// has others), doesn't move a row it leaves or that row's section. On each page,
-    /// the page itself (made, renamed, given text, typed) comes before its fields.
-    private var history: [(page: UUID, rows: [Row])] {
-        var rows: [UUID: [Row.Key: Row]] = [:]
-        var pages: [UUID] = []   // in the order first changed
-        var order = 0
-        for turn in companion.conversation.turns {
-            for action in turn.filed?.actions ?? [] {
-                guard let page = action.page else { continue }   // a new type or field
-                let key: Row.Key = switch action {
-                case .created: .created
-                case .renamed: .renamed
-                case .described: .described
-                case .value(_, let field, _), .replaced(_, let field, _, _): .field(field)
-                default: .typed   // the only other with a page
-                }
-                if rows[page] == nil { pages.append(page) }
-                rows[page, default: [:]][key, default: Row(key: key, first: order)].changes
-                    .append((action: action, turn: turn.id, date: turn.answered ?? turn.asked))
-                order += 1
-            }
-        }
-        func rank(_ key: Row.Key) -> Int {
-            switch key { case .created: 0; case .renamed: 1; case .described: 2; case .typed: 3; case .field: 4 }
-        }
-        return pages.reversed().map { page in
-            (page: page, rows: rows[page, default: [:]].values.sorted {
-                rank($0.key) != rank($1.key) ? rank($0.key) < rank($1.key) : $0.first > $1.first
-            })
-        }
-    }
-
-    @ViewBuilder private func row(_ row: Row) -> some View {
-        let latest = row.latest
-        let change = Change(latest.action, in: library)
-        let later = companion.conversation.changedLater(latest.action, in: latest.turn, elsewhere: companion.others)
-        // At the largest text sizes Undo goes under the words rather than squeezing them.
-        let layout = textSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading)) : AnyLayout(HStackLayout())
-        let content = layout {
+    /// One thing a message changed, under its point; a field opens its own timeline.
+    @ViewBuilder private func change(_ action: FilingRecord.Entry, on page: UUID) -> some View {
+        let change = Change(action, in: library)
+        let line = TimelineRow {
             Label {
                 VStack(alignment: .leading, spacing: 2) {
-                    change.detail.font(.body)
-                    Ago(date: latest.date, changes: row.changes.count).font(.subheadline).foregroundStyle(.secondary)
-                    if later { Text("Changed since").font(.caption).foregroundStyle(.secondary) }
+                    change.detail
+                    // A change to another page says which (a world conversation's are all elsewhere).
+                    if action.page != page { change.page }
                 }
-                .accessibilityElement(children: .combine)
-                .accessibilityHint(later ? Text("Something filed since changed this. Undo that first.") : Text(""))
             } icon: {
-                Image(systemName: change.symbol)
+                Image(systemName: change.symbol).foregroundStyle(.secondary)
             }
-            if !textSize.isAccessibilitySize { Spacer(minLength: 8) }
-            if later {
-                // Undo with what was built on it since, after saying what (Kevin, 2026-11-24).
-                UndoThroughButton(title: "Undo…", action: latest.action, turn: latest.turn, label: change.spoken)
-            } else {
-                UndoButton(action: latest.action, turn: latest.turn, label: change.spoken)
-            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(change.spoken)
         }
-        if let key = change.field, row.changes.count > 1 {
-            NavigationLink(value: key) { content }
-                .accessibilityHint("Shows the values the companion gave this field.")
+        if let key = change.field {
+            // The link is the row, so it takes the timeline's insets itself.
+            NavigationLink(value: key) { line }
+                .accessibilityHint("Shows every value the companion gave this field.")
+                .timelineInsets()
         } else {
-            content
+            line
         }
     }
 }
 
-/// A field changed more than once: every value the companion gave it from this
-/// conversation, newest first, each with the message it came from and when. While
-/// the field still holds the newest, its Undo steps back to the one before, and Undo
-/// to Here on an older one goes back to it.
+/// A field's own timeline: every value the companion gave it from this conversation,
+/// newest first, each with the message it came from and when, down to what it held
+/// before. Undo on a value takes it back and every later one, and what was built on
+/// them, so the field goes back to the value under it.
 struct FieldTimeline: View {
     let key: FieldKey
     @Environment(Library.self) private var library
     @Environment(Companion.self) private var companion
-    @Environment(\.dynamicTypeSize) private var textSize
 
     var body: some View {
         let history = Array(companion.conversation.history(of: key.field, on: key.page).reversed())
         let now = library.pages.first { $0.id == key.page }?.values[key.field]
+        // Changed since outside this conversation (by hand, or from another's): Undo here would change nothing.
+        let elsewhere = history.first.map { now != $0.value } ?? false
         List {
-            if let newest = history.first {
-                Section {
-                    // Changed since outside this conversation (by hand, or from another page's).
-                    if now != newest.value {
-                        VStack(alignment: .leading, spacing: 4) {
-                            if let now { Text(library.filedValue(now)).font(.authored(.body)) } else { Text("Empty") }
-                            Text("Current, changed outside this conversation").font(.subheadline).foregroundStyle(.secondary)
-                        }
-                        .accessibilityElement(children: .combine)
-                    }
-                    ForEach(Array(history.enumerated()), id: \.element) { i, change in
-                        let current = i == 0 && now == change.value
-                        let layout = textSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading))
-                                                                  : AnyLayout(HStackLayout(alignment: .firstTextBaseline))
-                        layout {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(library.filedValue(change.value)).font(.authored(.body))
-                                if current { Text("Current").font(.subheadline).foregroundStyle(.secondary) }
-                                Text("“\(change.message)”").font(.authored(.footnote)).foregroundStyle(.secondary).lineLimit(3)
-                                Ago(date: change.date).font(.caption).foregroundStyle(.secondary)
-                            }
-                            .accessibilityElement(children: .combine)
-                            if !textSize.isAccessibilitySize { Spacer(minLength: 8) }
-                            // Only while the newest is what the field holds: Undo would otherwise change nothing.
-                            if now == newest.value {
-                                let label = Text(library.filedValue(change.value))
-                                if i == 0 {
-                                    UndoButton(action: change.action, turn: change.turn, label: label)
-                                } else {
-                                    // Back to this value: every later change to the field, and what was built on them.
-                                    UndoThroughButton(title: "Undo to Here", action: history[i - 1].action,
-                                                      turn: history[i - 1].turn, label: label)
-                                }
+            if elsewhere {
+                TimelineRow(mark: .point, top: false) {
+                    value(now)
+                    Text("Now, changed outside this conversation").font(.subheadline).foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+            }
+            ForEach(Array(history.enumerated()), id: \.element) { i, change in
+                TimelineRow(mark: .point, top: i > 0 || elsewhere) {
+                    HStack(alignment: .firstTextBaseline) {
+                        value(change.value)
+                        Spacer(minLength: 8)
+                        if !elsewhere {
+                            UndoPointButton(newest: i == 0, label: Text(library.filedValue(change.value))) {
+                                companion.undoChain(change.action, from: change.turn)
                             }
                         }
                     }
-                    // What it held before the companion's first change here.
-                    if case .replaced(_, _, let was, _) = history.last?.action {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(library.filedValue(was)).font(.authored(.body))
-                            Text("Before").font(.subheadline).foregroundStyle(.secondary)
-                        }
-                        .accessibilityElement(children: .combine)
-                    }
-                } header: {
-                    library.pageName(key.page).font(.subheadline).textCase(nil)
-                } footer: {
-                    Text("Newest first. Undo the newest to go back to the one before.")
+                    Text("“\(change.message)”").font(.authored(.footnote)).foregroundStyle(.secondary).lineLimit(3)
+                    Ago(date: change.date, current: i == 0 && !elsewhere).font(.caption).foregroundStyle(.secondary)
                 }
             }
+            if let oldest = history.last {
+                TimelineRow(mark: .start, bottom: false) {
+                    value(oldest.action.was)
+                    Text("Before").font(.subheadline).foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+            }
         }
+        .listStyle(.plain)
+        .environment(\.defaultMinListRowHeight, 0)
         .navigationTitle(library.schema.fields.first { $0.id == key.field }?.name ?? "Field")
+        .navigationSubtitle(library.pageName(key.page))
         .overlay {
             if history.isEmpty {   // all undone while it's open
                 ContentUnavailableView("No Changes", systemImage: "clock.arrow.circlepath")
             }
         }
+    }
+
+    private func value(_ value: FieldValue?) -> Text {
+        value.map { Text(library.filedValue($0)).font(.authored(.body)) } ?? Text("Empty").foregroundStyle(.secondary)
     }
 }
 
@@ -206,16 +158,67 @@ struct FieldKey: Hashable {
     var field: UUID
 }
 
-/// "5 minutes ago", or "3 changes · 5 minutes ago" for something changed more than
-/// once, kept up to date while it's on screen. One Text, so it wraps as one sentence.
+/// A row of a timeline: `content` beside the rail, which has a point (`mark`) at the
+/// content's first line, or just runs past. The rail comes down from the row above
+/// (`top`) and goes on to the row below (`bottom`).
+private struct TimelineRow<Content: View>: View {
+    enum Mark { case none, point, start }
+    var mark = Mark.none
+    var top = true
+    var bottom = true
+    @ViewBuilder var content: Content
+    @ScaledMetric(relativeTo: .subheadline) private var dot: CGFloat = 11
+    @ScaledMetric(relativeTo: .subheadline) private var column: CGFloat = 20
+    /// How far down the row its point sits, to the middle of the first line.
+    @ScaledMetric(relativeTo: .subheadline) private var center: CGFloat = 20
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Group {
+                switch mark {
+                case .point: Circle().fill(.tint)
+                case .start: Circle().strokeBorder(.tertiary, lineWidth: 2)
+                case .none: Color.clear
+                }
+            }
+            .frame(width: dot, height: dot)
+            // Centred on the first line's lower-case letters.
+            .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + dot * 0.35 }
+            .frame(width: column)
+            VStack(alignment: .leading, spacing: 4) { content }
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, mark == .none ? 6 : 10)
+        .background(alignment: .leading) {
+            VStack(spacing: 0) {
+                Rectangle().frame(width: 2, height: center).opacity(top ? 1 : 0)
+                Rectangle().frame(width: 2).frame(maxHeight: .infinity).opacity(bottom ? 1 : 0)
+            }
+            .foregroundStyle(.tertiary)
+            .frame(width: column)
+        }
+        .timelineInsets()
+    }
+}
+
+extension View {
+    /// A timeline's rows touch, so the rail runs unbroken from point to point.
+    fileprivate func timelineInsets() -> some View {
+        listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+            .listRowSeparator(.hidden)
+    }
+}
+
+/// "5 minutes ago" ("Current · 5 minutes ago" for the value a field holds), kept up
+/// to date while it's on screen.
 private struct Ago: View {
     let date: Date
-    var changes = 1
+    var current = false
 
     var body: some View {
         TimelineView(.everyMinute) { _ in
             let ago = date.formatted(.relative(presentation: .named, unitsStyle: .wide))
-            Text(changes > 1 ? "\(changes) changes · \(ago)" : ago)
+            Text(current ? "Current · \(ago)" : ago)
         }
     }
 }
@@ -233,32 +236,36 @@ extension Library {
     }
 }
 
-/// Undo with everything filed since that built on it, newest first, after a stock
-/// confirmation that lists it (Kevin, 2026-11-24: "undo to this point and all layered
-/// changes would be undone"). Built on from another conversation: says so instead.
-private struct UndoThroughButton: View {
-    let title: LocalizedStringKey
-    let action: FilingRecord.Entry
-    let turn: UUID
+/// Undo on a timeline's point: what it changed and everything after it there
+/// (`find`), newest first, after a stock confirmation that lists them when it's
+/// more than one (Kevin, 2026-11-24: "undo to this point and all layered changes
+/// would be undone"). Built on from another conversation: says so instead.
+private struct UndoPointButton: View {
+    /// The newest point: nothing after it, so no "…".
+    let newest: Bool
+    /// What it takes back, for VoiceOver.
     let label: Text
+    let find: () -> [Conversation.Filed]?
     @Environment(Library.self) private var library
     @Environment(Companion.self) private var companion
     @State private var chain: [Conversation.Filed]?
     @State private var blocked = false
 
     var body: some View {
-        Button(title) {
-            if let found = companion.undoChain(action, from: turn) { chain = found } else { blocked = true }
+        Button(newest ? "Undo" : "Undo…") {
+            switch find() {
+            case nil: blocked = true
+            case let found? where found.count == 1: companion.undo(found, in: library)
+            case let found?: chain = found
+            }
         }
         .buttonStyle(.bordered)
         .controlSize(.small)
-        .accessibilityLabel(Text("Undo to here: \(label)"))
-        .confirmationDialog(chain.map { $0.count == 1 ? "Undo this change?" : "Undo \($0.count) changes?" } ?? "",
+        .accessibilityLabel(newest ? Text("Undo \(label)") : Text("Undo \(label), and everything after it"))
+        .confirmationDialog(chain.map { "Undo \($0.count) changes?" } ?? "",
                             isPresented: Binding { chain != nil } set: { if !$0 { chain = nil } },
                             titleVisibility: .visible, presenting: chain) { chain in
-            Button(chain.count == 1 ? "Undo" : "Undo \(chain.count) Changes", role: .destructive) {
-                companion.undoThrough(action, from: turn, in: library)
-            }
+            Button("Undo \(chain.count) Changes", role: .destructive) { companion.undo(chain, in: library) }
         } message: { chain in
             Text(chain.map { summary($0.action) }.joined(separator: "\n"))
         }
@@ -278,65 +285,66 @@ private struct UndoThroughButton: View {
     }
 }
 
-/// Undo for one change: a small bordered button, as iOS shows an action in a row.
-private struct UndoButton: View {
-    let action: FilingRecord.Entry
-    let turn: UUID
-    let label: Text
-    @Environment(Library.self) private var library
-    @Environment(Companion.self) private var companion
-
-    var body: some View {
-        Button("Undo") { companion.undoFiling(action, from: turn, in: library) }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .accessibilityLabel(Text("Undo: \(label)"))
-    }
-}
-
-/// One change as a row: its kind (an icon) and what it says (the page is the
-/// section's), the author's words and names in New York. Every change has one, even
-/// one whose page, type or field has since been deleted: Undo goes newest first, and
-/// a hidden change would leave an older one waiting for it with nothing to tap.
+/// One change as a line on the timeline: an icon for its kind and what it did, the
+/// author's words and names in New York; a corrected value shows the one it
+/// replaced ("Age: about sixteen → seventeen"). Every change has one, even one whose
+/// page, type or field has since been deleted, so its point can still be undone.
 private struct Change {
     let symbol: String
     let detail: Text
-    /// What VoiceOver says for its Undo.
+    /// What VoiceOver says for it.
     let spoken: Text
     /// The field it filled, for its timeline.
     let field: FieldKey?
+    /// The page it changed, to show under it when that isn't the conversation's;
+    /// nil for a new page, whose line names it.
+    let page: Text?
 
     @MainActor init(_ action: FilingRecord.Entry, in library: Library) {
         func authored(_ s: String) -> Text { Text(s).fontDesign(.serif) }   // New York at the row's own size
+        func value(_ v: FieldValue) -> Text { authored(library.filedValue(v)) }
+        let page = action.page.map(library.pageName) ?? Text(Library.deletedPage)
         switch action {
         case .created(let created, _):
             symbol = "doc.badge.plus"
             let type = library.schema.type((library.pages.first { $0.id == created }
                                             ?? library.recentlyDeleted.first { $0.id == created })?.type)?.name
-            detail = type.map { Text("New \(authored($0)) page") } ?? Text("New page")
+            detail = Text("New \(type.map(authored) ?? Text("page")): \(page)")
+            spoken = detail
         case .typed(_, let type):
             symbol = "tag"
-            detail = Text("Type: \(authored(library.schema.type(type)?.name ?? "Deleted type"))")
-        case .renamed(_, let was, _):
+            detail = Text("Type: \(library.schema.type(type).map { authored($0.name) } ?? Text("Deleted type"))")
+            spoken = Text("\(page), \(detail)")
+        case .renamed(_, let was, let title):
             symbol = "character.cursor.ibeam"
-            detail = Text("Renamed, was \(was.isEmpty ? Text("untitled") : authored(was))")
+            let old = was.isEmpty ? Text("untitled") : authored(was)
+            detail = Text("Renamed: \(old) → \(authored(title))")
+            spoken = Text("Renamed from \(old) to \(authored(title))")
         case .described(_, let text):
             symbol = "text.alignleft"
             detail = Text("Page text: \(authored(text))")
-        case .value(_, let fieldID, let value), .replaced(_, let fieldID, _, let value):
-            let field = library.schema.fields.first { $0.id == fieldID }?.name ?? "Deleted field"
-            if case .replaced(_, _, let was, _) = action {
+            spoken = Text("\(page), \(detail)")
+        case .value(_, let fieldID, let new), .replaced(_, let fieldID, _, let new):
+            let field = library.schema.fields.first { $0.id == fieldID }.map { authored($0.name) } ?? Text("Deleted field")   // the app's words, in San Francisco
+            if let was = action.was {
                 symbol = "pencil"
-                detail = Text("\(authored(field)): \(authored(library.filedValue(value))), was \(authored(library.filedValue(was)))")
+                detail = Text("\(field): \(value(was)) → \(value(new))")
+                spoken = Text("\(page), \(field) changed from \(value(was)) to \(value(new))")
             } else {
                 symbol = "text.badge.plus"
-                detail = Text("\(authored(field)): \(authored(library.filedValue(value)))")
+                detail = Text("\(field): \(value(new))")
+                spoken = Text("\(page), \(detail)")
             }
         case .newType, .newField, .fieldAdded:   // never among `actions`
             symbol = "questionmark"
             detail = Text("")
+            spoken = detail
         }
-        spoken = Text("\(action.page.map(library.pageName) ?? Text(Library.deletedPage)), \(detail)")
+        if case .created = action {
+            self.page = nil
+        } else {
+            self.page = page.font(.subheadline).foregroundStyle(.secondary)
+        }
         if let page = action.page, let field = action.field {
             self.field = FieldKey(page: page, field: field)
         } else {

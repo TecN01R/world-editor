@@ -388,10 +388,15 @@ final class Companion {
         conversation.undoChain(action, in: turn, elsewhere: others)
     }
 
-    /// Undo to here: `action` and everything filed since that built on it, newest first
-    /// (Kevin, 2026-11-24: "undo to this point and all layered changes would be undone").
-    func undoThrough(_ action: FilingRecord.Entry, from turn: UUID, in library: Library) {
-        for filed in undoChain(action, from: turn) ?? [] { undoFiling(filed.action, from: filed.turn, in: library) }
+    /// What going back to before `turn`'s answer takes back, newest first (nil: built on
+    /// from another conversation, to be undone there).
+    func rewindChain(to turn: UUID) -> [Conversation.Filed]? {
+        conversation.rewind(to: turn, elsewhere: others)
+    }
+
+    /// Takes back `chain` (an `undoChain` or `rewindChain`), newest first.
+    func undo(_ chain: [Conversation.Filed], in library: Library) {
+        for filed in chain { undoFiling(filed.action, from: filed.turn, in: library) }
     }
 
     /// Asking again failed or was dropped: the reply it would have replaced comes back.
