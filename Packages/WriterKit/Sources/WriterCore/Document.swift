@@ -256,7 +256,7 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
                   paragraphs: try c.decode([Paragraph].self, forKey: .paragraphs),
                   modified: try c.decode(Date.self, forKey: .modified),
                   type: try c.decodeIfPresent(UUID.self, forKey: .type),
-                  values: Dictionary(uniqueKeysWithValues: values.compactMap { k, v in UUID(uuidString: k).map { ($0, v) } }))
+                  values: Dictionary(values.compactMap { k, v in UUID(uuidString: k).map { ($0, v) } }) { first, _ in first })
         deleted = try c.decodeIfPresent(Date.self, forKey: .deleted)
     }
 
@@ -284,8 +284,11 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
         goesForGood.map { max(0, Int(($0.timeIntervalSince(now) / 86_400).rounded(.up))) }
     }
 
+    /// Nothing on it: no title, no writing, no type and no field values. Leaving an empty
+    /// page discards it, so a page with only a type or fields filled in isn't empty.
     public var isEmpty: Bool {
         title.allSatisfy(\.isWhitespace) && paragraphs.allSatisfy { $0.text.allSatisfy(\.isWhitespace) }
+            && type == nil && values.isEmpty
     }
 
     private var trimmedTitle: String { title.trimmingCharacters(in: .whitespaces) }
@@ -394,13 +397,19 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
         return joinAt
     }
 
+    /// `text` with every kind of line break ("\r\n", "\r", U+2028, U+2029…) as "\n",
+    /// the one paragraphs split on, as pasted text may have any of them.
+    private static func plainLineBreaks(_ text: String) -> String {
+        String(text.map { $0.isNewline ? "\n" : $0 })
+    }
+
     /// Types `string` over `range` of paragraph `index`; line breaks in it
     /// split the paragraph. The new text continues the style before it.
     /// Returns where the caret ends up.
     @discardableResult
     public mutating func replace(_ range: Range<Int>, in index: Int, with string: String) -> (index: Int, offset: Int) {
         guard paragraphs.indices.contains(index) else { return (index, 0) }
-        let normalized = string.replacingOccurrences(of: "\r\n", with: "\n")
+        let normalized = Self.plainLineBreaks(string)
         let style = paragraphs[index].style(at: range.lowerBound)
         paragraphs[index].replace(range, with: normalized, style: style)
         var at = index
@@ -439,7 +448,9 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
     /// List buttons: every paragraph the selection touches becomes `kind`, or
     /// body text again if they all already were.
     public mutating func toggleKind(_ kind: ParagraphKind, in range: Range<Int>) {
-        let touched = paragraphIndices(range)
+        // A selection ending just past a line break (as selecting whole lines does)
+        // leaves the next paragraph alone.
+        let touched = paragraphIndices(range.isEmpty ? range : range.lowerBound..<(range.upperBound - 1))
         let target: ParagraphKind = touched.allSatisfy { paragraphs[$0].kind == kind } ? .body : kind
         for i in touched { paragraphs[i].kind = target }
         modified = Date()

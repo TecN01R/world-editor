@@ -239,7 +239,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
 
     func textView(_ tv: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
         if RichText.unlinkIfEditing(tv, range: range, replacement: text) { return false }
-        guard text.contains("\n") else { return true }
+        guard text.contains(where: \.isNewline) else { return true }
         // Return (or a multi-line paste) splits the paragraph into pages.
         var caret = (index: index, offset: 0)
         library.update { doc in

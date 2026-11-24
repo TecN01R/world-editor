@@ -42,7 +42,7 @@ final class DocumentTests: XCTestCase {
         let store = try DocumentStore(directory: dir)
         let d = Document(title: "T", paragraphs: [Paragraph(text: "x")])
         try store.save(d)
-        XCTAssertEqual(try store.all(), [d])
+        XCTAssertEqual(store.all(), [d])
     }
 
     func testSearchResultsShowAndOpenAtTheWords() {
@@ -82,9 +82,9 @@ final class DocumentTests: XCTestCase {
         XCTAssertTrue(page.values.isEmpty)
 
         let store = SchemaStore(url: FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID()).json"))
-        XCTAssertEqual(store.load(), Schema())
+        XCTAssertEqual(try store.load(), Schema())
         try store.save(schema)
-        XCTAssertEqual(store.load(), schema)
+        XCTAssertEqual(try store.load(), schema)
     }
 }
 

@@ -84,12 +84,14 @@ public final class WorldStore: @unchecked Sendable {
     }
 
     /// Deletes for good, in every world but `except`, the pages whose 30 days
-    /// in Recently Deleted are up.
+    /// in Recently Deleted are up, and their conversations.
     public func removeExpired(except open: UUID?, now: Date = Date()) {
         for world in all() where world.id != open {
             guard let store = try? DocumentStore(directory: documents(world.id)) else { continue }
-            for page in (try? store.all()) ?? [] where page.goesForGood.map({ $0 <= now }) == true {
+            let talk = try? ConversationStore(directory: conversations(world.id))
+            for page in store.all() where page.goesForGood.map({ $0 <= now }) == true {
                 try? store.delete(page.id)
+                talk?.delete(page.id)
             }
         }
     }

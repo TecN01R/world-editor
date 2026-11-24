@@ -421,7 +421,7 @@ final class ConversationTests: XCTestCase {
         var talk = Conversation(page: UUID())
         talk.ask("What does Ilsa want?")
         try store.save(talk)
-        XCTAssertEqual(store.load(talk.page), talk)
-        XCTAssertEqual(store.load(UUID()).turns, [])
+        XCTAssertEqual(try store.load(talk.page), talk)
+        XCTAssertEqual(try store.load(UUID()).turns, [])
     }
 }

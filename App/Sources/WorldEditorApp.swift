@@ -35,6 +35,9 @@ final class Library {
     /// Deleted pages, newest first, kept for 30 days so a delete can be undone.
     /// Apart from `pages`, so nothing else (search, @ links, fields) sees them.
     private(set) var recentlyDeleted: [WriterCore.Document] = []
+    /// What of the open world this version couldn't read ("your types and fields", "2
+    /// pages"), to tell the author once: it's kept as it is, never saved over (`UnreadableFile`).
+    var unreadable: [String] = []
 
     /// The open page. Leaving a page that was never written in discards it.
     var selection: UUID? {
@@ -200,7 +203,7 @@ final class Library {
 
     /// Takes on changed pages and schema, saving what changed.
     private func commit(_ new: [WriterCore.Document], _ newSchema: Schema) {
-        let old = Dictionary(uniqueKeysWithValues: pages.map { ($0.id, $0) })
+        let old = Dictionary(pages.map { ($0.id, $0) }) { first, _ in first }
         pages = new
         if newSchema != schema {
             schema = newSchema
@@ -291,6 +294,10 @@ final class Library {
     /// Where the open world keeps the companion's conversations; nil in CI.
     var conversationsDirectory: URL? { worldStore?.conversations(world.id) }
 
+    private var conversationStore: ConversationStore? {
+        conversationsDirectory.flatMap { try? ConversationStore(directory: $0) }
+    }
+
     init() {
         if Screenshots.isActive {
             worldStore = nil                   // CI runs never touch saved pages
@@ -322,17 +329,30 @@ final class Library {
 
     private static let openWorldKey = "openWorld"
 
+    /// "1 page", "2 pages".
+    private static func count(_ n: Int, _ thing: String) -> String { "\(n) \(thing)\(n == 1 ? "" : "s")" }
+
     /// Reads a world from disk and opens its most recent page.
     private func load(_ world: World) {
         self.world = world
         UserDefaults.standard.set(world.id.uuidString, forKey: Self.openWorldKey)
         store = worldStore.flatMap { try? DocumentStore(directory: $0.documents(world.id)) }
         schemaStore = worldStore.map { SchemaStore(url: $0.schema(world.id)) }
-        let saved = (try? store?.all()) ?? []
-        pages = saved.filter { $0.deleted == nil }
-        recentlyDeleted = saved.filter { $0.deleted != nil }.sorted { $0.deleted! > $1.deleted! }
+        let saved = store?.scan() ?? (pages: [], unreadable: [])
+        pages = saved.pages.filter { $0.deleted == nil }
+        recentlyDeleted = saved.pages.filter { $0.deleted != nil }.sorted { $0.deleted! > $1.deleted! }
         removeExpired()
-        schema = schemaStore?.load() ?? Schema()
+        var unread: [String] = []
+        do {
+            schema = try schemaStore?.load() ?? Schema()
+        } catch {
+            schema = Schema()
+            unread.append("your types and fields")
+        }
+        if !saved.unreadable.isEmpty { unread.append(Self.count(saved.unreadable.count, "page")) }
+        let talk = conversationStore?.scan().unreadable ?? []
+        if !talk.isEmpty { unread.append(Self.count(talk.count, "conversation")) }
+        unreadable = unread
         searchQuery = ""
         PageIndex.start(with: pages.map { ($0, fieldText($0)) })
         if pages.isEmpty { newPage() } else { selection = pages.first?.id }
@@ -371,7 +391,7 @@ final class Library {
     func deleteWorld(_ id: UUID) {
         guard worlds.count > 1, let store = worldStore else { return }
         if world.id == id, let other = worlds.first(where: { $0.id != id }) { open(world: other.id) }
-        for page in (try? DocumentStore(directory: store.documents(id)).all()) ?? [] { PageIndex.remove(page.id) }
+        for page in (try? DocumentStore(directory: store.documents(id)))?.all() ?? [] { PageIndex.remove(page.id) }
         try? store.delete(id)
         worlds = store.all()
     }
@@ -433,6 +453,7 @@ final class Library {
     func deleteForGood(_ id: UUID) {
         recentlyDeleted.removeAll { $0.id == id }
         try? store?.delete(id)
+        conversationStore?.delete(id)   // its talk goes with it
     }
 
     /// Deletes for good the pages whose 30 days are up.
@@ -459,8 +480,8 @@ final class Library {
         guard let page = pages.first(where: { $0.id == id }), page.isEmpty else { return }
         // A blank page you've talked through with the companion is kept; its
         // unanswered question goes with it otherwise.
-        let talk = conversationsDirectory.flatMap { try? ConversationStore(directory: $0) }
-        if let talk, !talk.load(id).authorText.isEmpty { return }
+        let talk = conversationStore
+        if let talk, talk.hasTalk(id) { return }
         talk?.delete(id)
         pendingSaves.removeValue(forKey: id)?.cancel()
         pages.removeAll { $0.id == id }

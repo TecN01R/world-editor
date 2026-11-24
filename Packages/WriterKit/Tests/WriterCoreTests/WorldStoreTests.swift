@@ -47,7 +47,7 @@ final class WorldStoreTests: XCTestCase {
         XCTAssertEqual(world.name, World.defaultName)
         XCTAssertEqual(store.all(), [world])
         XCTAssertEqual(try DocumentStore(directory: store.documents(world.id)).all().map(\.id), [page.id])
-        XCTAssertEqual(SchemaStore(url: store.schema(world.id)).load(), schema)
+        XCTAssertEqual(try SchemaStore(url: store.schema(world.id)).load(), schema)
         XCTAssertFalse(FileManager.default.fileExists(atPath: legacy.path))     // moved, not copied
         XCTAssertNil(try store.adoptLegacy(documents: legacy, schema: legacySchema))   // only once
     }
@@ -73,7 +73,7 @@ final class WorldStoreTests: XCTestCase {
         let world = try XCTUnwrap(store.adoptLegacy(documents: legacy, schema: legacySchema))
         XCTAssertEqual(world.id, id)                                         // the same world, not a second
         XCTAssertEqual(store.all().count, 1)
-        XCTAssertEqual(SchemaStore(url: store.schema(id)).load(), schema)    // its types joined its pages
+        XCTAssertEqual(try SchemaStore(url: store.schema(id)).load(), schema)    // its types joined its pages
     }
 
     func testRemovesExpiredPagesInOtherWorlds() throws {
@@ -91,7 +91,7 @@ final class WorldStoreTests: XCTestCase {
         try DocumentStore(directory: store.documents(open.id)).save(expired)
 
         store.removeExpired(except: open.id)
-        XCTAssertEqual(try pages.all().map(\.id), [waiting.id])
+        XCTAssertEqual(pages.all().map(\.id), [waiting.id])
         XCTAssertEqual(store.pageCount(open.id), 1)                         // the open world is the app's to handle
     }
 }

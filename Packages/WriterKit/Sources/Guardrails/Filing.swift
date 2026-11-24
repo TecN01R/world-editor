@@ -223,16 +223,18 @@ public enum Filer {
         var record = FilingRecord()
         // Only questions or musing: nothing is stated, so nothing is filed (not even a type).
         guard states(message) else { return record }
-        /// `phrase` as the author wrote it, and whether it's a name: capitalised
-        /// mid-sentence ("the Treaty of Gull Rock"), not just at its start.
-        func found(_ phrase: String) -> (words: String, isName: Bool)? {
+        /// `phrase` as the author wrote it, as whole words; whether it's a name (capitalised
+        /// mid-sentence, as "the Treaty of Gull Rock", not just at its start); and whether
+        /// it's said as a correction (`Statement.corrects`).
+        func found(_ phrase: String) -> (words: String, isName: Bool, corrects: Bool)? {
             let wanted = Statement.collapsed(phrase).trimmingCharacters(in: Statement.edges)
             guard !wanted.isEmpty else { return nil }
-            for s in sentences where !s.hedged {
-                if let r = s.text.range(of: wanted, options: [.caseInsensitive, .diacriticInsensitive]) {
-                    let words = String(s.text[r])
-                    return (words, r.lowerBound != s.text.startIndex && Self.looksLikeAName(words))
-                }
+            for (n, s) in sentences.enumerated() where !s.hedged {
+                guard let r = Statement.wholeWords(wanted, in: s.text) else { continue }
+                let words = String(s.text[r])
+                let previous = n > 0 ? sentences[n - 1].text : nil
+                return (words, r.lowerBound != s.text.startIndex && Self.looksLikeAName(words),
+                        Statement.corrects(s.text, after: previous))
             }
             return nil
         }
@@ -303,7 +305,6 @@ public enum Filer {
             }
         }
 
-        let correcting = Statement.has(Statement.corrections, in: message)
         var filled = Set<[UUID]>()   // page and field filled from this message
         for fact in filings.facts {
             // The open page's name is its title (above), never a field.
@@ -334,7 +335,7 @@ public enum Filer {
             let known = onType ?? shared
             // A name with no page yet gets one (the model often files "Sword: Mercy" without listing Mercy).
             let linkable = known.map { def in
-                def.kind == .page && (pages[i].values[def.id].map { correcting && replaceable(pages[i].id, def.id, $0) } ?? true)
+                def.kind == .page && (pages[i].values[def.id].map { hit.corrects && replaceable(pages[i].id, def.id, $0) } ?? true)
             } ?? true
             if hit.isName, linkable, index(named: words) == nil { _ = make(words) }
             guard let i = index(named: fact.page) else { continue }   // where it is now, after a new page
@@ -342,10 +343,10 @@ public enum Filer {
             let field = known ?? FieldDefinition(name: fieldName, kind: linked == nil ? .text : .page,
                                                  pageType: linked?.type)
             // A field filled from this message keeps its first value; one filled before changes
-            // only when the message corrects something.
+            // only when the sentence saying the new value corrects something.
             let was = pages[i].values[field.id]
             guard let value = value(words, linked: linked, for: field), value != was,
-                  was.map { correcting && replaceable(pages[i].id, field.id, $0) } ?? true,
+                  was.map { hit.corrects && replaceable(pages[i].id, field.id, $0) } ?? true,
                   !filled.contains([pages[i].id, field.id]) else { continue }
             filled.insert([pages[i].id, field.id])
             if known == nil {
@@ -424,20 +425,52 @@ struct Statement {
             .split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 
+    /// The message's sentences. One ends at a line break, or at ".", "!" or "?" before a
+    /// space, a closing quote or the end: not inside "3.5", nor after a title or an
+    /// initial ("Dr. Vance", "J. R. Hale").
     static func split(_ message: String) -> [Statement] {
+        let chars = Array(message)
         var out: [Statement] = [], current = ""
         func end(_ mark: Character?) {
             let text = collapsed(current)
             if !text.isEmpty { out.append(Statement(text: text, hedged: mark == "?" || hedges(text))) }
             current = ""
         }
-        for c in message {
+        for (i, c) in chars.enumerated() {
             if c.isNewline { end(nil); continue }
             current.append(c)
-            if ".!?".contains(c) { end(c) }
+            guard ".!?".contains(c) else { continue }
+            let next = i + 1 < chars.count ? chars[i + 1] : nil
+            guard next.map({ $0.isWhitespace || "\"')]\u{201D}\u{2019}".contains($0) }) ?? true else { continue }
+            if c == ".", abbreviated(current.dropLast()) { continue }
+            end(c)
         }
         end(nil)
         return out
+    }
+
+    /// Titles written with a full stop that doesn't end the sentence.
+    private static let titles: Set<String> = ["mr", "mrs", "ms", "dr", "st", "mt", "jr", "sr", "prof", "gen",
+                                              "capt", "col", "lt", "sgt", "rev", "fr", "vs"]
+
+    /// Whether `text` ends in a title or an initial (one capital, never "I").
+    private static func abbreviated(_ text: Substring) -> Bool {
+        guard text.last?.isLetter == true, let last = text.split(whereSeparator: { !$0.isLetter }).last else { return false }
+        return titles.contains(last.lowercased()) || (last.count == 1 && last != "I" && last.allSatisfy(\.isUppercase))
+    }
+
+    /// Where `phrase` is in `text` as whole words, ignoring case and accents: "Al" is
+    /// never found inside "always".
+    static func wholeWords(_ phrase: String, in text: String) -> Range<String.Index>? {
+        func wordy(_ c: Character?) -> Bool { c.map { $0.isLetter || $0.isNumber } ?? false }
+        var from = text.startIndex
+        while let r = text.range(of: phrase, options: [.caseInsensitive, .diacriticInsensitive], range: from..<text.endIndex) {
+            let before = r.lowerBound > text.startIndex ? text[text.index(before: r.lowerBound)] : nil
+            let after = r.upperBound < text.endIndex ? text[r.upperBound] : nil
+            if !wordy(before), !wordy(after) { return r }
+            from = text.index(after: r.lowerBound)
+        }
+        return nil
     }
 
     /// Whether the sentence holds one of the author's words for uncertainty, as a whole word.
@@ -452,10 +485,22 @@ struct Statement {
         return has(ProvenanceValidator.hedges.filter { $0 != "?" && !(polite && $0 == "i think") } + unsure, in: text)
     }
 
-    /// Words that take something back: a filled field changes only in a message with one,
-    /// so "she was nineteen when…" doesn't replace her age.
-    static let corrections = ["actually", "not", "no", "isn't", "wasn't", "sorry", "wait", "instead",
-                              "rather", "meant", "mean", "wrong", "oops", "correction", "changed"]
+    /// Words that take something back, in the sentence that says the new value or the one
+    /// before it ("Wait. She's twenty.").
+    private static let corrections = ["actually", "sorry", "wait", "oops", "correction", "meant", "i mean",
+                                      "wrong", "instead", "rather"]
+
+    /// Whether `sentence` corrects something, so a filled field may change: a word of
+    /// `corrections` in it or the sentence before, or a "not", "isn't", "wasn't" or
+    /// "changed" in it, or either opening with "No". So "she was nineteen when…", or "She
+    /// has no siblings. She's forty.", doesn't replace her age.
+    static func corrects(_ sentence: String, after previous: String?) -> Bool {
+        func takesBack(_ s: String) -> Bool {
+            has(corrections, in: s) || s.lowercased().split(whereSeparator: { !$0.isLetter }).first == "no"
+        }
+        return takesBack(sentence) || has(["not", "isn't", "wasn't", "changed"], in: sentence)
+            || previous.map(takesBack) ?? false
+    }
 
     /// Whether `text` holds one of `words` as whole words.
     static func has(_ words: [String], in text: String) -> Bool {

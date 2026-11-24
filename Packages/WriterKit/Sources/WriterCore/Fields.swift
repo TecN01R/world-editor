@@ -95,17 +95,22 @@ public enum FieldValue: Codable, Hashable, Sendable {
 /// The author's fields and types, saved beside the pages.
 public final class SchemaStore: @unchecked Sendable {
     public let url: URL
+    private let file: SavedFile<Schema>
 
-    public init(url: URL) { self.url = url }
+    public init(url: URL) {
+        self.url = url
+        file = SavedFile<Schema>(url: url)
+        file.encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    }
 
-    public func load() -> Schema {
-        (try? Data(contentsOf: url)).flatMap { try? JSONDecoder().decode(Schema.self, from: $0) } ?? Schema()
+    /// The saved types and fields; none yet when nothing's saved. Throws
+    /// `UnreadableFile` for a file this version can't read, which saving then leaves alone.
+    public func load() throws -> Schema {
+        try file.read() ?? Schema()
     }
 
     public func save(_ schema: Schema) throws {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(schema).write(to: url, options: [.atomic])
+        try file.write(schema)
     }
 }
 

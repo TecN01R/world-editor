@@ -28,11 +28,14 @@ public final class DocumentStore: @unchecked Sendable {
         try data.write(to: url(for: document.id), options: [.atomic])
     }
 
-    public func all() throws -> [Document] {
-        let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-        return files.filter { $0.pathExtension == "json" }
-            .compactMap { try? decoder.decode(Document.self, from: Data(contentsOf: $0)) }
-            .sorted { $0.modified > $1.modified }
+    /// Every page this version can read, most recently changed first.
+    public func all() -> [Document] { scan().pages }
+
+    /// Every page, most recently changed first, and the files this version can't read
+    /// (left as they are: nothing saves over them, since their pages never load).
+    public func scan() -> (pages: [Document], unreadable: [URL]) {
+        let found = SavedFile<Document>.all(in: directory, decoder: decoder)
+        return (found.values.sorted { $0.modified > $1.modified }, found.unreadable)
     }
 
     public func delete(_ id: UUID) throws {

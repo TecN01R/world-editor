@@ -152,7 +152,7 @@ final class Companion {
         opened = (page, library)
         preparing?.cancel()
         store = directory.flatMap { try? ConversationStore(directory: $0) }
-        conversation = store?.load(page.id) ?? Conversation(page: page.id)
+        conversation = (try? store?.load(page.id)) ?? Conversation(page: page.id)
         // (The first world conversation, from before there were several, went by the world's id.)
         if aboutWorld || page.id == library.world.id { conversation.aboutWorld = true }
         others = (store?.all() ?? []).filter { $0.page != page.id }
@@ -356,7 +356,7 @@ final class Companion {
             }
             // Gone meanwhile (a new conversation, another world): nothing to file into.
             let there = conversation.page == page ? conversation.turns.contains { $0.id == turn.id }
-                                                  : store?.load(page).turns.contains { $0.id == turn.id } == true
+                                                  : (try? store?.load(page))?.turns.contains { $0.id == turn.id } == true
             guard there, world == library.conversationsDirectory,
                   aboutWorld || library.pages.contains(where: { $0.id == page }) else { return }
             // Kept even when empty: Try Again reads the message again only if nothing came of it.
@@ -369,7 +369,7 @@ final class Companion {
         if conversation.page == page, let i = conversation.turns.firstIndex(where: { $0.id == turn }) {
             conversation.turns[i].filed = record
             save()
-        } else if var talk = store?.load(page), let i = talk.turns.firstIndex(where: { $0.id == turn }) {
+        } else if var talk = try? store?.load(page), let i = talk.turns.firstIndex(where: { $0.id == turn }) {
             talk.turns[i].filed = record   // the author has moved on to another page
             try? store?.save(talk)
             others.removeAll { $0.page == talk.page }   // so Undo here sees it
@@ -383,7 +383,7 @@ final class Companion {
         guard !conversation.changedLater(action, in: turn, elsewhere: others),   // newest first (Kevin, 2026-11-24)
               var record = conversation.turns.first(where: { $0.id == turn })?.filed else { return }
         let records = (conversation.turns.filter { $0.id != turn } + others.flatMap(\.turns)).compactMap(\.filed)
-        library.undo(action, of: &record, kept: { [store] id in store?.load(id).authorText.isEmpty == false },
+        library.undo(action, of: &record, kept: { [store] id in store?.hasTalk(id) == true },
                      others: records)
         setFiled(record, turn: turn, page: conversation.page)   // kept when all undone, so it isn't filed again
     }

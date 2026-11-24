@@ -246,26 +246,37 @@ public final class ConversationStore: @unchecked Sendable {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 
-    private func url(_ page: UUID) -> URL { directory.appendingPathComponent("\(page.uuidString).json") }
+    private func file(_ page: UUID) -> SavedFile<Conversation> {
+        SavedFile(url: directory.appendingPathComponent("\(page.uuidString).json"))
+    }
 
-    public func load(_ page: UUID) -> Conversation {
-        (try? Data(contentsOf: url(page))).flatMap { try? JSONDecoder().decode(Conversation.self, from: $0) }
-            ?? Conversation(page: page)
+    /// The page's conversation; an empty one when nothing's been said. Throws
+    /// `UnreadableFile` for a file this version can't read, which saving then leaves alone.
+    public func load(_ page: UUID) throws -> Conversation {
+        try file(page).read() ?? Conversation(page: page)
     }
 
     public func save(_ conversation: Conversation) throws {
-        try JSONEncoder().encode(conversation).write(to: url(conversation.page), options: [.atomic])
+        try file(conversation.page).write(conversation)
     }
 
-    /// Every page's conversation in this world.
-    public func all() -> [Conversation] {
-        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
-        return files.filter { $0.pathExtension == "json" }.compactMap {
-            (try? Data(contentsOf: $0)).flatMap { try? JSONDecoder().decode(Conversation.self, from: $0) }
-        }
+    /// Every conversation in this world that this version can read.
+    public func all() -> [Conversation] { scan().conversations }
+
+    /// Every conversation in this world, and the files this version can't read.
+    public func scan() -> (conversations: [Conversation], unreadable: [URL]) {
+        let found = SavedFile<Conversation>.all(in: directory)
+        return (found.values, found.unreadable)
     }
 
+    /// Whether the author has said anything on this page. A conversation this version
+    /// can't read counts as yes, so nothing is thrown away on a guess.
+    public func hasTalk(_ page: UUID) -> Bool {
+        (try? load(page)).map { !$0.authorText.isEmpty } ?? true
+    }
+
+    /// Deletes the page's conversation, unless this version can't read it.
     public func delete(_ page: UUID) {
-        try? FileManager.default.removeItem(at: url(page))
+        try? file(page).delete()
     }
 }
