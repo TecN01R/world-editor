@@ -741,24 +741,13 @@ struct EditorView: View {
                 // Done here also leaves Focus, an editing-only mode (Kevin).
                 if typing { ToolbarItem(placement: .confirmationAction) { doneButton } }
             } else if editing {
-                // Editing the page: Focus, and Done (the iPhone keyboard has no key to close it)
-                // in iOS's blue, each its own button and never in "•••" (Kevin, 2026-11-24;
-                // together in one glass, Done lost its blue). Unfolded, the companion and
-                // Mentions in a menu beside them. Folded, the side column above the keyboard
-                // holds only Back and two buttons: with the menu too, iOS put Done and the menu
-                // in a "•••" of its own beside Focus (Kevin's screenshot, 2026-11-24: "just
-                // looks terrible"), so they wait for the keyboard to go down. Back and the
-                // sidebar button stay, as in Notes. (Swapping the bar while any keyboard was
-                // up, search's or an alert's, hid the sidebar button and the companion's.)
-                if !folded {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Menu("More", systemImage: "ellipsis") {
-                            companionButton
-                            mentionsButton
-                        }
-                    }
-                    ToolbarSpacer(.fixed, placement: .topBarTrailing)
-                }
+                // Editing the page, folded and unfolded alike (Kevin, 2026-11-24): Back or the
+                // sidebar button, Focus, and Done (the iPhone keyboard has no key to close it) in
+                // iOS's blue, each its own button, never in "•••". The companion and Mentions
+                // wait for the keyboard to go down: folded, the side column above the keyboard
+                // holds only three buttons (with a menu as well, iOS put Done in a "•••" of its
+                // own; "just looks terrible"). (Swapping the bar while any keyboard was up,
+                // search's or an alert's, hid the sidebar button and the companion's.)
                 // Focus is for the writing: offered only while it has the keyboard, not the
                 // title or a field (Kevin). Where iOS puts the bar's buttons, with Done (pinned to
                 // the top row unfolded, it sat over the companion's column; Kevin, 2026-11-24).
