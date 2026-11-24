@@ -163,10 +163,10 @@ struct RootView: View {
 struct PageList: View {
     @Environment(Library.self) private var library
     @Binding var selection: UUID?
-    /// Unfolded, the title shares the top row with New Page; folded, the
+    /// Unfolded, the title shares the top row with search and New Page; folded, the
     /// buttons move to the Duo's side column and the title heads the list.
     let titleInBar: Bool
-    /// The world's own conversations with the companion (its button at the bottom, above search).
+    /// The world's own conversations with the companion (its button alone at the bottom).
     let openWorldConversations: () -> Void
     let newPage: () -> Void
     @State private var searching = false
@@ -316,9 +316,11 @@ struct PageList: View {
                  : "Its \(count == 1 ? "page" : "\(count) pages") will be deleted for good, with its types and fields. This can’t be undone.")
         }
         .toolbar {
-            // Kevin, 2026-11-24: search at the very bottom, the companion right above it,
-            // New Page in its usual place at the top; the companion at the bottom on every
-            // screen.
+            // Kevin, 2026-11-24: the companion alone at the bottom, on every screen; New Page
+            // in its usual place at the top, with search beside it as a button (iOS's top
+            // placement for search when the bottom is kept for something else).
+            DefaultToolbarItem(kind: .search, placement: .primaryAction)
+            ToolbarSpacer(.fixed, placement: .primaryAction)
             ToolbarItem(placement: .primaryAction) {
                 Button("New Page", systemImage: "square.and.pencil") {
                     // Showing one type: the new page is one of them (as a new
@@ -331,15 +333,12 @@ struct PageList: View {
                 .keyboardShortcut("n")
             }
             // The companion for the whole world, not one page: it opens like a page, full
-            // screen folded and beside the list unfolded. Listed before search, so the
-            // folded Duo's side column puts it right above.
+            // screen folded and beside the list unfolded.
             ToolbarItem(placement: .bottomBar) {
                 // Named apart from a page's own companion button, which shows beside it unfolded.
                 Button("World Conversations", systemImage: "bubble.left.and.text.bubble.right", action: openWorldConversations)
                     .accessibilityHint("Talk with the companion about your whole world.")
             }
-            ToolbarSpacer(.fixed, placement: .bottomBar)
-            DefaultToolbarItem(kind: .search, placement: .bottomBar)
         }
     }
 
