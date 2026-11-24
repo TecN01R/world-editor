@@ -339,8 +339,13 @@ reads "A thalassocratic nation" (its Mentions show Casperica, through the
 link). His rulings: it happens on its own, with **Undo**; only what's said to
 the companion is filed, never the page's writing.
 
-- **When:** after each reply to the author's message, so replies never wait
-  for it; the next reply waits for it instead (one model, one job at a time).
+- **When:** once the conversation pauses: the companion closed, another page
+  or conversation opened, or two minutes after a reply with no message (Kevin,
+  2026-11-24). Filing reads its own prompt on the model's one cache, so filing
+  after every reply made the next reply read the whole conversation again
+  (20–30 s on the 26B). A message sent, or Try Again, while it files stops
+  it; it picks up at the next pause. A reply prepared on opening a page waits
+  for it.
 - **How:** a second, short request on the same model, without thinking and
   greedy (its most likely reading): `FilingPrompt` (instructions with one
   worked example; the open page, the world's types and fields, the other

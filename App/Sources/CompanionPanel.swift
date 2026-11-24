@@ -86,8 +86,8 @@ struct CompanionPanel: View {
                     if let thought = companion.thoughts[turn.question] { reasoning(thought, done: true) }
                     if !turn.question.isEmpty { reply(turn) }   // empty: the author began
                     // What was filed from the author's message before this reply shows under the
-                    // reply, as the companion's doing, in the order it happens: filing runs once
-                    // the reply is done (Kevin, 2026-11-24).
+                    // reply, as the companion's doing, in the order it happens: filing runs after
+                    // the reply, once the conversation pauses (Kevin, 2026-11-24).
                     if i > 0, let record = turns[i - 1].filed, !record.isEmpty { filed(record, from: turns[i - 1].id) }
                     if let answer = turn.answer { mine(answer) }
                     // No reply after it (being tried again): under the message meanwhile.

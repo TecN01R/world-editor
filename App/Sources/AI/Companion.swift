@@ -7,8 +7,9 @@ import WriterCore
 /// they think out loud with. What it says comes from its instructions alone
 /// (`CompanionPrompt`): nothing checks or filters a reply afterwards (Kevin's
 /// ruling, 2026-11-23). It never writes into the page (docs/ai-charter.md);
-/// after each reply, what the author said is filed into the world's types,
-/// fields and pages, in their words, with Undo (`Filer`; Kevin's ruling, 2026-11-23).
+/// once the conversation pauses, what the author said is filed into the world's
+/// types, fields and pages, in their words, with Undo (`Filer`; Kevin's ruling,
+/// 2026-11-23).
 @MainActor @Observable
 final class Companion {
     enum State: Equatable {
@@ -31,9 +32,13 @@ final class Companion {
     /// or sent back to the model (its makers' advice).
     private(set) var thoughts: [String: String] = [:]
     /// The panel is showing: beside the page unfolded, a sheet folded. Opening it
-    /// prepares the open page's reply, if one is due (`prepareSoon`).
+    /// prepares the open page's reply, if one is due (`prepareSoon`); closing it pauses
+    /// the conversation, so what the author said is filed (`fileWaiting`).
     var isOpen = false {
-        didSet { if isOpen, !oldValue { prepareSoon() } }
+        didSet {
+            if isOpen, !oldValue { prepareSoon() }
+            if !isOpen, oldValue { fileWaiting() }
+        }
     }
     /// The Duo is folded (compact width): the companion is a sheet, not a column.
     var folded = true
@@ -86,8 +91,22 @@ final class Companion {
     private var asks = 0
     /// The page open now (a world conversation's stand-in), whose reply is prepared when the companion opens.
     private var opened: (page: WriterCore.Document, library: Library)?
-    /// Filing what the author last said; the next reply waits for it (one model, one job at a time).
+    /// Filing what the author said; the next reply waits for it (one model, one job at a time).
     private var filing: Task<Void, Never>?
+    /// What the author said that's still to be filed, and the world it was said in. Filing
+    /// reads a prompt of its own on the model's one cache, so filing after every reply made
+    /// the next reply read the whole conversation again (20–30 s). It's filed once the
+    /// conversation pauses: the companion closed, another page or conversation opened, or two
+    /// minutes after a reply with no message (Kevin's call, 2026-11-24; at one minute it
+    /// often began as he was sending).
+    private var unfiled: [(turn: Conversation.Turn, page: UUID, aboutWorld: Bool, world: URL?, library: Library)] = []
+    /// The two minutes after a reply, before what's `unfiled` is filed.
+    private var pause: Task<Void, Never>?
+    /// The background of this conversation's prompt as the model read it (and keeps in its
+    /// cache), kept for its follow-ups, so each reads only the new messages: built afresh for
+    /// each reply, it differed early on and the whole prompt was read again. `key` is what it
+    /// rests on: the conversation, its room, and the open page (or, about the world, its pages).
+    private var background: (key: String, system: String)?
     private static let log = Logger(subsystem: "com.tecn01r.worldeditor", category: "companion")
 
     init() {
@@ -148,6 +167,7 @@ final class Companion {
         // The same page again (folding or unfolding rebuilds the editor): leave a reply or
         // Try Again in progress alone.
         guard page.id != conversation.page || directory != store?.directory else { return }
+        fileWaiting()   // the conversation it leaves paused
         opened = (page, library)
         preparing?.cancel()
         store = directory.flatMap { try? ConversationStore(directory: $0) }
@@ -193,6 +213,7 @@ final class Companion {
     /// Asks again now, in place of any waiting reply, which is kept as a version of the new one.
     func retry(page: WriterCore.Document, in library: Library) {
         if let turn = conversation.retract() { retracted = turn }
+        stopFiling()
         askNow(about: page, in: library)
     }
 
@@ -248,6 +269,7 @@ final class Companion {
             conversation.turns[i].seenTitle = now.title
         }
         save()
+        stopFiling()
         askNow(about: page, in: library)
     }
 
@@ -288,7 +310,7 @@ final class Companion {
             // Unusual text takes more of the model's context than its length
             // suggests: a prompt that doesn't fit is rebuilt with less background.
             for room in [1, 2, 4] {
-                let prompt: CompanionPrompt
+                var prompt: CompanionPrompt
                 if plain {
                     prompt = CompanionPrompt.plain(conversation, maxTurnCharacters: 6000 / room)
                 } else if isWorld {
@@ -300,6 +322,24 @@ final class Companion {
                                              others: others.map { library.companionPage($0) },
                                              earlier: earlier, conversation: conversation,
                                              maxCharacters: 6000 / room, maxTurnCharacters: 6000 / room)
+                }
+                // Its background as last read, while what it rests on is unchanged. Not before
+                // its first reply, whose background has "Right now…" for its opening only.
+                if !plain, !conversation.turns.isEmpty {
+                    let subject: String
+                    if isWorld {
+                        subject = "\(library.pages.count) \(library.pages.map(\.modified).max()?.timeIntervalSince1970 ?? 0)"
+                    } else {
+                        let openPage = library.companionPage(page, open: true)
+                        subject = [openPage.name, openPage.type ?? "", openPage.fields, openPage.writing]
+                            .joined(separator: "\u{1}")
+                    }
+                    let key = "\(conversation.page) \(room) \(subject)"
+                    if let kept = background, kept.key == key {
+                        prompt.system = kept.system
+                    } else {
+                        background = (key, prompt.system)
+                    }
                 }
                 do {
                     for try await partial in model.stream(prompt, thinking: thinks) {
@@ -332,41 +372,70 @@ final class Companion {
         if !reply.reasoning.isEmpty { thoughts[reply.reply] = reply.reasoning }
         save()
         state = .idle
-        // Replied: now what the author said, filed (after, so the reply never waits for it).
-        if let answered = conversation.turns.dropLast().last {
-            file(answered, page: page.id, aboutWorld: conversation.aboutWorld, in: library)
+        // Replied: what the author said is filed once the conversation pauses (`unfiled`).
+        if let answered = conversation.turns.dropLast().last,
+           answered.needsFiling, let message = answered.answer, Filer.states(message) {
+            unfiled.append((answered, page.id, conversation.aboutWorld, store?.directory, library))
+            pause?.cancel()
+            pause = Task {
+                try? await Task.sleep(for: .seconds(120))
+                if !Task.isCancelled { fileWaiting() }
+            }
         }
     }
 
-    /// Files what the author said in `turn` of `page`'s conversation, unless something already was.
-    private func file(_ turn: Conversation.Turn, page: UUID, aboutWorld: Bool, in library: Library) {
-        guard turn.needsFiling, let message = turn.answer, Filer.states(message) else { return }
-        let previous = filing
-        let world = store?.directory   // the world it was said in
+    /// Files what's waiting to be, in order, after any filing already under way.
+    private func fileWaiting() {
+        pause?.cancel()
+        guard !unfiled.isEmpty else { return }
+        let waiting = unfiled, previous = filing
+        unfiled = []
         filing = Task {
             await previous?.value
-            // Still the open world (the author may have switched worlds since).
-            guard world == library.conversationsDirectory else { return }
-            // A world conversation has no page of its own; it files into the pages it names.
-            guard let doc = aboutWorld ? library.worldSubject(page) : library.pages.first(where: { $0.id == page }) else { return }
-            let filings: Filings
-            do {
-                filings = try await model.file(library.filingPrompt(for: doc, aboutWorld: aboutWorld, asked: turn.question,
-                                                                    message: message))
-            } catch {
-                Self.log.error("Filing failed: \(String(describing: error), privacy: .public)")
-                trialLog("FILING ERROR: \(String(describing: error))")   // TRIAL
-                return
+            for (n, item) in waiting.enumerated() {
+                // Stopped for a reply: the rest waits for the next pause.
+                guard await file(item.turn, page: item.page, aboutWorld: item.aboutWorld, world: item.world, in: item.library)
+                else {
+                    unfiled.insert(contentsOf: waiting[n...], at: 0)
+                    return
+                }
             }
-            // Gone meanwhile (a new conversation, another world): nothing to file into.
-            let there = conversation.page == page ? conversation.turns.contains { $0.id == turn.id }
-                                                  : (try? store?.load(page))?.turns.contains { $0.id == turn.id } == true
-            guard there, world == library.conversationsDirectory,
-                  aboutWorld || library.pages.contains(where: { $0.id == page }) else { return }
-            // Kept even when empty: Try Again reads the message again only if nothing came of it.
-            let sent = turn.seen.map { (values: $0, title: turn.seenTitle ?? "") }
-            setFiled(library.file(filings, message: message, on: page, again: turn.filed, sent: sent), turn: turn.id, page: page)
         }
+    }
+
+    /// The author sent a message (or asked again): the reply goes first, filing after.
+    private func stopFiling() {
+        pause?.cancel()
+        filing?.cancel()
+    }
+
+    /// Files what the author said in `turn` of `page`'s conversation in `world`; false when
+    /// stopped for a reply before it could.
+    private func file(_ turn: Conversation.Turn, page: UUID, aboutWorld: Bool, world: URL?, in library: Library) async -> Bool {
+        guard !Task.isCancelled else { return false }
+        // Still the open world (the author may have switched worlds since). A world
+        // conversation has no page of its own; it files into the pages it names.
+        guard world == library.conversationsDirectory, let message = turn.answer,
+              let doc = aboutWorld ? library.worldSubject(page) : library.pages.first(where: { $0.id == page }) else { return true }
+        let filings: Filings
+        do {
+            filings = try await model.file(library.filingPrompt(for: doc, aboutWorld: aboutWorld, asked: turn.question,
+                                                                message: message))
+        } catch {
+            if Task.isCancelled { return false }
+            Self.log.error("Filing failed: \(String(describing: error), privacy: .public)")
+            trialLog("FILING ERROR: \(String(describing: error))")   // TRIAL
+            return true
+        }
+        // Gone meanwhile (a new conversation, another world): nothing to file into.
+        let there = conversation.page == page ? conversation.turns.contains { $0.id == turn.id }
+                                              : (try? store?.load(page))?.turns.contains { $0.id == turn.id } == true
+        guard there, world == library.conversationsDirectory,
+              aboutWorld || library.pages.contains(where: { $0.id == page }) else { return true }
+        // Kept even when empty: Try Again reads the message again only if nothing came of it.
+        let sent = turn.seen.map { (values: $0, title: turn.seenTitle ?? "") }
+        setFiled(library.file(filings, message: message, on: page, again: turn.filed, sent: sent), turn: turn.id, page: page)
+        return true
     }
 
     private func setFiled(_ record: FilingRecord, turn: UUID, page: UUID) {

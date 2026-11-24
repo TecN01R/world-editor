@@ -15,7 +15,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] 3 Open page in sync; editing crash risks (pushed 606a88a; waiting for the phone)
 - [ ] 4 Smooth typing (pushed; waiting for the phone. Not done: the open page observed on its own, Focus caching its measurements; only if typing still lags)
 - [ ] 5 Smooth replies (pushed 7c046d4; waiting for the phone)
-- [ ] 6 Faster replies (unload policy, then append-only history and filing)
+- [ ] 6 Faster replies (pushed: background kept per conversation, earlier replies as cached, filing on a pause; Kevin to try 4–5 messages, then read the CACHE/SPEED lines)
 - [ ] 7 One companion
 - [ ] 8 Format bar through stock; try iOS's "Aa" panel
 - [ ] 9 Stock swaps
@@ -48,7 +48,6 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Does the companion speak first on pages too?
 
 ## Waiting on Kevin
-- [ ] Editing bar: Focus and Done share one capsule (plain checkmark) or stay apart (tinted Done)?
 - [ ] Done in Focus mode: keep, or let Exit Focus also close the keyboard?
 - [ ] The one-time wobble of the pages list: folded or unfolded, once per launch or per install? A screen recording would settle it
 - [ ] Approve the his-words design, and three answers: fix spelling? turn "she" into the

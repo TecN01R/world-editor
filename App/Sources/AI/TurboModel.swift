@@ -147,17 +147,21 @@ final class TurboModel: CompanionModel, @unchecked Sendable {
     /// user's, the companion's earlier replies (never their reasoning, its makers'
     /// advice) as the model's, and the model's turn opened. To have it think first,
     /// `<|think|>` opens the system turn; otherwise its thought channel comes already
-    /// closed. Words that read as its control tokens are defused (`Reasoned.gemmaPlain`).
+    /// closed, before its earlier replies too: as the model wrote them, so the prompt for
+    /// a follow-up begins as its cache does and only the new messages are read. Words that
+    /// read as its control tokens are defused (`Reasoned.gemmaPlain`).
     static func chat(system: String, turns: [(author: Bool, text: String)], thinking: Bool) -> String {
         func plain(_ text: String) -> String { Reasoned.gemmaPlain(text).trimmingCharacters(in: .whitespacesAndNewlines) }
+        let thought = thinking ? "" : "<|channel>thought\n<channel|>"
         var text = ""
         if thinking || !system.isEmpty {
             text = "<|turn>system\n" + (thinking ? "<|think|>\n" : "") + plain(system) + "<turn|>\n"
         }
         for turn in turns {
-            text += "<|turn>" + (turn.author ? "user" : "model") + "\n" + plain(turn.text) + "<turn|>\n"
+            text += turn.author ? "<|turn>user\n" : ("<|turn>model\n" + thought)
+            text += plain(turn.text) + "<turn|>\n"
         }
-        return text + "<|turn>model\n" + (thinking ? "" : "<|channel>thought\n<channel|>")
+        return text + "<|turn>model\n" + thought
     }
 
     // MARK: - Installing
@@ -505,6 +509,8 @@ private final class Engine: @unchecked Sendable {
     private let turns = Turns()
     /// Only while holding a turn.
     private var loaded: Loaded?
+    /// A memory warning came while a job held the model.
+    private let warned = OSAllocatedUnfairLock(initialState: false)
     /// The model's own thread: loading the model, and waiting on the GPU token by token,
     /// block, which Swift's shared threads are not for.
     private static let thread = ModelThread()
@@ -520,7 +526,16 @@ private final class Engine: @unchecked Sendable {
         // still free it meanwhile).
         try await Self.foreground()
         await turns.wait()
-        defer { turns.next() }
+        defer {
+            // A memory warning came while it worked: its memory is given back now.
+            let warning = warned.withLock { flag in
+                let was = flag
+                flag = false
+                return was
+            }
+            if warning { unload(because: "memory warning during a job") }
+            turns.next()
+        }
         try Task.checkCancellation()
         // Leaving the app from here (loading included) ends the job at the next token, or
         // the next part of the prompt, before the GPU's work can fail mid-way.
@@ -574,12 +589,20 @@ private final class Engine: @unchecked Sendable {
         }
     }
 
-    /// Gives back the model's memory, unless it's at work.
+    /// Gives back the model's memory now, or once the job at work is done.
     func unloadIfIdle() {
-        guard turns.take() else { return }
-        if loaded != nil { trialLog("UNLOAD \(TurboModel.name): memory warning") }   // TRIAL
-        loaded = nil
+        guard turns.take() else {
+            warned.withLock { $0 = true }
+            return
+        }
+        unload(because: "memory warning")
         turns.next()
+    }
+
+    /// Only while holding a turn.
+    private func unload(because reason: String) {
+        if loaded != nil { trialLog("UNLOAD \(TurboModel.name): \(reason)") }   // TRIAL
+        loaded = nil
     }
 
     /// Returns once the app is in the foreground: at once, or when the author comes back.
