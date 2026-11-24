@@ -565,6 +565,9 @@ struct EditorView: View {
                     }
                 }
                 .axisBehavior(folded ? .automatic : .horizontalOnly)
+                // Its own glass, apart from the companion and Mentions: it changes
+                // the whole screen, they open things beside the page (Kevin).
+                ToolbarSpacer(.fixed, placement: .topBarTrailing)
                 // The companion, beside the page (unfolded) or a sheet (folded); on
                 // the Duo the side column, which stays in reach above the keyboard.
                 // ⌥⌘I is the system's shortcut for an inspector.
