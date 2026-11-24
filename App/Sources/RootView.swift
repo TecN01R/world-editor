@@ -121,7 +121,9 @@ struct RootView: View {
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .onChange(of: focusMode) { _, focus in
-            focusControls = false
+            // Entering, the controls show and then fade on their usual timer
+            // (or as soon as you type), so Exit Focus is in sight at first (Kevin).
+            focusControls = focus
             if focus { companion.isOpen = false }   // never in Focus mode
             withAnimation { columns = focus ? .detailOnly : .all }   // unfolded: list beside the page
         }
