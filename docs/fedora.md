@@ -69,7 +69,8 @@ opens with the new build the next time Kevin opens it.
   system one with sudo, run a private one and point the tools at it:
   `netmuxd --disable-usb --disable-unix --host 127.0.0.1 -p 27099
   --plist-storage /var/lib/lockdown &`, then
-  `USBMUXD_SOCKET_ADDRESS=127.0.0.1:27099 scripts/run-on-phone.sh --no-launch`.
+  `USBMUXD_SOCKET_ADDRESS=127.0.0.1:27099 scripts/run-on-phone.sh --no-launch`
+  (the script points at the private one by itself while it runs).
   The private one loses the phone too after a while; the script then restarts
   it on its own.
 - The service checks GitHub every 90 s, within its 60-an-hour limit for

@@ -9,6 +9,11 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 git pull --ff-only --quiet || echo "(couldn't pull; building what's here)"
+# The private netmuxd (docs/fedora.md) when it runs: the system one loses the phone, and a
+# shell without USBMUXD_SOCKET_ADDRESS set reported it unreachable while it was on the Wi-Fi.
+if [[ -z "${USBMUXD_SOCKET_ADDRESS:-}" ]] && pgrep -u "$USER" -f "netmuxd .*-p 27099" >/dev/null; then
+    export USBMUXD_SOCKET_ADDRESS=127.0.0.1:27099
+fi
 scripts/fetch-turbo-fieldfare.sh   # the companion's engine, which Package.swift builds
 # Stops at once when the phone can't be reached (not on this network, not plugged
 # in): xtool would otherwise wait for it indefinitely (Kevin, 2026-11-24, away from home).
