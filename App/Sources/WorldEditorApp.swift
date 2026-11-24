@@ -271,7 +271,7 @@ final class Library {
     private var pendingSaves: [UUID: Task<Void, Never>] = [:]
 
     /// A conversation about the whole world stands for no page: it goes by its own id
-    /// (`WorldCompanionView`; Kevin, 2026-11-24).
+    /// (`WorldConversationList`; Kevin, 2026-11-24).
     func worldSubject(_ conversation: UUID) -> WriterCore.Document {
         WriterCore.Document(id: conversation, title: world.name)
     }

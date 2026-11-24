@@ -416,8 +416,11 @@ final class Companion {
         if let retracted, talk.waiting == nil { talk.turns.append(retracted) }
         guard !(talk.aboutWorld && talk.turns.isEmpty) else { return }   // a world conversation exists once something's said
         try? store?.save(talk)
-        if talk.aboutWorld, !worldConversations.contains(where: { $0.page == talk.page }) {
-            worldConversations.insert(talk, at: 0)   // new: to the top of its list
+        if talk.aboutWorld {
+            // Newest first, as Messages keeps its list: the one just added to goes to the top,
+            // with its title and time as they are now (unfolded the list stays beside it).
+            worldConversations.removeAll { $0.page == talk.page }
+            worldConversations.insert(talk, at: 0)
         }
     }
 }

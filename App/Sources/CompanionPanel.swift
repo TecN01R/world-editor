@@ -24,8 +24,8 @@ struct CompanionPanel: View {
     private static let margin: CGFloat = 20
     /// Folded, a sheet; unfolded, the inspector column beside the page.
     let inSheet: Bool
-    /// A conversation about the whole world, as a screen of its own from the pages
-    /// list's companion (`WorldCompanionView`): its bar has Changes and the menu.
+    /// A conversation about the whole world, beside (unfolded) or over (folded) the
+    /// world's conversation list (`WorldConversationList`): its bar has Changes and the menu.
     var worldConversation: UUID? = nil
     /// Starts another world conversation (its menu's New Conversation).
     var newConversation: (() -> Void)? = nil

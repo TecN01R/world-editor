@@ -306,14 +306,16 @@ marked, and Undo on the newest (`Conversation.history`).
 
 ## The world's own conversation
 
-The companion button beside New Page in the pages list opens the world's
-conversations about the whole world, not one page (Kevin, 2026-11-24:
-"converse with it and not operate solely within a single page"; then "a list
-of conversations unless you were already in one, and start fresh ones"): a
-stock list, newest first, each titled by the author's first words, with New
-Conversation; it goes back into the one the author was in, and with none yet
-straight into a new one. Folded it fills the screen as a page does, unfolded
-it sits beside the list (`WorldCompanionView`, `CompanionPanel(thread:)`).
+The World Conversations button at the bottom of the pages list, above search,
+opens the world's conversations about the whole world, not one page (Kevin,
+2026-11-24: "converse with it and not operate solely within a single page";
+then "a list of conversations unless you were already in one, and start fresh
+ones"): a stock list in the pages list's place (Pages goes back), newest
+first, each titled by the author's first words, with New Conversation; it goes
+back into the one the author was in, and with none yet straight into a new
+one. As in Messages, the conversation sits beside the list unfolded and over
+it folded (Kevin, 2026-11-24: "the conversation list next to the conversation
+itself"; `WorldConversationList`, `CompanionPanel(worldConversation:)`).
 Each is stored under its own id, marked `aboutWorld`; one exists once
 something's been said in it. The model
 gets every page as background, the ones bearing on what's being said first,
