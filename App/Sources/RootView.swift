@@ -492,7 +492,7 @@ struct EditorView: View {
                     .ignoresSafeArea()   // the whole display; bars appear over it
                     .transition(.opacity)
             } else {
-                PageEditor(focusBesideTitle: folded) {   // stops at the keyboard, as iOS lays pages out
+                PageEditor {   // stops at the keyboard, as iOS lays pages out
                     withAnimation(.smooth(duration: 0.3)) { focusMode = true }
                 }
                     .transition(.opacity)
@@ -555,18 +555,16 @@ struct EditorView: View {
                     .keyboardShortcut(.cancelAction)
                 }
             } else {
-                // Focus at the top right of the page. Unfolded: here, kept in the row
-                // the sidebar button already uses, not the side column (Kevin,
-                // 2026-11-23). Folded there's no such row (one kept for it pushed the
-                // page down), so it's at the end of the title's row (PageEditor).
-                if !folded {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Focus Mode", systemImage: "arrow.up.left.and.arrow.down.right") {
-                            withAnimation(.smooth(duration: 0.3)) { focusMode = true }
-                        }
+                // Focus, stock in both postures (Kevin, 2026-11-23). Unfolded: kept in
+                // the top row the sidebar button already uses, at its right end.
+                // Folded: in the side column with the other buttons, as iOS places
+                // them (kept at the top it would add a row of its own).
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Focus Mode", systemImage: "arrow.up.left.and.arrow.down.right") {
+                        withAnimation(.smooth(duration: 0.3)) { focusMode = true }
                     }
-                    .axisBehavior(.horizontalOnly)
                 }
+                .axisBehavior(folded ? .automatic : .horizontalOnly)
                 // The companion, beside the page (unfolded) or a sheet (folded); on
                 // the Duo the side column, which stays in reach above the keyboard.
                 // ⌥⌘I is the system's shortcut for an inspector.

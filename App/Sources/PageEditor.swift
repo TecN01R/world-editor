@@ -7,17 +7,10 @@ import WriterCore
 /// autocorrect, dictation, selection all behave as iOS users expect).
 struct PageEditor: UIViewRepresentable {
     @Environment(Library.self) private var library
-    /// Steps into Focus mode: the button at the top right of the page, or ⇧⌘F.
+    /// Steps into Focus mode with ⇧⌘F (its button is in the toolbar).
     private let onFocus: () -> Void
-    /// Folded, that button is at the end of the title's row: there's no top bar
-    /// to put it in, and one kept for it would push the page down a row.
-    /// Unfolded it's in the bar the sidebar button already uses (RootView).
-    private let focusBesideTitle: Bool
 
-    init(focusBesideTitle: Bool, onFocus: @escaping () -> Void) {
-        self.focusBesideTitle = focusBesideTitle
-        self.onFocus = onFocus
-    }
+    init(onFocus: @escaping () -> Void) { self.onFocus = onFocus }
 
     func makeCoordinator() -> Coordinator { Coordinator(library: library, onFocus: onFocus) }
 
@@ -35,18 +28,13 @@ struct PageEditor: UIViewRepresentable {
         fields.view.backgroundColor = .clear
         fields.safeAreaRegions = []
         tv.fieldsController = fields
-        tv.focusButton = context.coordinator.focusButton
-        tv.showsFocusButton = focusBesideTitle
         context.coordinator.textView = tv
         context.coordinator.render(selection: nil)
         context.coordinator.restoreCaret()
         return PageView(textView: tv, bar: context.coordinator.formatBar)
     }
 
-    func updateUIView(_ view: PageView, context: Context) {
-        context.coordinator.onFocus = onFocus
-        view.textView.showsFocusButton = focusBesideTitle
-    }
+    func updateUIView(_ view: PageView, context: Context) { context.coordinator.onFocus = onFocus }
 
     /// Bold New York, scaled with Dynamic Type.
     static var titleFont: UIFont { newYork(34, weight: .bold, scaledAs: .largeTitle) }   // the size of the world's title
@@ -80,18 +68,6 @@ struct PageEditor: UIViewRepresentable {
         private var isRendering = false
         var onFocus: () -> Void
         lazy var formatBar = FormatBar(onAction: { [weak self] action in self?.perform(action) })
-
-        /// Focus Mode, a stock glass button, its arrows mirroring Exit Focus's.
-        lazy var focusButton: UIButton = {
-            var config = UIButton.Configuration.glass()
-            config.image = UIImage(systemName: "arrow.up.left.and.arrow.down.right")
-            config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .title3)
-            let b = UIButton(configuration: config, primaryAction: UIAction { [weak self] _ in self?.onFocus() })
-            b.accessibilityLabel = "Focus Mode"
-            b.showsLargeContentViewer = true
-            b.largeContentTitle = "Focus Mode"
-            return b
-        }()
 
         lazy var titleField: UITextField = {
             let f = UITextField()
@@ -563,11 +539,6 @@ final class PageTextView: PlainPasteTextView {
     }
     var fieldsHeight: CGFloat = 0 { didSet { if fieldsHeight != oldValue { setNeedsLayout() } } }
 
-    /// Focus Mode, at the end of the title's row while it's shown (folded).
-    var focusButton: UIButton? {
-        didSet { oldValue?.removeFromSuperview(); focusButton.map(addSubview) }   // scrolls with the page, as the title does
-    }
-    var showsFocusButton = false { didSet { if showsFocusButton != oldValue { setNeedsLayout() } } }
 
     /// The format bar's height while it floats over the bottom of the page.
     var barHeight: CGFloat = 0 { didSet { setNeedsLayout() } }
@@ -586,15 +557,7 @@ final class PageTextView: PlainPasteTextView {
         let titleHeight = ceil(title.font?.lineHeight ?? 34) + 8
         // Offset so the title's letters, not its field, land on that edge and
         // level with the list's title (also measured on the Duo).
-        // Folded, Focus at the row's end: as tall as a touch target, centred on
-        // the title, which stops short of it.
-        let button = UIFontMetrics.default.scaledValue(for: 44, compatibleWith: traitCollection)
-        let titleWidth = showsFocusButton ? max(0, lineWidth - button - 8) : lineWidth
-        title.frame = CGRect(x: lead - 1.0 / 3, y: 8 - 20.0 / 3, width: titleWidth, height: titleHeight)
-        if let focus = focusButton {
-            focus.isHidden = !showsFocusButton
-            focus.frame = CGRect(x: width - side - button, y: title.frame.midY - button / 2, width: button, height: button)
-        }
+        title.frame = CGRect(x: lead - 1.0 / 3, y: 8 - 20.0 / 3, width: lineWidth, height: titleHeight)
         var top = title.frame.maxY
         if let fields = fieldsController?.view {
             fields.frame = CGRect(x: lead, y: top + 6, width: lineWidth, height: fieldsHeight)
