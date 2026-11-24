@@ -27,6 +27,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] 3 Benchmark mode on the Duo, held to an 8 GB phone's memory
 - [ ] 4 iOS: models by tier, chosen from the phone's memory; bigger downloads offered where they fit
 - [ ] Speed floor for the weakest phone: Kevin to set, from the report's numbers
+- [ ] Requirement (Kevin, 2026-11-24): each conversation's model cache saved to storage and restored, so coming back (even after the model was unloaded) doesn't read the whole prompt again; the chosen engine must support it (llama.cpp and MLX do; the 26B's TurboFieldfare doesn't)
 - [ ] Android app: later, its own native project
 
 ## Your words into your pages (design: claude.ai/artifact/4GgWK8rCVJUdjwsTrVW9QT)
