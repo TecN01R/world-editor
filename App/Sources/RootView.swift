@@ -718,17 +718,23 @@ struct EditorView: View {
                 if typing { ToolbarItem(placement: .confirmationAction) { doneButton } }
             } else if editing {
                 // Editing the page: Focus and Done (the iPhone keyboard has no key to close it)
-                // together in one glass, never in "•••", the companion and Mentions in a menu
-                // beside them (Kevin, 2026-11-24). Back and the sidebar button stay, as in
-                // Notes. (Swapping the bar while any keyboard was up, search's or an alert's,
-                // hid the sidebar button and the companion's; Kevin, 2026-11-24.)
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu("More", systemImage: "ellipsis") {
-                        companionButton
-                        mentionsButton
+                // together in one glass, never in "•••" (Kevin, 2026-11-24). Unfolded, the
+                // companion and Mentions in a menu beside them. Folded, the side column above
+                // the keyboard holds only Back and two buttons: with the menu too, iOS put Done
+                // and the menu in a "•••" of its own beside Focus (Kevin's screenshot,
+                // 2026-11-24: "just looks terrible"), so they wait for the keyboard to go down.
+                // Back and the sidebar button stay, as in Notes. (Swapping the bar while any
+                // keyboard was up, search's or an alert's, hid the sidebar button and the
+                // companion's; Kevin, 2026-11-24.)
+                if !folded {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Menu("More", systemImage: "ellipsis") {
+                            companionButton
+                            mentionsButton
+                        }
                     }
+                    ToolbarSpacer(.fixed, placement: .topBarTrailing)
                 }
-                ToolbarSpacer(.fixed, placement: .topBarTrailing)
                 // Focus is for the writing: offered only while it has the keyboard, not the
                 // title or a field (Kevin). Unfolded, in the top row at its right end;
                 // folded, in the side column.
