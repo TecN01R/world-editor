@@ -1,6 +1,7 @@
 import Combine
 import CoreSpotlight
 import SwiftUI
+import WidgetKit   // NSUserActivityTypeLiveActivity
 import WriterCore
 
 /// Pages list beside the open page. Folded, it's a stack (list, then page);
@@ -14,7 +15,6 @@ struct RootView: View {
     @State private var column: NavigationSplitViewColumn = Screenshots.opensList ? .sidebar : .detail
     @State private var focusMode = Self.startsInFocus
     @State private var focusControls = false
-    @Environment(\.scenePhase) private var scenePhase
     @State private var columns: NavigationSplitViewVisibility = Self.startsInFocus ? .detailOnly : .all
     /// Folded, the companion's sheet keeps the height it was left at, half or full,
     /// across folding, reopening and relaunching (iOS's scene state restoration).
@@ -29,21 +29,23 @@ struct RootView: View {
     /// indicator, pages list) until a tap outside the text brings it back.
     /// VoiceOver users keep the controls: hidden ones would be unreachable.
     private var chromeHidden: Bool { focusMode && !focusControls && !voiceOver }
-    /// The companion is on screen: folded, whenever it's open; unfolded, only
-    /// while the pages list is put away. Never over the world's own conversations,
-    /// which are the companion already.
+    /// A page is open: not the pages list (folded, going back to it clears the
+    /// selection), nor the world's conversations.
+    private var pageShown: Bool { library.selection != nil && library.selection != library.world.id }
+    /// The companion is on screen: folded, whenever it's open over a page; unfolded,
+    /// only while the pages list is put away. Never over the pages list or the world's
+    /// own conversations, which have the world's companion (Kevin, 2026-11-24: a
+    /// page's companion over the list is "weird").
     private var companionShown: Bool {
-        companion.isOpen && (sizeClass == .compact || columns == .detailOnly) && library.selection != library.world.id
+        companion.isOpen && pageShown && (sizeClass == .compact || columns == .detailOnly)
     }
 
     var body: some View {
         @Bindable var library = library
         // Focus mode takes the whole display: the pages list steps aside when unfolded.
         NavigationSplitView(columnVisibility: $columns, preferredCompactColumn: $column) {
-            PageList(selection: $library.selection, titleInBar: sizeClass == .regular, openCompanion: {
-                library.selection = library.world.id
-                column = .detail
-            }) {
+            PageList(selection: $library.selection, titleInBar: sizeClass == .regular,
+                     openWorldConversations: openWorldConversations) {
                 library.newPage()
                 column = .detail
             }
@@ -99,17 +101,30 @@ struct RootView: View {
                 } set: { companionFullHeight = $0 == .large })
                 .presentationDragIndicator(.visible)
         }
-        // Back in the app while the companion's download runs (from its Live
-        // Activity, say): show the download, as the companion it belongs to.
-        .onChange(of: scenePhase) { _, phase in
-            if phase == .active, companion.download != nil, !companion.isOpen, !focusMode { companion.isOpen = true }
+        // Coming back to the app (its icon, the app switcher) opens nothing: it's where
+        // the author left it, even while the companion's download runs. Only a tap on the
+        // download's Live Activity shows the download (Kevin, 2026-11-24), in the companion
+        // of what's on screen: a page's own, or from the pages list the world's
+        // conversations. That Live Activity is iOS's own (the continued-processing task),
+        // which documents no signal for the tap; if iOS sends the Live Activity user
+        // activity, as for any Live Activity without a link, this catches it.
+        .onContinueUserActivity(NSUserActivityTypeLiveActivity) { _ in
+            trialLog("LIVE ACTIVITY tap, download \(companion.download != nil)")   // TRIAL: does iOS send it?
+            guard companion.download != nil, !focusMode else { return }
+            if pageShown {
+                companion.isOpen = true
+                // Unfolded, beside the page with the pages list put away, as its button does.
+                if sizeClass == .regular { withAnimation { columns = .detailOnly } }
+            } else if library.selection != library.world.id {
+                openWorldConversations()
+            }
         }
         .onChange(of: sizeClass, initial: true) { _, size in
             companion.folded = size == .compact
-            // Unfolding with the companion open: the page and the companion side by
-            // side, the pages list put away (as opening it unfolded does).
-            // (Not over the world's conversations, which sit beside the list.)
-            if size == .regular, companion.isOpen, !focusMode, library.selection != library.world.id { columns = .detailOnly }
+            // Unfolding with the companion open over a page: the page and the companion
+            // side by side, the pages list put away (as opening it unfolded does). Only
+            // over a page: not the pages list, nor the world's conversations beside it.
+            if size == .regular, companion.isOpen, !focusMode, pageShown { columns = .detailOnly }
         }
         // Applied at the root: status bar visibility is decided by the top controller.
         .statusBarHidden(chromeHidden)
@@ -137,6 +152,12 @@ struct RootView: View {
             withAnimation { columns = focus ? .detailOnly : .all }   // unfolded: list beside the page
         }
     }
+
+    /// The world's conversations, in the page's place.
+    private func openWorldConversations() {
+        library.selection = library.world.id
+        column = .detail
+    }
 }
 
 struct PageList: View {
@@ -145,8 +166,8 @@ struct PageList: View {
     /// Unfolded, the sidebar's buttons share a row with the title; folded,
     /// they move to the Duo's side column and the title heads the list.
     let titleInBar: Bool
-    /// The world's own conversation with the companion (its button beside New Page).
-    let openCompanion: () -> Void
+    /// The world's own conversations with the companion (its button at the top, on its own).
+    let openWorldConversations: () -> Void
     let newPage: () -> Void
     @State private var searching = false
     /// Showing only one type's pages, or Recently Deleted.
@@ -299,10 +320,15 @@ struct PageList: View {
             // a page, full screen folded and beside the list unfolded.
             ToolbarItem(placement: .primaryAction) {
                 // Named apart from a page's own companion button, which shows beside it unfolded.
-                Button("World Conversations", systemImage: "bubble.left.and.text.bubble.right", action: openCompanion)
+                Button("World Conversations", systemImage: "bubble.left.and.text.bubble.right", action: openWorldConversations)
                     .accessibilityHint("Talk with the companion about your whole world.")
             }
-            ToolbarItem(placement: .primaryAction) {
+            // Search and New Page together at the bottom, within reach, as iOS 26's Mail
+            // and Notes have them; the companion stays on its own at the top, not sharing
+            // its glass with an unrelated action (Kevin, 2026-11-24, asked; Apple's layout).
+            DefaultToolbarItem(kind: .search, placement: .bottomBar)
+            ToolbarSpacer(.fixed, placement: .bottomBar)
+            ToolbarItem(placement: .bottomBar) {
                 Button("New Page", systemImage: "square.and.pencil") {
                     // Showing one type: the new page is one of them (as a new
                     // note goes in the open folder), so it's in the list.
@@ -648,7 +674,7 @@ struct EditorView: View {
 }
 
 /// The world's conversations with the companion, about the whole world rather than
-/// one page (its button beside New Page; Kevin, 2026-11-24): a stock list, newest
+/// one page (its button at the top of the pages list; Kevin, 2026-11-24): a stock list, newest
 /// first, each titled by the author's first words, with New Conversation. It goes
 /// back into the one the author was in; with none yet, straight into a new one.
 /// Every page is background, none is open; what's said is filed into the pages it
