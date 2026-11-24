@@ -67,8 +67,7 @@ struct PageEditor: UIViewRepresentable {
         /// Replacing the text moves the selection; that isn't the user moving the caret.
         private var isRendering = false
         var onFocus: () -> Void
-        lazy var formatBar = FormatBar(onAction: { [weak self] action in self?.perform(action) },
-                                       onFocus: { [weak self] in self?.onFocus() })
+        lazy var formatBar = FormatBar(onAction: { [weak self] action in self?.perform(action) })
 
         lazy var titleField: UITextField = {
             let f = UITextField()
@@ -343,14 +342,11 @@ final class FormatBar: UIView {
     private var barHeight: CGFloat { UIFontMetrics.default.scaledValue(for: 44, compatibleWith: traitCollection) }
     private lazy var heightConstraint = capsule.heightAnchor.constraint(equalToConstant: barHeight)
     private let capsule = UIVisualEffectView(effect: UIGlassEffect())
-    /// Focus mode, its own glass circle at the row's end: as tall as the bar, as wide as it's tall.
-    private let focus = UIVisualEffectView(effect: UIGlassEffect())
-    private lazy var focusSize = focus.widthAnchor.constraint(equalToConstant: barHeight)
     private let scroll = UIScrollView()
     private let stack = UIStackView()
     private var buttons: [UIButton] = []
 
-    init(onAction: @escaping (Action) -> Void, onFocus: @escaping () -> Void) {
+    init(onAction: @escaping (Action) -> Void) {
         super.init(frame: CGRect(x: 0, y: 0, width: 320, height: 44 + Self.gap))
         buttons = [Self.button(symbol: "bold", label: "Bold") { onAction(.style(.bold)) },
                    Self.button(symbol: "italic", label: "Italic") { onAction(.style(.italic)) },
@@ -359,37 +355,19 @@ final class FormatBar: UIView {
 
         capsule.cornerConfiguration = .capsule()
         capsule.clipsToBounds = true
-        focus.cornerConfiguration = .capsule()
-        focus.clipsToBounds = true
-        let focusButton = Self.button(symbol: "text.viewfinder", label: "Focus Mode", slot: false, action: onFocus)
-        focusButton.translatesAutoresizingMaskIntoConstraints = false
-        focus.contentView.addSubview(focusButton)
         scroll.showsHorizontalScrollIndicator = false
         stack.axis = .horizontal
-        for v in [capsule, focus, scroll, stack] as [UIView] { v.translatesAutoresizingMaskIntoConstraints = false }
+        for v in [capsule, scroll, stack] as [UIView] { v.translatesAutoresizingMaskIntoConstraints = false }
         scroll.addSubview(stack)
         capsule.contentView.addSubview(scroll)
         addSubview(capsule)
-        addSubview(focus)
 
         let pad: CGFloat = 8
         let fit = capsule.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: 2 * pad)
         fit.priority = .defaultHigh   // as wide as its buttons, until the column's width runs out
-        let row = UILayoutGuide()   // formatting and Focus, centred together
-        addLayoutGuide(row)
         NSLayoutConstraint.activate([
-            row.leadingAnchor.constraint(equalTo: capsule.leadingAnchor),
-            row.trailingAnchor.constraint(equalTo: focus.trailingAnchor),
-            row.centerXAnchor.constraint(equalTo: centerXAnchor),
-            row.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 12),
-            capsule.trailingAnchor.constraint(equalTo: focus.leadingAnchor, constant: -Self.gap),
-            focus.topAnchor.constraint(equalTo: topAnchor),
-            focus.heightAnchor.constraint(equalTo: capsule.heightAnchor),
-            focusSize,
-            focusButton.leadingAnchor.constraint(equalTo: focus.contentView.leadingAnchor),
-            focusButton.trailingAnchor.constraint(equalTo: focus.contentView.trailingAnchor),
-            focusButton.topAnchor.constraint(equalTo: focus.contentView.topAnchor),
-            focusButton.bottomAnchor.constraint(equalTo: focus.contentView.bottomAnchor),
+            capsule.centerXAnchor.constraint(equalTo: centerXAnchor),
+            capsule.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 12),
             capsule.topAnchor.constraint(equalTo: topAnchor),
             heightConstraint,
             fit,
@@ -408,7 +386,6 @@ final class FormatBar: UIView {
         addInteraction(UILargeContentViewerInteraction())   // press and hold at large text sizes
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (bar: FormatBar, _: UITraitCollection) in
             bar.heightConstraint.constant = bar.barHeight
-            bar.focusSize.constant = bar.barHeight
             bar.invalidateIntrinsicContentSize()
         }
     }
@@ -416,12 +393,12 @@ final class FormatBar: UIView {
 
     override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: barHeight + Self.gap) }
 
-    /// Only the capsule and Focus take touches; taps beside or below them reach the page.
+    /// Only the capsule takes touches; taps beside or below it reach the page.
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        capsule.frame.contains(point) || focus.frame.contains(point)
+        capsule.frame.contains(point)
     }
 
-    private static func button(symbol: String? = nil, title: String? = nil, label: String, slot: Bool = true,
+    private static func button(symbol: String? = nil, title: String? = nil, label: String,
                                action: @escaping () -> Void) -> UIButton {
         var config = UIButton.Configuration.plain()
         config.image = symbol.flatMap { UIImage(systemName: $0) }
@@ -436,7 +413,7 @@ final class FormatBar: UIView {
         b.showsLargeContentViewer = true
         b.largeContentTitle = label
         b.largeContentImage = config.image
-        if slot { b.widthAnchor.constraint(greaterThanOrEqualToConstant: 56).isActive = true }   // even slots, as in Notes
+        b.widthAnchor.constraint(greaterThanOrEqualToConstant: 56).isActive = true   // even slots, as in Notes
         b.setContentCompressionResistancePriority(.required, for: .horizontal)   // scroll, never squeeze
         b.configurationUpdateHandler = { b in
             b.configuration?.background.backgroundColor = b.isSelected ? .tertiarySystemFill : .clear

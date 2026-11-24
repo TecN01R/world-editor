@@ -555,6 +555,15 @@ struct EditorView: View {
                     .keyboardShortcut(.cancelAction)
                 }
             } else {
+                // Focus at the top, kept there when the folded Duo moves the other
+                // buttons into its side column (as WhatsApp keeps its call buttons;
+                // stock in iOS 27.1). Its arrows mirror Exit Focus's.
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Focus Mode", systemImage: "arrow.up.left.and.arrow.down.right") {
+                        withAnimation(.smooth(duration: 0.3)) { focusMode = true }
+                    }
+                }
+                .axisBehavior(.horizontalOnly)
                 // The companion, beside the page (unfolded) or a sheet (folded); on
                 // the Duo the side column, which stays in reach above the keyboard.
                 // ⌥⌘I is the system's shortcut for an inspector.
