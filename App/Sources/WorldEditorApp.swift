@@ -134,6 +134,69 @@ final class Library {
                              writing: page.paragraphs.map(\.text).joined(separator: "\n"))
     }
 
+    // MARK: Filing from the companion's conversation (docs/companion.md, Filing)
+
+    /// What the model is asked, to read types, fields and pages out of the
+    /// author's `message` in `page`'s conversation, answering `asked`.
+    func filingPrompt(for page: WriterCore.Document, asked: String?, message: String) -> FilingPrompt {
+        FilingPrompt(open: page, pages: pages, schema: schema, asked: asked, message: message)
+    }
+
+    /// Files what the model read out of `message` (`Filer` keeps only the
+    /// author's own words, and replaces nothing) and saves it.
+    func file(_ filings: Filings, message: String, on page: UUID) -> FilingRecord {
+        var pages = pages, schema = schema
+        let record = Filer.file(filings, message: message, open: page, pages: &pages, schema: &schema)
+        if !record.isEmpty { commit(pages, schema) }
+        return record
+    }
+
+    /// Takes back one thing filing did (`FilingRecord.undo`). A page it made
+    /// goes, or, if the author wrote on it since, goes to Recently Deleted.
+    func undo(_ action: FilingRecord.Entry, of record: inout FilingRecord) {
+        var pages = pages, schema = schema
+        let made = record.undo(action, pages: &pages, schema: &schema)
+        if let made, !made.edited {
+            if selection == made.page { selection = nil }
+            pendingSaves.removeValue(forKey: made.page)?.cancel()
+            try? store?.delete(made.page)
+            if store != nil { PageIndex.remove(made.page) }
+        }
+        commit(pages, schema)
+        if let made, made.edited { delete(made.page) }
+    }
+
+    /// Takes on changed pages and schema, saving what changed.
+    private func commit(_ new: [WriterCore.Document], _ newSchema: Schema) {
+        let old = Dictionary(uniqueKeysWithValues: pages.map { ($0.id, $0) })
+        pages = new
+        if newSchema != schema {
+            schema = newSchema
+            saveSchema()
+        }
+        for page in new where old[page.id] != page { scheduleSave(page) }
+    }
+
+    /// What a filing did, as the conversation shows it: pages by their names now.
+    func describe(_ record: FilingRecord) -> [FilingLine] {
+        func name(_ id: UUID) -> String? { pages.first { $0.id == id }?.heading }
+        return record.actions.compactMap { action -> FilingLine? in
+            switch action {
+            case .created(let id, _):
+                guard let page = pages.first(where: { $0.id == id }) else { return nil }
+                return FilingLine(action: action, page: page.heading, detail: nil, type: schema.type(page.type)?.name)
+            case .typed(let id, let type):
+                return name(id).map { FilingLine(action: action, page: $0, detail: schema.type(type)?.name, type: nil) }
+            case .value(let id, let fieldID, let value):
+                guard let page = name(id), let field = schema.fields.first(where: { $0.id == fieldID }),
+                      let shown = value.display(pageName: name) else { return nil }
+                return FilingLine(action: action, page: page, detail: "\(field.name): \(shown)", type: nil)
+            default:
+                return nil
+            }
+        }
+    }
+
     /// "Name: value" lines for a page's fields, for search.
     func fieldText(_ page: WriterCore.Document) -> String {
         page.fieldText(fields(of: page)) { id in pages.first { $0.id == id }?.heading }
@@ -414,4 +477,16 @@ enum Screenshots {
         ])
         return ([rich, mara, map], schema)
     }
+}
+
+/// One thing filing did, as a line in the conversation: a page made, a type
+/// given, or a field filled; each undone on its own.
+struct FilingLine: Hashable {
+    var action: FilingRecord.Entry
+    var page: String
+    /// The type given, or "Field: value"; nil for a new page.
+    var detail: String?
+    /// A new page's type.
+    var type: String?
+    var isNew: Bool { if case .created = action { true } else { false } }
 }

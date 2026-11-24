@@ -266,6 +266,60 @@ or better. What is left, from the judges' notes:
   adventure is she on?") and on a critic's voice ("suggests a profound sense
   of duty").
 
+## Filing: structure from the conversation
+
+Kevin, 2026-11-23: "Take a free flowing conversation and give it extreme
+structure and form without me having to." Tell the companion on Casperica's
+page "she's from a thalassocratic nation called Myriddea", and Casperica
+becomes a Character with Origin → Myriddea, and a new Place page Myriddea
+reads "A thalassocratic nation" (its Mentions show Casperica, through the
+link). His rulings: it happens on its own, with **Undo**; only what's said to
+the companion is filed, never the page's writing.
+
+- **When:** after each reply to the author's message, so replies never wait
+  for it; the next reply waits for it instead (one model, one job at a time).
+- **How:** a second, short request on the same model, without thinking and
+  greedy (its most likely reading):
+  `FilingPrompt` (instructions with one worked example; the open page, the
+  world's types and fields, the other pages' titles, what the companion said,
+  and the message), its output held to `Filings`' shape by constrained
+  decoding (AnyLanguageModel's `@Generable`).
+- **What code guarantees** (`Filer`, tested in WriterKit): every value, new
+  page title and new page text is found in the message, in a sentence that
+  isn't a question or hedged ("maybe", "might", "what if", "either"); a
+  message that states nothing files nothing; a new page needs a capitalised
+  name ("Myriddea", not "grandmother"); existing pages, types and fields are
+  reused by name ("The Guild of Lamps" is "Guild of Lamps"); only empty fields
+  are filled and only untyped pages typed; a value naming a page links to it;
+  a value that only repeats its field ("Grandmother: grandmother") is dropped.
+- **What shows:** under the author's message, *Added to Your Pages*: each
+  page made, type given and field filled on its own line with its own Undo
+  (Kevin: "each discrete action has its own undo"). Undo takes back what the
+  author hasn't changed since; a new type or field nothing uses any more goes
+  with it; a page they've written on goes to Recently Deleted
+  (`FilingRecord.undo`).
+
+scenarios, then 67 with events, dates and items; the generic ones in git
+plus 11 from Kevin's world):
+
+| Prompt | Sampling | Facts filed | New pages made | Filed from questions, hedges, chat |
+|---|---|---|---|---|
+| First (no example, pages listed first) | chat (temp 1), ×2 | 75/98 (77%) | 15/32 | 2/36 |
+| One worked example, facts first | chat, ×2 | 86/96 (90%) | 25/32 | 0/36 |
+| + "only when it means just that", "a ship is not a Place" | chat, ×2 | 90/96 (94%) | 29/32 | 0/36 |
+| same, with events, dates, items | chat, ×2 | 106/120 (88%) | 36/44 | 0/36 |
+| same | greedy | 55/60 (92%) | 17/22 | 0/18 |
+| + an event and a date in the example (shipped) | greedy | 57/60 (95%) | 19/22 | 0/18 |
+
+About 2.7 s a message on the computer's GPU. New types come from what's said
+(Event, Ship, Object, Organization appeared on their own). Read by hand, about
+1 in 30 filings in the shipped run were still wrong (a ship typed as a Place,
+"Gull Rock" for "Treaty of Gull Rock", a fact pinned on the wrong page): each
+shows as its own line in the conversation, undone in one tap.
+Not yet: a fact about a page already filled stays as it was (nothing is
+replaced), an untitled page isn't named from the conversation, and the
+page's own writing isn't read.
+
 ## Changing it
 
    `variants.py` that swaps it in for the app's.

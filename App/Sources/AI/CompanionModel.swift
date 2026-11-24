@@ -22,6 +22,9 @@ protocol CompanionModel: Sendable {
     var version: String? { get }
     func availableUpdate() async -> ModelUpdate?
     func install(_ update: ModelUpdate) async throws
+    /// What the author's message states, read out for filing (types, fields,
+    /// new pages); `Filer` then keeps only what's in their words.
+    func file(_ prompt: FilingPrompt) async throws -> Filings
 }
 
 extension CompanionModel {
@@ -36,6 +39,8 @@ extension CompanionModel {
     func availableUpdate() async -> ModelUpdate? { nil }
     /// Downloads `update` and uses it from the next reply on.
     func install(_ update: ModelUpdate) async throws {}
+    /// Files nothing: only the companion's own model has been measured at it (Apple's runs only on the simulator).
+    func file(_ prompt: FilingPrompt) async throws -> Filings { Filings() }
 }
 
 /// The prompt is more than the model can read at once.

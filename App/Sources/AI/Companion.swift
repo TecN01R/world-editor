@@ -6,7 +6,9 @@ import WriterCore
 /// The companion: talks with the author about the open page like a friend
 /// they think out loud with. What it says comes from its instructions alone
 /// (`CompanionPrompt`): nothing checks or filters a reply afterwards (Kevin's
-/// ruling, 2026-11-23). It never writes into the page (docs/ai-charter.md).
+/// ruling, 2026-11-23). It never writes into the page (docs/ai-charter.md);
+/// after each reply, what the author said is filed into the world's types,
+/// fields and pages, in their words, with Undo (`Filer`; Kevin's ruling, 2026-11-23).
 @MainActor @Observable
 final class Companion {
     enum State: Equatable {
@@ -63,6 +65,8 @@ final class Companion {
     private var model: any CompanionModel = AppleModel()
     private var store: ConversationStore?
     private var preparing: Task<Void, Never>?
+    /// Filing what the author last said; the next reply waits for it (one model, one job at a time).
+    private var filing: Task<Void, Never>?
     private static let log = Logger(subsystem: "com.tecn01r.worldeditor", category: "companion")
 
     init() {
@@ -173,6 +177,7 @@ final class Companion {
         if let reason = await model.unavailableReason { state = .unavailable(reason); return }
         state = .thinking
         defer { self.writing = nil; self.reasoning = nil }
+        await filing?.value
         let page = library.pages.first { $0.id == page.id } ?? page   // as it is now, not when it opened
         let others = library.pages.filter { $0.id != page.id }
         let earlier = (store?.all() ?? []).filter { $0.page != page.id }.map { talk in
@@ -213,6 +218,45 @@ final class Companion {
         if !reply.reasoning.isEmpty, let turn = conversation.turns.last { thoughts[turn.id] = reply.reasoning }
         save()
         state = .idle
+        // Replied: now what the author said, filed (after, so the reply never waits for it).
+        if let answered = conversation.turns.dropLast().last { file(answered, page: page.id, in: library) }
+    }
+
+    /// Files what the author said in `turn` of `page`'s conversation, once.
+    private func file(_ turn: Conversation.Turn, page: UUID, in library: Library) {
+        guard let message = turn.answer, turn.filed == nil else { return }
+        let previous = filing
+        filing = Task {
+            await previous?.value
+            guard let doc = library.pages.first(where: { $0.id == page }) else { return }
+            let filings: Filings
+            do {
+                filings = try await model.file(library.filingPrompt(for: doc, asked: turn.question, message: message))
+            } catch {
+                Self.log.error("Filing failed: \(String(describing: error), privacy: .public)")
+                trialLog("FILING ERROR: \(String(describing: error))")   // TRIAL
+                return
+            }
+            // Kept even when empty, so trying the reply again doesn't file it twice.
+            setFiled(library.file(filings, message: message, on: page), turn: turn.id, page: page)
+        }
+    }
+
+    private func setFiled(_ record: FilingRecord, turn: UUID, page: UUID) {
+        if conversation.page == page, let i = conversation.turns.firstIndex(where: { $0.id == turn }) {
+            conversation.turns[i].filed = record
+            save()
+        } else if var talk = store?.load(page), let i = talk.turns.firstIndex(where: { $0.id == turn }) {
+            talk.turns[i].filed = record   // the author has moved on to another page
+            try? store?.save(talk)
+        }
+    }
+
+    /// Takes back one thing filed from `turn` (what the author changed since stays).
+    func undoFiling(_ action: FilingRecord.Entry, from turn: UUID, in library: Library) {
+        guard var record = conversation.turns.first(where: { $0.id == turn })?.filed else { return }
+        library.undo(action, of: &record)
+        setFiled(record, turn: turn, page: conversation.page)   // kept when all undone, so it isn't filed again
     }
 
     private func save() { try? store?.save(conversation) }

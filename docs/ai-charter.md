@@ -10,10 +10,10 @@ behaviour that only lives in a prompt isn't guaranteed.
 | Rule | Enforced by |
 |---|---|
 | All inference runs on the device. No cloud, subscriptions or external AI APIs. | No network AI clients exist in the codebase. Apple's framework is pinned to `SystemLanguageModel` (on-device), never its server models (`FactExtractor`). |
-| The AI never modifies the author's writing. | AI code receives `Document` *values* (copies); only the editors call `Library.update`. |
+| The AI never modifies the author's writing. | AI code receives `Document` *values* (copies); only the editors call `Library.update`. Filing adds to pages through `Library.file`, which only adds (see the next rule). |
 | Inferred information is never presented as established. | `KnowledgeBase` has only `established` (author stated it) and `speculative` (author wrote it as uncertain). Anything else is `unknown`. |
 | Where non-invention can't be guaranteed, prefer incomplete output. | Rejected candidates are dropped and logged, never repaired by guessing (`ProvenanceValidator`, `IllustrationPlan`). |
-| Structure isn't writing: the AI may propose types and field names ("Wants", "Home"), as questions the author answers. Every field *value* is the author's own words; the AI never fills one in itself. (Kevin's ruling, 2026-11-22.) | Values are filed only from the author's words, with a source (`ProvenanceValidator`); the author approves every proposed type, field and value. |
+| Structure isn't writing: the AI may name types and fields ("Character", "Origin"). Every field *value*, new page title and new page text is the author's own words; the AI never fills one in itself. What the author tells the companion is filed on its own, with Undo (Kevin's rulings, 2026-11-22 and 2026-11-23: "automatic, with Undo"). Filing never replaces what the author wrote. | `Filer` keeps a value, title or page text only if it's found in the author's message, in a sentence that isn't a question or hedged; it fills only empty fields, types only untyped pages and never touches an existing page's text. The conversation shows what was filed, with Undo (`FilingRecord`). |
 | Models download on demand and unload when idle. | `ModelCatalog` (licence + pinned checksum required before download), `ModelResidency` (memory budget, LRU unload). |
 
 ## Search and curation

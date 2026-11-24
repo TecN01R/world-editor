@@ -74,7 +74,8 @@ public struct ProvenanceValidator: Sendable {
     /// Words that mark the author's own uncertainty. A fact whose quote contains
     /// one of these can't be recorded as established.
     public static let hedges = ["maybe", "perhaps", "might", "possibly", "probably",
-                                "i think", "not sure", "could be", "or maybe", "what if", "?"]
+                                "i think", "not sure", "could be", "or maybe", "what if", "either",
+                                "wonder", "wondering", "haven't decided", "undecided", "?"]
 
     public init() {}
 

@@ -30,6 +30,9 @@ features below. Read `CLAUDE.md` first; this covers what isn't there.
   in the content (HIG). Rows stack via `ViewThatFits` when two columns don't
   fit. Clear buttons via UIKit appearance. A page field's menu ends with
   "New {Type}…", which creates a typed page and links it.
+- **Filing from the companion** (`Guardrails/Filing.swift`, `FilingRecord`):
+  what the author tells the companion becomes types, fields and linked pages
+  on its own, in their words, with Undo in the conversation
 
 ## Open threads
 

@@ -63,6 +63,7 @@ struct CompanionPanel: View {
                     // Its latest reply, still unanswered, can be tried again (hold it).
                     reply(turn.question, canRetry: turn.id == companion.conversation.waiting?.id && companion.state == .idle)
                     if let answer = turn.answer { mine(answer) }
+                    if let record = turn.filed, !record.isEmpty { filed(record, from: turn.id) }
                 }
                 status
             }
@@ -141,6 +142,39 @@ struct CompanionPanel: View {
             .contextMenu { copy(text) }
             .padding(.leading, 48)
             .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    /// What was filed from the author's message, under it: each page made,
+    /// type given and field filled, in their words (New York), with its own Undo.
+    private func filed(_ record: FilingRecord, from turn: UUID) -> some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            Label("Added to Your Pages", systemImage: "square.stack.3d.up")
+            ForEach(library.describe(record), id: \.self) { line in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    filed(line)
+                    Button("Undo", systemImage: "arrow.uturn.backward") {
+                        companion.undoFiling(line.action, from: turn, in: library)
+                    }
+                    .labelStyle(.iconOnly)
+                    .accessibilityLabel(Text("Undo: \(filed(line))"))
+                }
+            }
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .multilineTextAlignment(.trailing)
+        .padding(.leading, 48)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    /// "New page: Myriddea (Place)", "Casperica · Character", "Casperica · Origin: Myriddea".
+    private func filed(_ line: FilingLine) -> Text {
+        let page = Text(line.page).font(.authored(.footnote))
+        if line.isNew {
+            let type = line.type.map { Text(" (\(Text($0).font(.authored(.footnote))))") } ?? Text("")
+            return Text("New page: \(page)\(type)")
+        }
+        return Text("\(page) · \(Text(line.detail ?? "").font(.authored(.footnote)))")
     }
 
     /// No conversation yet: what the companion is doing, centred like iOS's own

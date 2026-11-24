@@ -10,12 +10,16 @@ public struct Conversation: Codable, Hashable, Sendable {
         /// The author's answer, in their words; nil while the question waits.
         public var answer: String?
         public var asked: Date
+        /// What was filed from the answer (types, fields, new pages), until undone.
+        public var filed: FilingRecord?
 
-        public init(id: UUID = UUID(), question: String, answer: String? = nil, asked: Date = Date()) {
+        public init(id: UUID = UUID(), question: String, answer: String? = nil, asked: Date = Date(),
+                    filed: FilingRecord? = nil) {
             self.id = id
             self.question = question
             self.answer = answer
             self.asked = asked
+            self.filed = filed
         }
     }
 
