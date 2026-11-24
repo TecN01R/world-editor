@@ -387,6 +387,9 @@ struct PageList: View {
                 }
                 .keyboardShortcut("n")
             }
+            // Kept in the bar, the world's name shortened instead: unfolded, iOS put it alone
+            // in a "•••" menu the same size as the button (Kevin, 2026-11-24).
+            .visibilityPriority(.high)
             // The companion for the whole world, not one page: its conversations take the
             // list's place, the one open beside them unfolded and full screen folded.
             // Listed before search, so the folded Duo's side column puts it right above.
