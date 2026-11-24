@@ -158,7 +158,7 @@ public struct CompanionPrompt: Equatable, Sendable {
         let used = world.count + related.count + memory.count + page.fields.count
         background.append("The page they have open now:\n" + Self.describe(page, maxCharacters: max(0, maxCharacters - used)))
 
-        var system = [Self.instructions(searching: lookup?.searching ?? false), Self.examples, background.joined(separator: "\n\n")]
+        var system = [Self.instructions(lookup: lookup), Self.examples, background.joined(separator: "\n\n")]
         // What to do first is said only when it applies: a small model follows
         // an instruction better than a condition.
         if conversation.turns.isEmpty { system.append(Self.opening(page, alone: world.isEmpty)) }
@@ -188,7 +188,7 @@ public struct CompanionPrompt: Equatable, Sendable {
         }
         if !memory.isEmpty { background.append("From your earlier conversations:\n" + memory) }
         // It doesn't speak first here: it waits for the author (Kevin, 2026-11-24).
-        system = [Self.instructions(searching: lookup?.searching ?? false), Self.examples, background.joined(separator: "\n\n")]
+        system = [Self.instructions(lookup: lookup), Self.examples, background.joined(separator: "\n\n")]
             .joined(separator: "\n\n")
         turns = Self.authorFirst(Self.recent(conversation, maxTurns: maxTurns, maxTurnCharacters: maxTurnCharacters),
                                  opener: Self.openedWorld)
@@ -197,6 +197,7 @@ public struct CompanionPrompt: Equatable, Sendable {
     /// What the companion can look up in the author's pages (docs/companion-roadmap.md, its
     /// own tools for the writer's pages): the prompt then shows only part of their pages, adds
     /// what they say about the author's last message (`retrieving`), and offers `search_pages`
+    /// (`searching`); its instructions say what to do about what isn't shown (`instructions(lookup:)`).
     public struct Lookup: Sendable {
         public var pages: PageLookup
         /// Spotlight's item ids for the author's last message, best first (none on Linux).
@@ -237,11 +238,22 @@ public struct CompanionPrompt: Equatable, Sendable {
         their pages: that part is theirs to tell you.
         """
 
-    /// `instructions`, with `searchInstruction` after the real-world case when `searching`.
-    public static func instructions(searching: Bool) -> String {
-        guard searching else { return instructions }
+    /// The reply case added when the prompt shows only part of the author's pages and the
+    /// model can't search them (retrieval alone): the search case's last sentence, worded for
+    /// what it's been shown, since it can't know what isn't on their pages. Without it the
+    public static let notShownInstruction = """
+        - If they ask about something of theirs that isn't in what you're shown of their pages \
+        here, say plainly that you don't see it: that part is theirs to tell you.
+        """
+
+    /// `instructions`, with a case for the author's pages after the real-world one when the
+    /// companion is shown only part of them (`lookup`): `searchInstruction` when it can
+    /// search them, otherwise `notShownInstruction`. Without a lookup, as they are.
+    public static func instructions(lookup: Lookup?) -> String {
+        guard let lookup else { return instructions }
+        let added = lookup.searching ? searchInstruction : notShownInstruction
         let next = "- If they asked what you think"
-        return instructions.replacingOccurrences(of: next, with: searchInstruction + "\n" + next)
+        return instructions.replacingOccurrences(of: next, with: added + "\n" + next)
     }
 
     /// The author's first turn in a world conversation the companion began (before it

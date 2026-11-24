@@ -196,9 +196,9 @@ final class CompanionPromptTests: XCTestCase {
     /// and the rest by name; only part of the pages is said to be shown.
     func testWithALookupTheOtherPagesAreTheMostLikeAndTheRestByName() {
         let (pages, lookup) = lookupWorld()
+        let retrieval = CompanionPrompt.Lookup(pages: lookup, retrieving: true, searching: false)
         let prompt = CompanionPrompt(page: .init(name: "Ilsa", type: "Character", writing: "A rower on the Kestrel"), others: pages,
-                                     conversation: Conversation(page: UUID()),
-                                     lookup: .init(pages: lookup, retrieving: true, searching: false))
+                                     conversation: Conversation(page: UUID()), lookup: retrieval)
         XCTAssertTrue(prompt.system.contains("""
             What the app shows you of the writer's pages (for reference; the writer didn't just say this; only part of their pages is shown here):
 
@@ -213,7 +213,9 @@ final class CompanionPromptTests: XCTestCase {
 
             The page they have open now:
             """))
-        XCTAssertTrue(prompt.system.hasPrefix(CompanionPrompt.instructions))   // no tool, no search instruction
+        // No tool: no search instruction, the not-shown one in its place.
+        XCTAssertTrue(prompt.system.hasPrefix(CompanionPrompt.instructions(lookup: retrieval)))
+        XCTAssertFalse(prompt.system.contains(PageLookup.toolName))
         XCTAssertTrue(prompt.system.hasSuffix("how it sits with their other pages. If something on it could be read two ways, ask which they mean."))
         // A page conversation's opening has no message of theirs to look up.
         XCTAssertFalse(prompt.system.contains("What their pages say about what they just said"))
@@ -245,15 +247,65 @@ final class CompanionPromptTests: XCTestCase {
 
     /// Offering search_pages adds its reply case, once, after the real-world one.
     func testSearchingAddsTheSearchInstruction() {
-        let searching = CompanionPrompt.instructions(searching: true)
-        XCTAssertEqual(searching.components(separatedBy: CompanionPrompt.searchInstruction).count, 2)
-        XCTAssertTrue(searching.contains("say that.\n- If they ask about something of theirs that isn't shown to you here, look for it with search_pages first"))
-        XCTAssertTrue(searching.contains("theirs to tell you.\n- If they asked what you think"))
-        XCTAssertEqual(CompanionPrompt.instructions(searching: false), CompanionPrompt.instructions)
         let (pages, lookup) = lookupWorld()
-        let prompt = CompanionPrompt(world: "Tidewater", pages: pages, conversation: Conversation(page: UUID()),
-                                     lookup: .init(pages: lookup, retrieving: false, searching: true))
-        XCTAssertTrue(prompt.system.hasPrefix(searching))
+        for retrieving in [false, true] {
+            let search = CompanionPrompt.Lookup(pages: lookup, retrieving: retrieving, searching: true)
+            let searching = CompanionPrompt.instructions(lookup: search)
+            XCTAssertEqual(searching.components(separatedBy: CompanionPrompt.searchInstruction).count, 2)
+            XCTAssertTrue(searching.contains("say that.\n- If they ask about something of theirs that isn't shown to you here, look for it with search_pages first"))
+            XCTAssertTrue(searching.contains("theirs to tell you.\n- If they asked what you think"))
+            XCTAssertFalse(searching.contains(CompanionPrompt.notShownInstruction))
+            let prompt = CompanionPrompt(world: "Tidewater", pages: pages, conversation: Conversation(page: UUID()), lookup: search)
+            XCTAssertTrue(prompt.system.hasPrefix(searching))
+        }
+    }
+
+    /// Shown only part of their pages with no search (retrieval alone, "R+"), it's told to say
+    /// plainly when it doesn't see what they ask about, in the search case's place.
+    func testRetrievalAloneAddsTheNotShownInstruction() {
+        let (pages, lookup) = lookupWorld()
+        let retrieval = CompanionPrompt.Lookup(pages: lookup, retrieving: true, searching: false)
+        let instructions = CompanionPrompt.instructions(lookup: retrieval)
+        XCTAssertEqual(instructions, CompanionPrompt.instructions.replacingOccurrences(
+            of: "say that.\n- If they asked what you think",
+            with: "say that.\n- If they ask about something of theirs that isn't in what you're shown of their pages here, "
+                + "say plainly that you don't see it: that part is theirs to tell you.\n- If they asked what you think"))
+        XCTAssertFalse(instructions.contains(PageLookup.toolName))
+        var talk = Conversation(page: UUID(), aboutWorld: true)
+        talk.answer("who founded the Guild of Lamps?")
+        let world = CompanionPrompt(world: "Tidewater", pages: pages, conversation: talk, lookup: retrieval)
+        let page = CompanionPrompt(page: ilsa, others: pages, conversation: talk, lookup: retrieval)
+        for prompt in [world, page] {
+            XCTAssertTrue(prompt.system.hasPrefix(instructions + "\n\n" + CompanionPrompt.examples + "\n\n"))
+        }
+    }
+
+    /// Without a lookup the prompt is today's, byte for byte: the instructions as they are,
+    /// with neither lookup case, on a page and in the world's conversation.
+    func testWithoutALookupThePromptIsUnchanged() {
+        XCTAssertEqual(CompanionPrompt.instructions(lookup: nil), CompanionPrompt.instructions)
+        XCTAssertTrue(CompanionPrompt.instructions.contains("say that.\n- If they asked what you think"))
+        var talk = Conversation(page: UUID(), aboutWorld: true)
+        talk.answer("who founded the Guild of Lamps?")
+        let world = CompanionPrompt(world: "Tidewater", pages: [verran], conversation: talk)
+        XCTAssertEqual(world.system, [
+            CompanionPrompt.instructions,
+            CompanionPrompt.examples,
+            """
+            What the app shows you of the writer's pages (for reference; the writer didn't just say this):
+
+            Their world, \u{201C}Tidewater\u{201D}, and its pages:
+            - Verran (Place): A seafaring nation of rowers and traders
+            """,
+        ].joined(separator: "\n\n"))
+        XCTAssertEqual(world.turns, [.init(speaker: .author, text: "who founded the Guild of Lamps?")])
+        let page = CompanionPrompt(page: ilsa, others: [verran], conversation: talk)
+        XCTAssertTrue(page.system.hasPrefix(CompanionPrompt.instructions + "\n\n" + CompanionPrompt.examples + "\n\n"
+                                            + "What the app shows you of the writer's pages (for reference; the writer didn't just say this):\n\n"))
+        for prompt in [world, page] {
+            XCTAssertFalse(prompt.system.contains(CompanionPrompt.notShownInstruction))
+            XCTAssertFalse(prompt.system.contains(CompanionPrompt.searchInstruction))
+        }
     }
 
     /// The world's conversation with a lookup lists every page by name, those bearing on what

@@ -116,22 +116,25 @@ public struct PageLookup: Sendable {
     // MARK: Searching
 
     /// The tool's text for `query`, at most `maxCharacters`, plain for Gemma
-    /// (`Reasoned.gemmaPlain`): the page it names, with its fields and writing and the other
-    /// pages that mention it; or the pages with the most matching passages; then what the
-    /// author told the companion about it. `ranked`: Spotlight's item ids for the query, best
-    /// first; they come before the lexical hits, and those of pages or paragraphs no longer
-    /// here are dropped.
+    /// (`Reasoned.gemmaPlain`): the page it names (`named(in:)`), with its fields and writing
+    /// (the parts that answer the rest of the query, when it's too long to show whole) and the
+    /// other pages that mention it; or the pages with the most matching passages; then what
+    /// the author told the companion about it. `ranked`: Spotlight's item ids for the query,
+    /// best first; they come before the lexical hits, and those of pages or paragraphs no
+    /// longer here are dropped.
     public func results(for query: String, ranked: [String] = []) -> String {
         let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return Self.needsQuery }
-        let match = index.match(Self.terms(query, leavingOut: Self.stopwords))
-        let named = self.named(query)
-        let hits = pageHits(ranked: ranked, match: match, without: named, limit: named == nil ? 5 : 4)
+        let terms = Self.terms(query, leavingOut: Self.stopwords)
+        let match = index.match(terms)
+        let named = ordered(self.named(in: query), by: match)
+        let hits = pageHits(ranked: ranked, match: match, named: Array(named.dropFirst()), answering: terms,
+                            without: named.first, limit: named.isEmpty ? 5 : 4)
         let said = answerLines(match)
-        let lines = self.lines(hits, found: match.found)
-        if let named {
-            return Self.assemble(head: describe(named, maxCharacters: 900), pages: lines, heading: "Also on their pages:",
-                                 said: said, maxCharacters: Self.maxCharacters)
+        let lines = self.lines(hits, cap: Self.maxCharacters / 2)
+        if let first = named.first {
+            return Self.assemble(head: describe(first, answering: terms, maxCharacters: 900), pages: lines,
+                                 heading: "Also on their pages:", said: said, maxCharacters: Self.maxCharacters)
         }
         guard !hits.isEmpty || !said.isEmpty else { return Reasoned.gemmaPlain(Self.nothingFound(query)) }
         return Self.assemble(head: [], pages: lines,
@@ -142,18 +145,24 @@ public struct PageLookup: Sendable {
     /// What the author's pages and earlier answers say about `message` (what they just
     /// said), for the prompt: the same search as `results`, its words taken from the
     /// message, within `maxCharacters` and plain for Gemma; empty when nothing bears on it.
+    /// A page the message names comes first, with its fields and the passages that answer
+    /// the rest of the message (how it goes on, when none does), in up to half the room.
     /// `excluding`: the open page, already shown in full.
     public func related(to message: String, maxCharacters: Int, ranked: [String] = [], excluding page: UUID? = nil) -> String {
-        let terms = Self.terms(message, leavingOut: Self.stopwords).filter { term in
-            // A message is sentences, not a query: its everyday words say nothing.
+        // A message is sentences, not a query: the words a question is asked with say nothing.
+        let words = Self.terms(message, leavingOut: Self.stopwords).filter { $0.count > 1 || !Self.stopwords.contains($0[0]) }
+        // Nor, across the whole world, do its everyday words; within a page it names they can.
+        let terms = words.filter { term in
             term.count > 1 || term[0].count <= 3 || !term[0].contains(where: \.isLetter)
                 || !CompanionPrompt.keywords(term[0]).isEmpty
         }
-        guard !terms.isEmpty || !ranked.isEmpty else { return "" }
-        let match = index.match(terms)
         let without = page.flatMap { id in pages.firstIndex { $0.id == id } }
-        let hits = pageHits(ranked: ranked, match: match, without: without, limit: 5)
-        return Self.assemble(head: [], pages: lines(hits, found: match.found), heading: nil, said: answerLines(match),
+        let named = self.named(in: message).filter { $0 != without }
+        guard !terms.isEmpty || !ranked.isEmpty || !named.isEmpty else { return "" }
+        let match = index.match(terms)
+        let hits = pageHits(ranked: ranked, match: match, named: ordered(named, by: match), answering: words,
+                            without: without, limit: 5)
+        return Self.assemble(head: [], pages: lines(hits, cap: maxCharacters / 2), heading: nil, said: answerLines(match),
                              maxCharacters: maxCharacters)
     }
 
@@ -181,32 +190,79 @@ public struct PageLookup: Sendable {
 
     // MARK: What a search shows
 
-    /// A page found, and its passages to show (fields or paragraphs, at most two).
+    /// A page found, its passages to show (fields or paragraphs: at most two, or for a page
+    /// named, up to `namedPassages`) and the words to show them around.
     private struct PageHit {
         var page: Int
         var passages: [Int] = []
+        var found: Set<String> = []
+        /// Named in what was said: all its fields are shown.
+        var named = false
     }
 
-    /// The page `query` names: its heading, ignoring case, accents and a leading "The"
-    /// (the newest, if two have it).
-    private func named(_ query: String) -> Int? {
-        let name = Self.name(query)
-        guard !name.isEmpty else { return nil }
-        return pages.indices.filter { Self.name(pages[$0].heading) == name }.max { pages[$0].modified < pages[$1].modified }
+    /// The most passages a named page shows.
+    private static let namedPassages = 6
+
+    /// The pages `text` names, in the order it names them: by a page's whole name (its
+    /// heading, ignoring case, accents and a leading "The"; the newest, if two have it), or
+    /// by a word of a name of two to four words that `text` capitalizes, that no other page's
+    /// name has and that isn't an everyday word ("Edric" for "Edric Calloway", "the Reeves"
+    /// for "The Dyke Reeves"; not "Port" when "Port Vell" and "Port Ash" are both pages).
+    private func named(in text: String) -> [Int] {
+        let words = Self.words(text)
+        var named: [Int] = []
+        func add(_ p: Int) {
+            // Two pages with the same name: the newer.
+            let page = index.naming[index.names[p][0], default: []].filter { index.names[$0] == index.names[p] }
+                .max { pages[$0].modified < pages[$1].modified } ?? p
+            if !named.contains(page) { named.append(page) }
+        }
+        for (i, word) in words.enumerated() {
+            let holding = index.naming[word.word, default: []]
+            for p in holding where index.names[p].first == word.word {
+                let name = index.names[p]
+                if i + name.count <= words.count, name.indices.allSatisfy({ words[i + $0].word == name[$0] }),
+                   name.contains(where: { !Self.stopwords.contains($0) }) {
+                    add(p)
+                }
+            }
+            if holding.count == 1, (2...4).contains(index.names[holding[0]].count), text[word.range].first?.isUppercase == true,
+               !Self.stopwords.contains(word.word), word.word.count <= 3 || !CompanionPrompt.keywords(word.word).isEmpty {
+                add(holding[0])
+            }
+        }
+        return named
     }
 
-    /// "the Kestrel" as a title match compares it: "kestrel".
-    private static func name(_ text: String) -> String {
+    /// `named`, those whose passages rank highest in `match` first, then as they were.
+    private func ordered(_ named: [Int], by match: Index.Match) -> [Int] {
+        var rank: [Int: Int] = [:]
+        for (i, p) in match.ranked.enumerated() where index.passages[p].kind != .answer && rank[index.passages[p].owner] == nil {
+            rank[index.passages[p].owner] = i
+        }
+        return named.enumerated().sorted { (rank[$0.element] ?? .max, $0.offset) < (rank[$1.element] ?? .max, $1.offset) }.map(\.element)
+    }
+
+    /// A page as a search shows it: "the Kestrel" is ["kestrel"].
+    private static func name(_ text: String) -> [String] {
         var words = words(text).map(\.word)
         if words.count > 1, words[0] == "the" { words.removeFirst() }
-        return words.joined(separator: " ")
+        return words
     }
 
-    /// Pages in the order their passages rank, Spotlight's first, then the lexical hits,
-    /// up to `limit` pages and two passages each; `without`: a page left out.
-    private func pageHits(ranked: [String], match: Index.Match, without: Int?, limit: Int) -> [PageHit] {
+    /// The `named` pages first, each with its passages that answer `terms` (`passages(of:answering:)`),
+    /// then the others in the order their passages rank, Spotlight's first, then the lexical
+    /// hits, two passages each; up to `limit` pages. `without`: a page left out (never among `named`).
+    private func pageHits(ranked: [String], match: Index.Match, named: [Int], answering terms: [[String]],
+                          without: Int?, limit: Int) -> [PageHit] {
+        var hits = named.prefix(limit).map { p in
+            let own = passages(of: p, answering: terms)
+            return PageHit(page: p, passages: Array(own.passages.prefix(Self.namedPassages)), found: match.found.union(own.found),
+                           named: true)
+        }
+        var at = Dictionary(uniqueKeysWithValues: hits.enumerated().map { ($0.element.page, $0.offset) })
         let spotlight = ranked.compactMap { Search.Item(id: $0).flatMap { index.byItem[$0] } }
-        var seen = Set<Int>(), hits: [PageHit] = [], at: [Int: Int] = [:]
+        var seen = Set<Int>()
         for p in spotlight + match.ranked where seen.insert(p).inserted {
             let passage = index.passages[p]
             guard passage.kind != .answer, passage.owner != without else { continue }
@@ -217,29 +273,49 @@ public struct PageLookup: Sendable {
                 guard hits.count < limit else { continue }
                 i = hits.count
                 at[passage.owner] = i
-                hits.append(PageHit(page: passage.owner))
+                hits.append(PageHit(page: passage.owner, found: match.found))
             }
-            if passage.kind != .title, hits[i].passages.count < 2 { hits[i].passages.append(p) }
+            if !hits[i].named, passage.kind != .title, hits[i].passages.count < 2 { hits[i].passages.append(p) }
         }
         return hits
     }
 
-    /// Each hit's line with two passages, then with one, for `assemble` to take the first that fits.
-    private func lines(_ hits: [PageHit], found: Set<String>) -> [[String]] {
-        hits.map { hit in [2, 1].map { line(hit, passages: $0, found: found) } }
+    /// Page `p`'s own passages (fields, then paragraphs): the `matching` ones that match
+    /// `terms`, less the words of its name, first, best first ("what does Edric actually
+    /// want" puts "What he actually wants…" before how his page opens); and the words found.
+    private func passages(of p: Int, answering terms: [[String]]) -> (passages: [Int], matching: Int, found: Set<String>) {
+        let own = (index.belonging[p] ?? []).filter { index.passages[$0].kind != .answer }
+        let name = Set(index.names[p])
+        let rest = terms.filter { !$0.allSatisfy(name.contains) }
+        guard !rest.isEmpty else { return (own, 0, []) }
+        let match = index.match(rest)
+        let mine = Set(own)
+        let best = match.ranked.filter(mine.contains)
+        return (best + own.filter { !best.contains($0) }, best.count, match.found)
     }
 
-    /// "- Name (Type): " and the hit's first `passages`: its matching fields, and each
-    /// paragraph cut around the first word found. A page found by its name alone shows its
-    /// fields, or how it opens.
-    private func line(_ hit: PageHit, passages count: Int, found: Set<String>) -> String {
-        let page = pages[hit.page]
+    /// Each hit's line with all its passages, then one fewer, down to one, for `assemble` to
+    /// take the first that fits; a named page's longer lines only within `cap`.
+    private func lines(_ hits: [PageHit], cap: Int) -> [[String]] {
+        hits.map { hit in
+            let forms = stride(from: max(hit.passages.count, 1), through: 1, by: -1).map { line(hit, passages: $0) }
+            guard hit.named else { return forms }
+            let fitting = forms.filter { $0.count <= cap }
+            return fitting.isEmpty ? Array(forms.suffix(1)) : fitting
+        }
+    }
+
+    /// "- Name (Type): " and the hit's first `passages`: its fields (those that match, unless
+    /// the page was named), and each paragraph cut around the first word found. A page found
+    /// by its name alone shows its fields, or how it opens.
+    private func line(_ hit: PageHit, passages count: Int) -> String {
+        let page = pages[hit.page], found = hit.found
         var shown = hit.passages.prefix(count).map { p -> String in
             let passage = index.passages[p]
             guard passage.kind == .fields else {
                 return "\u{201C}" + Self.window(page.paragraphs[passage.paragraph].text, found: found) + "\u{201D}"
             }
-            let matching = page.fields.filter { Self.words($0).contains { found.contains($0.word) } }
+            let matching = hit.named ? [] : page.fields.filter { Self.words($0).contains { found.contains($0.word) } }
             return Self.window((matching.isEmpty ? page.fields : matching).joined(separator: "; "), found: found)
         }
         if shown.isEmpty {
@@ -262,8 +338,9 @@ public struct PageLookup: Sendable {
     }
 
     /// The page a search names, in at most `maxCharacters`: what it is, its fields, then its
-    /// writing (how it opens and its latest part, when long).
-    private func describe(_ p: Int, maxCharacters: Int) -> [String] {
+    /// writing; when that's too long, its paragraphs that answer `terms` (less the page's
+    /// name), or else how it opens and its latest part.
+    private func describe(_ p: Int, answering terms: [[String]], maxCharacters: Int) -> [String] {
         let page = pages[p]
         let kind = page.type.map { type in
             CompanionPrompt.article(type) + " " + CompanionPrompt.lowercasedWord(type) + " page"
@@ -281,10 +358,29 @@ public struct PageLookup: Sendable {
             if page.fields.isEmpty { lines.append("Nothing is written on it yet.") }
         } else if writing.count <= room {
             lines.append(writing)
+        } else if let answers = answering(terms, on: p, maxCharacters: room) {
+            lines.append(answers)
         } else if room >= 80, let excerpt = CompanionPrompt.excerpt(writing, maxCharacters: room - 5) {
             lines.append(excerpt)   // the excerpt adds "\n[…]\n" between its parts
         }
         return lines
+    }
+
+    /// Page `p`'s paragraphs that answer `terms` (`passages(of:answering:)`), each cut around
+    /// what matched, in the page's order with "[…]" between, as many as fit in
+    /// `maxCharacters`; nil when none does.
+    private func answering(_ terms: [[String]], on p: Int, maxCharacters: Int) -> String? {
+        let own = passages(of: p, answering: terms)
+        var chosen: [(paragraph: Int, text: String)] = [], used = -5   // "\n[…]\n" before every one but the first
+        for q in own.passages.prefix(own.matching) where index.passages[q].kind == .paragraph {
+            let paragraph = index.passages[q].paragraph
+            let text = Reasoned.gemmaPlain(Self.window(pages[p].paragraphs[paragraph].text, found: own.found))
+            guard used + 5 + text.count <= maxCharacters else { break }
+            chosen.append((paragraph, text))
+            used += 5 + text.count
+        }
+        guard !chosen.isEmpty else { return nil }
+        return chosen.sorted { $0.paragraph < $1.paragraph }.map(\.text).joined(separator: "\n[\u{2026}]\n")
     }
 
     /// The tool's text: `head`, then `heading` and as many `pages` as fit (each in the
@@ -316,13 +412,16 @@ public struct PageLookup: Sendable {
 
     // MARK: Words
 
-    /// Words too common to search for. Short on purpose: names like "Ana" or "Kai" are
-    /// short words too.
+    /// Words too common to search for, and those a question is asked with ("what did I say
+    /// … again?": in a world of 45 pages, "no" and "say" outranked "windpumps"). Short on
+    /// purpose: names like "Ana" or "Kai" are short words too.
     static let stopwords: Set<String> = [
-        "a", "about", "an", "and", "are", "as", "at", "be", "been", "but", "by", "did", "do", "does", "for", "from",
-        "he", "her", "him", "his", "how", "i", "in", "is", "it", "its", "me", "my", "of", "on", "or", "our", "she",
-        "that", "the", "their", "them", "these", "they", "this", "those", "to", "was", "we", "were", "what", "when",
-        "where", "which", "who", "whom", "whose", "why", "with", "you", "your",
+        "a", "about", "again", "all", "an", "and", "any", "anyway", "are", "as", "at", "be", "been", "but", "by", "can",
+        "did", "do", "does", "for", "from", "get", "got", "had", "has", "have", "he", "her", "him", "his", "how", "i",
+        "i'd", "i'll", "i'm", "i've", "if", "in", "is", "it", "its", "just", "me", "my", "no", "not", "now", "of", "ok",
+        "on", "or", "our", "said", "say", "says", "she", "so", "that", "the", "their", "them", "these", "they", "this",
+        "those", "to", "too", "was", "we", "were", "what", "when", "where", "which", "who", "whom", "whose", "why",
+        "with", "yes", "yet", "you", "your",
     ]
 
     /// What `query` looks for: its terms (`Search.terms`: words, "quoted phrases" whole),
@@ -368,6 +467,46 @@ public struct PageLookup: Sendable {
         if word.hasSuffix("'s") { word.removeLast(2) }
         while word.hasSuffix("'") { word.removeLast() }
         return word
+    }
+
+    /// `word`'s singular and plural, as regular English makes them: "tolls" and "toll",
+    /// "boxes" and "box", "ponies" and "pony" (each way); a search keeps those in the world.
+    static func numberForms(_ word: String) -> [String] {
+        func hissing(_ word: Substring) -> Bool { ["s", "x", "z", "ch", "sh"].contains(where: word.hasSuffix) }
+        var forms: [String] = []
+        if word.count >= 4, word.hasSuffix("s"), !word.hasSuffix("ss") { forms.append(String(word.dropLast())) }
+        if word.count >= 5, word.hasSuffix("es"), hissing(word.dropLast(2)) { forms.append(String(word.dropLast(2))) }
+        if word.count >= 5, word.hasSuffix("ies") { forms.append(word.dropLast(3) + "y") }
+        guard word.count >= 3 else { return forms }
+        forms.append(word + (hissing(word[...]) ? "es" : "s"))
+        if word.hasSuffix("y"), !"aeiou".contains(word.dropLast().last!) { forms.append(word.dropLast() + "ies") }
+        return forms
+    }
+
+    /// `word`'s regular verb forms, each way: "mend", "mends", "mended", "mending"; "live",
+    /// "lived", "living"; "stop", "stopped"; "carry", "carries", "carried". Some aren't verbs
+    /// ("evening" gives "even"), which is why they count for less than the word.
+    static func verbForms(_ word: String) -> [String] {
+        func undoubled(_ stem: Substring) -> [String] {   // "stopp" → "stop"; not "call" or "miss"
+            guard stem.count >= 4, let last = stem.last, stem.dropLast().last == last, !"aeiouls".contains(last) else { return [] }
+            return [String(stem.dropLast())]
+        }
+        var stems = [word]
+        if word.count >= 5, word.hasSuffix("ied") {
+            stems.append(word.dropLast(3) + "y")
+        } else if word.count >= 5, word.hasSuffix("ed") {
+            stems += [String(word.dropLast(2)), String(word.dropLast())] + undoubled(word.dropLast(2))
+        } else if word.count >= 6, word.hasSuffix("ing") {
+            stems += [String(word.dropLast(3)), word.dropLast(3) + "e"] + undoubled(word.dropLast(3))
+        }
+        var forms: [String] = []
+        for stem in stems where stem.count >= 3 {
+            forms += [stem, stem + "ed", stem + "ing", stem + String(stem.last!) + "ed", stem + String(stem.last!) + "ing"]
+                + numberForms(stem)
+            if stem.hasSuffix("e") { forms += [stem + "d", stem.dropLast() + "ing"] }
+            if stem.hasSuffix("y") { forms.append(stem.dropLast() + "ied") }
+        }
+        return forms.filter { $0 != word }
     }
 
     /// About `size` characters of `text`, on one line, from a little before the first word
@@ -429,8 +568,15 @@ extension PageLookup {
         var postings: [String: [Int]] = [:]
         /// Every word, sorted by its UTF-8 bytes, so the words a prefix begins are together.
         var vocabulary: [String] = []
+        /// Each page's name as it's matched (`PageLookup.name`), and the pages each of its words names.
+        var names: [[String]] = []
+        var naming: [String: [Int]] = [:]
 
         init(pages: [Page], answers: [Answer]) {
+            names = pages.map { PageLookup.name($0.heading) }
+            for (i, name) in names.enumerated() {
+                for word in Set(name) { naming[word, default: []].append(i) }
+            }
             var pageAt: [UUID: Int] = [:]
             func add(_ kind: Passage.Kind, owner: Int, paragraph: Int = 0, text: String, date: Date, item: Search.Item?) {
                 let p = passages.count
@@ -464,10 +610,11 @@ extension PageLookup {
         }
 
         /// The passages that match `terms`, best first. A term counts its idf for a whole
-        /// word (or a plural's singular: "tolls" finds "toll"), 0.6 of it for a longer word
-        /// it begins ("oar" finds "oars"); a phrase's words have to come in order. A page's
-        /// title matching counts half on its other passages that don't. Ties go title,
-        /// fields, paragraph, answer, then newer.
+        /// word, its plural or its singular ("tolls" and "toll" find each other), 0.6 of it
+        /// for its other forms ("mended" finds "mend") or a longer word it begins ("oar"
+        /// finds "oarsman"); a phrase's words have to come in order. A page's title matching
+        /// counts half on its other passages that don't. Ties go title, fields, paragraph,
+        /// answer, then newer.
         func match(_ terms: [[String]]) -> Match {
             var scores: [Int: Double] = [:], found = Set<String>()
             for term in terms {
@@ -509,13 +656,9 @@ extension PageLookup {
 
         /// The words in the world that count as `word`, with their weight.
         private func matches(_ word: String) -> [String: Double] {
-            var forms = [word], prefixes = [word]
-            if word.count >= 4, word.hasSuffix("s"), !word.hasSuffix("ss") {
-                forms.append(String(word.dropLast()))
-                prefixes.append(String(word.dropLast()))
-            }
-            if word.count >= 5, word.hasSuffix("es") { forms.append(String(word.dropLast(2))) }
-            if word.count >= 5, word.hasSuffix("ies") { forms.append(word.dropLast(3) + "y") }
+            let forms = [word] + PageLookup.numberForms(word)
+            var prefixes = [word]
+            if word.count >= 4, word.hasSuffix("s"), !word.hasSuffix("ss") { prefixes.append(String(word.dropLast())) }
             var weights: [String: Double] = [:]
             for prefix in prefixes where prefix.count >= 3 {
                 var i = lowerBound(prefix)
@@ -524,6 +667,7 @@ extension PageLookup {
                     i += 1
                 }
             }
+            for form in forms.flatMap(PageLookup.verbForms) where postings[form] != nil { weights[form] = 0.6 }
             for form in forms where postings[form] != nil { weights[form] = 1 }
             return weights
         }
