@@ -463,8 +463,10 @@ struct EditorView: View {
     }
 
     private var folded: Bool { sizeClass == .compact }
-    /// The keyboard is up: the toolbar shows Done and Focus, and nothing else.
+    /// The keyboard is up: the toolbar shows Done (and Focus, while writing), and nothing else.
     @State private var typing = false
+    /// The page's writing has the keyboard (not its title, a field or the companion).
+    @State private var writing = false
 
     /// Closes the keyboard (the iPhone keyboard has no key for it) and, in
     /// Focus, leaves it: Focus is for editing, so there's nothing to stay for.
@@ -511,7 +513,7 @@ struct EditorView: View {
                     .ignoresSafeArea()   // the whole display; bars appear over it
                     .transition(.opacity)
             } else {
-                PageEditor(keepsKeyboard: typing) {   // stops at the keyboard, as iOS lays pages out
+                PageEditor(keepsKeyboard: typing, onWriting: { writing = $0 }) {   // stops at the keyboard, as iOS lays pages out
                     withAnimation(.smooth(duration: 0.3)) { focusMode = true }
                 }
                     .transition(.opacity)
@@ -585,15 +587,18 @@ struct EditorView: View {
                 // companion and Mentions.
                 if typing {
                     done
-                    ToolbarSpacer(.fixed, placement: .topBarTrailing)
-                    // Unfolded, kept in the top row at its right end; folded, in the
-                    // side column, as iOS places it.
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button("Focus Mode", systemImage: "arrow.up.left.and.arrow.down.right") {
-                            withAnimation(.smooth(duration: 0.3)) { focusMode = true }
+                    // Focus is for the writing: offered only while it has the keyboard,
+                    // not the title, a field or the companion (Kevin). Unfolded, kept
+                    // in the top row at its right end; folded, in the side column.
+                    if writing {
+                        ToolbarSpacer(.fixed, placement: .topBarTrailing)
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button("Focus Mode", systemImage: "arrow.up.left.and.arrow.down.right") {
+                                withAnimation(.smooth(duration: 0.3)) { focusMode = true }
+                            }
                         }
+                        .axisBehavior(folded ? .automatic : .horizontalOnly)
                     }
-                    .axisBehavior(folded ? .automatic : .horizontalOnly)
                 } else {
                     // The companion, beside the page (unfolded) or a sheet (folded); on
                     // the Duo the side column. ⌥⌘I is the system's shortcut for an inspector.

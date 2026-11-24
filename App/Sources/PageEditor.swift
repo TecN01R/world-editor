@@ -12,9 +12,12 @@ struct PageEditor: UIViewRepresentable {
     /// The keyboard was up when the page appeared (coming back from Focus):
     /// keep writing, keyboard up, instead of waiting for a tap.
     private let keepsKeyboard: Bool
+    /// The writing (not the title or a field) has the keyboard, or no longer does.
+    private let onWriting: (Bool) -> Void
 
-    init(keepsKeyboard: Bool = false, onFocus: @escaping () -> Void) {
+    init(keepsKeyboard: Bool = false, onWriting: @escaping (Bool) -> Void = { _ in }, onFocus: @escaping () -> Void) {
         self.keepsKeyboard = keepsKeyboard
+        self.onWriting = onWriting
         self.onFocus = onFocus
     }
 
@@ -36,6 +39,7 @@ struct PageEditor: UIViewRepresentable {
         tv.fieldsController = fields
         context.coordinator.textView = tv
         context.coordinator.keepsKeyboard = keepsKeyboard
+        context.coordinator.onWriting = onWriting
         context.coordinator.render(selection: nil)
         context.coordinator.restoreCaret()
         return PageView(textView: tv, bar: context.coordinator.formatBar)
@@ -75,6 +79,7 @@ struct PageEditor: UIViewRepresentable {
         private var isRendering = false
         var onFocus: () -> Void
         var keepsKeyboard = false
+        var onWriting: (Bool) -> Void = { _ in }
         lazy var formatBar = FormatBar(onAction: { [weak self] action in self?.perform(action) })
 
         lazy var titleField: UITextField = {
@@ -172,10 +177,12 @@ struct PageEditor: UIViewRepresentable {
 
         func textViewDidBeginEditing(_ tv: UITextView) {
             (tv.superview as? PageView)?.showBar(true)
+            onWriting(true)
             updateFormatBar()   // the @ menu can only appear once writing
         }
         func textViewDidEndEditing(_ tv: UITextView) {
             (tv.superview as? PageView)?.showBar(false)
+            onWriting(false)
             closeMentionMenu()
         }
 
