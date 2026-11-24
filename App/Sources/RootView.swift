@@ -19,7 +19,9 @@ struct RootView: View {
     @State private var conversationsShown = false
     /// The world conversation open (a new one has its id before anything's said).
     @State private var worldConversation: UUID?
-    @State private var columns: NavigationSplitViewVisibility = Self.startsInFocus ? .detailOnly : .all
+    /// Unfolded, the drawer starts closed: the page in front, the drawer a tap away (open for
+    /// CI's shot of the pages list).
+    @State private var columns: NavigationSplitViewVisibility = Screenshots.opensList ? .all : .detailOnly
     /// The pages list as it was before Focus mode put it away, to put back after.
     @State private var columnsBeforeFocus: NavigationSplitViewVisibility?
     /// Folded, the companion's sheet keeps the height it was left at, half or full,
@@ -63,6 +65,10 @@ struct RootView: View {
         } detail: {
             detail
         }
+        // Unfolded, the pages list is a drawer that slides over the page, in portrait and
+        // landscape alike, never squeezing it (Kevin, 2026-11-24: "the drawer would slide
+        // over instead"); the companion is a column beside the page, one or the other open.
+        .navigationSplitViewStyle(.prominentDetail)
         // Coming back to the app (its icon, the app switcher) opens nothing: it's where
         // the author left it, even while the companion's download runs. Only a tap on the
         // download's Live Activity shows the download (Kevin, 2026-11-24), in the companion
