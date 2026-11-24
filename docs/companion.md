@@ -315,7 +315,20 @@ plus 11 from Kevin's world):
 | same | greedy | 55/60 (92%) | 17/22 | 0/18 |
 | + an event and a date in the example | greedy | 57/60 (95%) | 19/22 | 0/18 |
 | same, plain JSON (no constrained decoding) | greedy | 56/60 (93%) | 16/22 | 0/18 |
-| + "about" left out when empty, names in values get pages, lists read apart (shipped) | greedy | 57/60 (95%) | 20/22 | 0/18 |
+| + "about" left out when empty, names in values get pages, lists read apart | greedy | 57/60 (95%) | 20/22 | 0/18 |
+
+Kevin's try on the phone (2026-11-24) filed the facts but left Myriddea blank:
+against the words the message used for it (two scenarios added, one his own
+message; ×2 samples, 65 + 12 scenarios):
+
+| Prompt | Sampling | Facts filed | New pages made | Their description as its text | Filed from questions, hedges, chat |
+|---|---|---|---|---|---|
+| as above | greedy, ×2 | 120/130 (92%) | 45/50 | 4/18 | 0/36 |
+| + an "about" rule with "the fishing village of Holm", two more in the example | greedy, ×2 | 116/130 (89%) | 42/50 | 2/18 | 0/36 |
+| "about" right after the title, and on every new page in the example (shipped) | greedy, ×2 | 118/130 (91%) | 44/50 | 14/18 | 0/36 |
+
+The code also drops text that is only part of the page's name ("Lady" for
+Lady Corvina).
 
 About 2.7 s a message on the computer's GPU. New types come from what's said
 (Event, Ship, Object, Organization appeared on their own). Read by hand, about

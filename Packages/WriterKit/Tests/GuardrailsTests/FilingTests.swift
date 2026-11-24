@@ -116,6 +116,11 @@ final class FilingTests: XCTestCase {
                  "She lives on Tern Island with her grandmother.", pages: &pages, schema: &schema)
         XCTAssertEqual(pages.map(\.title), ["Casperica", "Tern Island"])
         XCTAssertEqual(pages[1].paragraphs.map(\.text), [""])
+
+        // Nor part of the name.
+        _ = file(Filings(pages: [.init(title: "Lady Corvina", type: "Character", about: "Lady")]),
+                 "Her sword was a gift from Lady Corvina.", pages: &pages, schema: &schema)
+        XCTAssertEqual(pages.first { $0.title == "Lady Corvina" }?.paragraphs.map(\.text), [""])
     }
 
     func testAValueThatOnlyRepeatsItsFieldSaysNothing() {

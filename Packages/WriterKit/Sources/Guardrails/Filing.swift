@@ -102,23 +102,27 @@ public struct FilingPrompt: Equatable, Sendable {
         of the world's fields only when it means just that, otherwise a new name. value: their \
         exact words, as few as will do: a name, a number, a couple of words.
         - pages: the open page, with its type; and each person, place, group or thing the message \
-        names that should have a page of its own. type: what kind of thing it is (one of the \
-        world's types only if it is one; a ship is not a Place). about: what the message says it \
-        is, in its exact words; leave it out when it doesn't say.
+        names that should have a page of its own. about: the words the message uses for what it \
+        is ("a monastery in the hills"; "the fishing village of Holm" gives "fishing village"), \
+        exactly; leave it out only when the message just names it. type: what kind of thing it is \
+        (one of the world's types only if it is one; a ship is not a Place).
         When a fact's value is a name, give just the name, and list it under pages too.
 
         Example. The open page: "Bram" (no type yet). Their message: "He trained at the Iron \
-        Abbey, a monastery in the hills, under Sister Maud. He's twenty. He lost his hand in the \
-        Siege of Varn, in the winter of 1102."
+        Abbey, a monastery in the hills, under Sister Maud, an old healer. He comes from the \
+        fishing village of Holm. He's twenty. He lost his hand in the Siege of Varn, the war's \
+        last battle, in the winter of 1102."
         {"facts": [{"page": "Bram", "field": "Trained at", "value": "Iron Abbey"}, \
         {"page": "Bram", "field": "Teacher", "value": "Sister Maud"}, \
+        {"page": "Bram", "field": "Comes from", "value": "Holm"}, \
         {"page": "Bram", "field": "Age", "value": "twenty"}, \
         {"page": "Bram", "field": "Lost his hand in", "value": "Siege of Varn"}, \
         {"page": "Siege of Varn", "field": "When", "value": "winter of 1102"}], \
         "pages": [{"title": "Bram", "type": "Character"}, \
-        {"title": "Iron Abbey", "type": "Place", "about": "a monastery in the hills"}, \
-        {"title": "Sister Maud", "type": "Character"}, \
-        {"title": "Siege of Varn", "type": "Event"}]}
+        {"title": "Iron Abbey", "about": "a monastery in the hills", "type": "Place"}, \
+        {"title": "Sister Maud", "about": "an old healer", "type": "Character"}, \
+        {"title": "Holm", "about": "fishing village", "type": "Place"}, \
+        {"title": "Siege of Varn", "about": "the war's last battle", "type": "Event"}]}
 
         Copy their words exactly; never add, reword or guess. Leave out what they asked, wondered \
         about or weren't sure of, and what only their friend said. If their message states \
@@ -226,7 +230,11 @@ public enum Filer {
             var i = index(named: page.title)
             // A new page needs a name, as the author wrote one: capitalised ("Myriddea", not "grandmother").
             if i == nil, let title = words(page.title), title.contains(where: \.isUppercase) {
-                let about = words(page.about).flatMap { key($0) == key(title) ? nil : $0.prefix(1).uppercased() + $0.dropFirst() }
+                // Its text says what it is, not part of its name ("Lady" for Lady Corvina).
+                let named = Set(key(title).split(separator: " "))
+                let about = words(page.about).flatMap {
+                    Set(key($0).split(separator: " ")).isSubset(of: named) ? nil : $0.prefix(1).uppercased() + $0.dropFirst()
+                }
                 i = make(title, about: about)
             }
             guard let i, pages[i].type == nil, let type = type(named: page.type) else { continue }
