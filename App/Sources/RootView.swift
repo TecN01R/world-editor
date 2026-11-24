@@ -51,7 +51,7 @@ struct RootView: View {
             }
         } detail: {
             if library.selection == library.world.id {
-                WorldCompanionView()   // the world's own conversation, from the top of the list
+                WorldCompanionView()   // the world's own conversation, from its button at the bottom of the list
             } else if let id = library.selection {
                 // Unfolded, tapping the companion's button sets the page beside it:
                 // opening puts the pages list away, closing brings it back. Only the
@@ -163,10 +163,10 @@ struct RootView: View {
 struct PageList: View {
     @Environment(Library.self) private var library
     @Binding var selection: UUID?
-    /// Unfolded, the sidebar's buttons share a row with the title; folded,
-    /// they move to the Duo's side column and the title heads the list.
+    /// Unfolded, the title shares the top row with New Page; folded, the
+    /// buttons move to the Duo's side column and the title heads the list.
     let titleInBar: Bool
-    /// The world's own conversations with the companion (its button at the top, on its own).
+    /// The world's own conversations with the companion (its button at the bottom, above search).
     let openWorldConversations: () -> Void
     let newPage: () -> Void
     @State private var searching = false
@@ -316,19 +316,10 @@ struct PageList: View {
                  : "Its \(count == 1 ? "page" : "\(count) pages") will be deleted for good, with its types and fields. This can’t be undone.")
         }
         .toolbar {
-            // The companion for the whole world, not one page (Kevin, 2026-11-24): opens like
-            // a page, full screen folded and beside the list unfolded.
+            // Kevin, 2026-11-24: search at the very bottom, the companion right above it,
+            // New Page in its usual place at the top; the companion at the bottom on every
+            // screen.
             ToolbarItem(placement: .primaryAction) {
-                // Named apart from a page's own companion button, which shows beside it unfolded.
-                Button("World Conversations", systemImage: "bubble.left.and.text.bubble.right", action: openWorldConversations)
-                    .accessibilityHint("Talk with the companion about your whole world.")
-            }
-            // Search and New Page together at the bottom, within reach, as iOS 26's Mail
-            // and Notes have them; the companion stays on its own at the top, not sharing
-            // its glass with an unrelated action (Kevin, 2026-11-24, asked; Apple's layout).
-            DefaultToolbarItem(kind: .search, placement: .bottomBar)
-            ToolbarSpacer(.fixed, placement: .bottomBar)
-            ToolbarItem(placement: .bottomBar) {
                 Button("New Page", systemImage: "square.and.pencil") {
                     // Showing one type: the new page is one of them (as a new
                     // note goes in the open folder), so it's in the list.
@@ -339,6 +330,16 @@ struct PageList: View {
                 }
                 .keyboardShortcut("n")
             }
+            // The companion for the whole world, not one page: it opens like a page, full
+            // screen folded and beside the list unfolded. Listed before search, so the
+            // folded Duo's side column puts it right above.
+            ToolbarItem(placement: .bottomBar) {
+                // Named apart from a page's own companion button, which shows beside it unfolded.
+                Button("World Conversations", systemImage: "bubble.left.and.text.bubble.right", action: openWorldConversations)
+                    .accessibilityHint("Talk with the companion about your whole world.")
+            }
+            ToolbarSpacer(.fixed, placement: .bottomBar)
+            DefaultToolbarItem(kind: .search, placement: .bottomBar)
         }
     }
 
@@ -650,9 +651,11 @@ struct EditorView: View {
                         .axisBehavior(folded ? .automatic : .horizontalOnly)
                     }
                 } else {
-                    // The companion, beside the page (unfolded) or a sheet (folded); on
-                    // the Duo the side column. ⌥⌘I is the system's shortcut for an inspector.
-                    ToolbarItem(placement: .primaryAction) {
+                    // The companion, beside the page (unfolded) or a sheet (folded), its
+                    // button at the bottom as on every screen (Kevin, 2026-11-24); folded,
+                    // at the foot of the Duo's side column. ⌥⌘I is the system's shortcut
+                    // for an inspector.
+                    ToolbarItem(placement: .bottomBar) {
                         Button(companionShown ? "Hide Companion" : "Companion", systemImage: "bubble.left.and.text.bubble.right") {
                             companion.isOpen = !companionShown
                             onCompanionToggled(companion.isOpen)
@@ -674,7 +677,7 @@ struct EditorView: View {
 }
 
 /// The world's conversations with the companion, about the whole world rather than
-/// one page (its button at the top of the pages list; Kevin, 2026-11-24): a stock list, newest
+/// one page (its button at the bottom of the pages list; Kevin, 2026-11-24): a stock list, newest
 /// first, each titled by the author's first words, with New Conversation. It goes
 /// back into the one the author was in; with none yet, straight into a new one.
 /// Every page is background, none is open; what's said is filed into the pages it
