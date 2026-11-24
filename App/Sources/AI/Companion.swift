@@ -23,9 +23,10 @@ final class Companion {
     private(set) var writing: String?
     /// What it's thinking, while it thinks before replying.
     private(set) var reasoning: String?
-    /// What it thought before each of its replies, for this session only: shown
-    /// collapsed, never saved or sent back to the model (its makers' advice).
-    private(set) var thoughts: [UUID: String] = [:]
+    /// What it thought before each of its replies (by the reply, so each tried
+    /// version keeps its own), for this session only: shown collapsed, never saved
+    /// or sent back to the model (its makers' advice).
+    private(set) var thoughts: [String: String] = [:]
     /// The panel is showing: beside the page unfolded, a sheet folded.
     var isOpen = false
     /// The Duo is folded (compact width): the companion is a sheet, not a column.
@@ -57,6 +58,9 @@ final class Companion {
     }
     /// The reply Try Again took back, kept as a version of the next one, or put back if that fails.
     private var retracted: Conversation.Turn?
+    /// The world's other conversations, as of opening this page: their filings can
+    /// change this page too, so Undo, newest first, looks at them as well.
+    private(set) var others: [Conversation] = []
 
     // The one model the companion uses: the test's leader that runs on the
     // phone today (Kevin: one model, no choosing, as when it ships). Gemma,
@@ -120,9 +124,14 @@ final class Companion {
     /// The open page changed: load its conversation and, after a pause,
     /// prepare a reply quietly.
     func open(_ page: WriterCore.Document, in library: Library) {
+        let directory = library.conversationsDirectory
+        // The same page again (folding or unfolding rebuilds the editor): leave a reply or
+        // Try Again in progress alone.
+        guard page.id != conversation.page || directory != store?.directory else { return }
         preparing?.cancel()
-        store = library.conversationsDirectory.flatMap { try? ConversationStore(directory: $0) }
+        store = directory.flatMap { try? ConversationStore(directory: $0) }
         conversation = store?.load(page.id) ?? Conversation(page: page.id)
+        others = (store?.all() ?? []).filter { $0.page != page.id }
         retracted = nil
         state = .idle
         guard conversation.waiting == nil else { return }   // a blank page too: it helps you start
@@ -184,6 +193,11 @@ final class Companion {
     /// The author's answer, in their words; then the companion's reply.
     func answer(_ text: String, page: WriterCore.Document, in library: Library) {
         conversation.answer(text)
+        // The page as they sent it: filing, after the reply, changes only what's still so.
+        if let i = conversation.turns.indices.last, let now = library.pages.first(where: { $0.id == page.id }) {
+            conversation.turns[i].seen = now.values
+            conversation.turns[i].seenTitle = now.title
+        }
         save()
         askNow(about: page, in: library)
     }
@@ -201,6 +215,9 @@ final class Companion {
         state = .thinking
         defer { self.writing = nil; self.reasoning = nil }
         await filing?.value
+        // Dropped while filing finished (another page opened, or asked again): whoever
+        // dropped it owns the conversation and the reply taken back now.
+        guard !Task.isCancelled else { return }
         let page = library.pages.first { $0.id == page.id } ?? page   // as it is now, not when it opened
         let others = library.pages.filter { $0.id != page.id }
         let earlier = (store?.all() ?? []).filter { $0.page != page.id }.map { talk in
@@ -232,26 +249,27 @@ final class Companion {
         } catch {
             Self.log.error("Model failed: \(String(describing: error), privacy: .public)")
             trialLog("ERROR \(page.title): \(String(describing: error))")   // TRIAL
-            restoreRetracted()
+            if !Task.isCancelled { restoreRetracted() }
             state = error is URLError ? .downloadPaused : .failed
             return
         }
-        guard !Task.isCancelled, conversation.page == page.id else { restoreRetracted(); state = .idle; return }
+        guard !Task.isCancelled else { return }   // superseded: leave state to whoever dropped it
+        guard conversation.page == page.id else { state = .idle; return }
         trialLog("REPLY\(plain ? " (plain)" : "") \(page.title): \(reply.reply)")   // TRIAL
         guard !reply.reply.isEmpty else { restoreRetracted(); state = .failed; return }   // ran out of room while thinking
         if modelVersion == nil { modelVersion = model.version }   // just downloaded
         conversation.ask(reply.reply, after: retracted)
         retracted = nil
-        if !reply.reasoning.isEmpty, let turn = conversation.turns.last { thoughts[turn.id] = reply.reasoning }
+        if !reply.reasoning.isEmpty { thoughts[reply.reply] = reply.reasoning }
         save()
         state = .idle
         // Replied: now what the author said, filed (after, so the reply never waits for it).
         if let answered = conversation.turns.dropLast().last { file(answered, page: page.id, in: library) }
     }
 
-    /// Files what the author said in `turn` of `page`'s conversation, once.
+    /// Files what the author said in `turn` of `page`'s conversation, unless something already was.
     private func file(_ turn: Conversation.Turn, page: UUID, in library: Library) {
-        guard let message = turn.answer, turn.filed == nil else { return }
+        guard turn.needsFiling, let message = turn.answer, Filer.states(message) else { return }
         let previous = filing
         filing = Task {
             await previous?.value
@@ -264,8 +282,13 @@ final class Companion {
                 trialLog("FILING ERROR: \(String(describing: error))")   // TRIAL
                 return
             }
-            // Kept even when empty, so trying the reply again doesn't file it twice.
-            setFiled(library.file(filings, message: message, on: page), turn: turn.id, page: page)
+            // Gone meanwhile (a new conversation, another world): nothing to file into.
+            let there = conversation.page == page ? conversation.turns.contains { $0.id == turn.id }
+                                                  : store?.load(page).turns.contains { $0.id == turn.id } == true
+            guard there, library.pages.contains(where: { $0.id == page }) else { return }
+            // Kept even when empty: Try Again reads the message again only if nothing came of it.
+            let sent = turn.seen.map { (values: $0, title: turn.seenTitle ?? "") }
+            setFiled(library.file(filings, message: message, on: page, again: turn.filed, sent: sent), turn: turn.id, page: page)
         }
     }
 
@@ -276,13 +299,19 @@ final class Companion {
         } else if var talk = store?.load(page), let i = talk.turns.firstIndex(where: { $0.id == turn }) {
             talk.turns[i].filed = record   // the author has moved on to another page
             try? store?.save(talk)
+            others.removeAll { $0.page == talk.page }   // so Undo here sees it
+            others.append(talk)
         }
     }
 
-    /// Takes back one thing filed from `turn` (what the author changed since stays).
+    /// Takes back one thing filed from `turn` (what the author changed since stays), unless
+    /// a later message changed it: that one is undone first.
     func undoFiling(_ action: FilingRecord.Entry, from turn: UUID, in library: Library) {
-        guard var record = conversation.turns.first(where: { $0.id == turn })?.filed else { return }
-        library.undo(action, of: &record)
+        guard !conversation.changedLater(action, in: turn, elsewhere: others),   // newest first (Kevin, 2026-11-24)
+              var record = conversation.turns.first(where: { $0.id == turn })?.filed else { return }
+        let records = (conversation.turns.filter { $0.id != turn } + others.flatMap(\.turns)).compactMap(\.filed)
+        library.undo(action, of: &record, kept: { [store] id in store?.load(id).authorText.isEmpty == false },
+                     others: records)
         setFiled(record, turn: turn, page: conversation.page)   // kept when all undone, so it isn't filed again
     }
 
@@ -293,7 +322,13 @@ final class Companion {
         if conversation.waiting == nil { conversation.turns.append(old) }
     }
 
-    private func save() { try? store?.save(conversation) }
+    /// Saves the conversation, with a reply being tried again still in it until the new
+    /// one comes: if the app closes or the page changes meanwhile, it isn't lost.
+    private func save() {
+        var talk = conversation
+        if let retracted, talk.waiting == nil { talk.turns.append(retracted) }
+        try? store?.save(talk)
+    }
 }
 
 // TRIAL: every reply, and the model's speed and memory, pulled off the phone

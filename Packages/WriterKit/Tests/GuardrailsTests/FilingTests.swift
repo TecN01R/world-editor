@@ -176,8 +176,28 @@ final class FilingTests: XCTestCase {
         var undone = polite
         _ = undone.undo(try XCTUnwrap(polite.actions.first), pages: &pages, schema: &schema)
         XCTAssertEqual(pages, [her])
-        XCTAssertTrue(file(Filings(facts: [.init(page: "she", field: "Vessel", value: "bireme")]),
-                           "I think it was a bireme", pages: &pages, schema: &schema).isEmpty)
+        for guess in ["I think it was a bireme", "I'm not actually sure, I think it was a bireme",
+                      "I don't actually know, a bireme"] {
+            XCTAssertTrue(file(Filings(facts: [.init(page: "she", field: "Vessel", value: "bireme")]),
+                               guess, pages: &pages, schema: &schema).isEmpty, guess)
+        }
+        let before = file(Filings(facts: [.init(page: "she", field: "Vessel", value: "bireme")]),
+                          "Actually, I think it was a bireme", pages: &pages, schema: &schema)
+        XCTAssertFalse(before.isEmpty)
+        var back = before
+        _ = back.undo(try XCTUnwrap(before.actions.first), pages: &pages, schema: &schema)
+        XCTAssertEqual(pages, [her])
+
+        // Read again (Try Again): a value the author changed since the first reading stays.
+        let seen = pages[0].values
+        pages[0].values[vessel.id] = .text("galley")   // their own edit
+        let reread = Filer.file(Filings(facts: [.init(page: "she", field: "Vessel", value: "bireme")]),
+                                message: "Actually it's a bireme", open: her.id, pages: &pages, schema: &schema) {
+            page, field, was in page == her.id && seen[field] == was
+        }
+        XCTAssertTrue(reread.isEmpty)
+        XCTAssertEqual(pages[0].values[vessel.id], .text("galley"))
+        pages[0].values[vessel.id] = .text("trireme")
 
         // What was true once isn't a correction.
         let then = file(Filings(facts: [.init(page: "she", field: "Vessel", value: "galley")]),
@@ -270,5 +290,23 @@ final class FilingTests: XCTestCase {
         let stray = #"{"facts": [{"page": "Ilsa", "field": "Born", "value": "1211 [old count]"}]}, "pages": [{"title": "Ilsa"}]}"#
         XCTAssertEqual(Filings.parse(stray), Filings(facts: [.init(page: "Ilsa", field: "Born", value: "1211 [old count]")],
                                                      pages: [.init(title: "Ilsa")]))
+    }
+
+    /// A field the author took off a type isn't put back by filing.
+    func testAFieldRemovedFromATypeStaysRemoved() {
+        let age = FieldDefinition(name: "Age", kind: .text)
+        let character = PageType(name: "Character", fields: [])   // Age taken off
+        var schema = Schema(fields: [age], types: [character])
+        var mara = Document(title: "Mara", paragraphs: [Paragraph(text: "")])
+        mara.type = character.id
+        mara.values[age.id] = .text("19")   // kept, unseen
+        var her = casperica
+        her.type = character.id
+        var pages = [her, mara]
+        let record = file(Filings(facts: [.init(page: "she", field: "Age", value: "twenty")]),
+                          "She's twenty.", pages: &pages, schema: &schema)
+        XCTAssertTrue(record.isEmpty)
+        XCTAssertTrue(schema.types[0].fields.isEmpty)
+        XCTAssertNil(pages[0].values[age.id])
     }
 }

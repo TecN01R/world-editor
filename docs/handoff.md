@@ -29,7 +29,13 @@ features below. Read `CLAUDE.md` first; this covers what isn't there.
   number, date, choice, yes/no and page link. Stock controls, no Liquid Glass
   in the content (HIG). Rows stack via `ViewThatFits` when two columns don't
   fit. Clear buttons via UIKit appearance. A page field's menu ends with
-  "New {Type}…", which creates a typed page and links it.
+  "New {Type}…", which creates a typed page and links it. The type line's
+  menu has "Edit {Type} Fields…" (`TypeFieldsSheet`): stock list editing to
+  remove a field from every page of the type (values kept), reorder, edit, or
+  add one (Kevin, 2026-11-24: removing was only in a field name's long-press
+  menu, which he couldn't find). Tapping a field's name edits the field;
+  holding it opens the menu (Edit Field…, Remove from {Type}): a long press
+  never deletes outright, as in iOS's own apps.
 - **Filing from the companion** (`Guardrails/Filing.swift`, `FilingRecord`):
   what the author tells the companion becomes types, fields and linked pages
   on its own, in their words, with Undo in the conversation

@@ -184,12 +184,25 @@ extension FilingPrompt {
 /// pages get a type, and an existing page's text is never touched. What's
 /// dropped is dropped, not repaired.
 public enum Filer {
+    /// Whether `message` states anything: not only questions, guesses and musing. Filing
+    /// one that doesn't can only find nothing, so it isn't asked of the model either.
+    public static func states(_ message: String) -> Bool {
+        Statement.split(message).contains { !$0.hedged }
+    }
+
+    /// - Parameters:
+    ///   - replaceable: whether a filled field (page, field, its value) may take a corrected
+    ///     value; reading a message again passes what it saw the first time.
+    ///   - renames: whether naming the page's subject may rename it (reading again: only if
+    ///     the title is still what it was the first time).
     public static func file(_ filings: Filings, message: String, open: UUID,
-                            pages: inout [Document], schema: inout Schema, now: Date = Date()) -> FilingRecord {
+                            pages: inout [Document], schema: inout Schema, now: Date = Date(),
+                            replaceable: (UUID, UUID, FieldValue) -> Bool = { _, _, _ in true },
+                            renames: Bool = true) -> FilingRecord {
         let sentences = Statement.split(message)
         var record = FilingRecord()
         // Only questions or musing: nothing is stated, so nothing is filed (not even a type).
-        guard sentences.contains(where: { !$0.hedged }) else { return record }
+        guard states(message) else { return record }
         /// `phrase` as the author wrote it, and whether it's a name: capitalised
         /// mid-sentence ("the Treaty of Gull Rock"), not just at its start.
         func found(_ phrase: String) -> (words: String, isName: Bool)? {
@@ -204,11 +217,12 @@ public enum Filer {
             return nil
         }
         func words(_ phrase: String) -> String? { found(phrase)?.words }
+        var renamed: String?   // the open page's new name, if the message gives one (below)
         func index(named name: String) -> Int? {
             let name = Self.key(name)
             guard !name.isEmpty else { return nil }
             if let i = pages.firstIndex(where: { $0.id == open }),
-               Self.key(pages[i].title) == name || Self.openPage.contains(name) { return i }
+               Self.key(pages[i].title) == name || Self.openPage.contains(name) || renamed.map(Self.key) == name { return i }
             return pages.firstIndex { Self.key($0.heading) == name }
         }
         func type(named name: String) -> UUID? {
@@ -227,6 +241,26 @@ public enum Filer {
             pages.insert(new, at: at)
             record.entries.append(.created(page: new.id, modified: now))
             return at
+        }
+
+        // Naming the open page's subject ("Her name is Florica") renames the page: not a
+        // Name field, nor a new page by that name (Kevin, 2026-11-24). Applied at the end, so
+        // lines by the old title still find the page; ones by the new title find it too.
+        // (By id each time: new pages go in near the top and move it.)
+        func isOpen(_ i: Int?) -> Bool { i.map { pages[$0].id == open } ?? false }
+        if renames, let o = pages.firstIndex(where: { $0.id == open }) {
+            // The model may call the page by its new name ("Mara: Name = Mara" on an untitled one).
+            func about(_ fact: Filings.Fact) -> Bool {
+                index(named: fact.page) == o || (index(named: fact.page) == nil && Self.key(fact.page) == Self.key(fact.value))
+            }
+            for fact in filings.facts where Self.nameFields.contains(Self.key(fact.field)) && about(fact) {
+                // Not a name it already has, or part of it ("Florica" for "Florica Dragan").
+                guard let hit = found(fact.value), hit.words.contains(where: \.isUppercase),
+                      !Set(Self.key(hit.words).split(separator: " "))
+                          .isSubset(of: Self.key(pages[o].title).split(separator: " ")) else { continue }
+                renamed = hit.words
+                break
+            }
         }
 
         for page in filings.pages {
@@ -252,15 +286,22 @@ public enum Filer {
         let correcting = Statement.has(Statement.corrections, in: message)
         var filled = Set<[UUID]>()   // page and field filled from this message
         for fact in filings.facts {
+            // The open page's name is its title (above), never a field.
+            if Self.nameFields.contains(Self.key(fact.field)), isOpen(index(named: fact.page)) { continue }
             guard let i = index(named: fact.page), let typeID = pages[i].type,
                   let t = schema.types.firstIndex(where: { $0.id == typeID }),
                   let fieldName = name(fact.field), let hit = found(fact.value),
                   key(hit.words) != key(fieldName) else { continue }   // "Grandmother: grandmother" says nothing
             let words = hit.words
-            let known = schema.fields(of: schema.types[t]).first { $0.name.lowercased() == fieldName.lowercased() }
-                ?? schema.fields.first { $0.name.lowercased() == fieldName.lowercased() }
+            let onType = schema.fields(of: schema.types[t]).first { $0.name.lowercased() == fieldName.lowercased() }
+            let shared = schema.fields.first { $0.name.lowercased() == fieldName.lowercased() }
+            // A field the author took off this type (its pages still hold values in it) isn't put back.
+            if onType == nil, let shared, pages.contains(where: { $0.type == typeID && $0.values[shared.id] != nil }) { continue }
+            let known = onType ?? shared
             // A name with no page yet gets one (the model often files "Sword: Mercy" without listing Mercy).
-            let linkable = known.map { $0.kind == .page && (pages[i].values[$0.id] == nil || correcting) } ?? true
+            let linkable = known.map { def in
+                def.kind == .page && (pages[i].values[def.id].map { correcting && replaceable(pages[i].id, def.id, $0) } ?? true)
+            } ?? true
             if hit.isName, linkable, index(named: words) == nil { _ = make(words) }
             guard let i = index(named: fact.page) else { continue }   // where it is now, after a new page
             let linked = index(named: words).flatMap { $0 == i ? nil : pages[$0] }
@@ -270,7 +311,8 @@ public enum Filer {
             // only when the message corrects something.
             let was = pages[i].values[field.id]
             guard let value = value(words, linked: linked, for: field), value != was,
-                  was == nil || correcting, !filled.contains([pages[i].id, field.id]) else { continue }
+                  was.map { correcting && replaceable(pages[i].id, field.id, $0) } ?? true,
+                  !filled.contains([pages[i].id, field.id]) else { continue }
             filled.insert([pages[i].id, field.id])
             if known == nil {
                 schema.fields.append(field)
@@ -284,8 +326,15 @@ public enum Filer {
             record.entries.append(was.map { .replaced(page: pages[i].id, field: field.id, was: $0, value: value) }
                                   ?? .value(page: pages[i].id, field: field.id, value: value))
         }
+        if let title = renamed, let o = pages.firstIndex(where: { $0.id == open }) {
+            record.entries.append(.renamed(page: pages[o].id, was: pages[o].title, title: title))
+            pages[o].title = title
+        }
         return record
     }
+
+    /// Field names that mean the page's own name.
+    static let nameFields: Set = ["name", "full name", "called", "named"]
 
     /// Every word capitalised, but for the small ones inside ("Treaty of Gull Rock", "Mercy").
     static func looksLikeAName(_ words: String) -> Bool {
@@ -355,10 +404,15 @@ struct Statement {
     }
 
     /// Whether the sentence holds one of the author's words for uncertainty, as a whole word.
-    /// "I think it was actually a bireme" is a correction said politely, not a guess (Kevin, 2026-11-24).
+    /// "I think it was actually a bireme" is a correction said politely, not a guess (Kevin,
+    /// 2026-11-24), as is "Actually, I think…"; "I'm not actually sure" or "I don't
+    /// actually know" isn't, and counts as unsure on its own.
     private static func hedges(_ text: String) -> Bool {
         let polite = has(["actually"], in: text)
-        return has(ProvenanceValidator.hedges.filter { $0 != "?" && !(polite && $0 == "i think") }, in: text)
+        let unsure = ["not actually sure", "not really sure", "not entirely sure", "not quite sure",
+                      "not completely sure", "not certain", "unsure", "don't know", "don't actually know",
+                      "no idea", "can't remember", "don't remember", "i guess"]
+        return has(ProvenanceValidator.hedges.filter { $0 != "?" && !(polite && $0 == "i think") } + unsure, in: text)
     }
 
     /// Words that take something back: a filled field changes only in a message with one,
@@ -368,7 +422,8 @@ struct Statement {
 
     /// Whether `text` holds one of `words` as whole words.
     static func has(_ words: [String], in text: String) -> Bool {
-        let padded = " " + String(collapsed(text).lowercased().map { $0.isLetter || $0 == "'" ? $0 : " " }) + " "
+        let letters = String(collapsed(text).lowercased().map { $0.isLetter || $0 == "'" ? $0 : " " })
+        let padded = " " + letters.split(separator: " ").joined(separator: " ") + " "   // "not 100% sure" is "not sure"
         return words.contains { padded.contains(" \($0) ") }
     }
 }

@@ -28,11 +28,15 @@ final class ConversationVersionsTests: XCTestCase {
     func testChoosingAVersionIsWhatTheConversationGoesOnFrom() throws {
         var talk = try retried(["A", "B"])
         let turn = talk.turns[0].id
+        talk.choose("Z", in: turn)   // not one of its versions
+        XCTAssertEqual(talk.turns[0].question, "B")
         talk.choose("A", in: turn)
         talk.answer("yes")
         XCTAssertEqual(talk.turns[0].question, "A")
-        talk.choose("Z", in: turn)   // not one of its versions
+        talk.choose("B", in: turn)   // answered: the one they answered stays
+        talk.delete("A", in: turn)
         XCTAssertEqual(talk.turns[0].question, "A")
+        XCTAssertEqual(talk.turns[0].versions, ["A", "B"])
     }
 
     func testDeletingAVersion() throws {

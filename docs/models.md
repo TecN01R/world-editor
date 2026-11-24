@@ -26,7 +26,12 @@ more than quality.
 Qwen3.5-4B). A first test put 14 models through 91 moments of conversation,
 pointless questions). Of the models that fit the phone with vision, Gemma 4
 E2B scored best; Qwen3.5-4B invented something in half its replies. Gemma 4
-26B (MoE, ~14 GB) scored best overall but doesn't fit in the phone's memory.
+26B (MoE, ~14 GB) scored best overall. It doesn't fit in the phone's memory
+whole, but it needn't: only ~4B of its parameters work per token, and
+TurboFieldfare (Swift + Metal, Apache 2.0, `Vendor/turbo-fieldfare`) keeps
+~2 GB in memory and streams the experts each token needs from storage. Another
+app (Vehla) reports 6-7 tokens a second with it on the iPhone Duo. A spike to
+run it in World Editor is open (Kevin, 2026-11-24: "It WILL run on the Duo").
 On the Duo, E2B writes about 50 tokens a second after a ~12 s first load. It
 runs through Hugging Face's AnyLanguageModel (Foundation Models' session API
 over llama.cpp), with Gemma's recommended sampling (temperature 1, top-p

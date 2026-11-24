@@ -58,6 +58,13 @@ struct PageFields: View {
                 Text("No Type").tag(UUID?.none)
             }
             Button("New Type…", systemImage: "plus") { library.fieldsRequest = .newType }
+            // Removing, reordering and editing a type's fields, for all its pages (Kevin,
+            // 2026-11-24: removing one was hidden in a field name's long-press menu).
+            if let type = library.type(of: library.document) {
+                Button("Edit \(type.name) Fields…", systemImage: "list.bullet") {
+                    library.fieldsRequest = .editFields(type: type.id)
+                }
+            }
         } label: {
             label.padding(.vertical, 4).contentShape(.rect)
         }
@@ -67,8 +74,15 @@ struct PageFields: View {
         .sensoryFeedback(.selection, trigger: library.document.type)
     }
 
+    /// The field's name: tap to edit the field (Kevin, 2026-11-24); hold for the row's
+    /// menu, which also removes it from the type.
     private func name(_ field: FieldDefinition) -> some View {
-        Text(field.name).font(.authored(.body)).foregroundStyle(.secondary)
+        Button { library.fieldsRequest = .editField(field.id) } label: {
+            Text(field.name).font(.authored(.body)).foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(field.name)
+        .accessibilityHint("Edits this field. Touch and hold for more.")
     }
 
     private func valueView(_ field: FieldDefinition) -> some View {
@@ -190,6 +204,59 @@ private struct FieldValueView: View {
 
     private var page: Binding<UUID?> {
         Binding { if case .page(let id)? = value { id } else { nil } } set: { value = $0.map(FieldValue.page) }
+    }
+}
+
+/// A type's fields, from the type line's menu: stock list editing. Swipe or Edit
+/// to remove one from every page of the type (what's filled in stays saved, and
+/// comes back if it's added again), drag to reorder, tap to edit, Add Field below.
+struct TypeFieldsSheet: View {
+    @Environment(Library.self) private var library
+    @Environment(\.dismiss) private var dismiss
+    let type: UUID
+    @State private var editing: FieldDefinition?
+    @State private var adding = false
+
+    var body: some View {
+        let type = library.schema.type(type)
+        let fields = library.schema.fields(of: type)
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(fields) { field in
+                        Button { editing = field } label: {
+                            LabeledContent { Text(field.kind.label) } label: { Text(field.name).font(.authored(.body)) }
+                        }
+                        .tint(.primary)
+                        .accessibilityHint("Edits this field.")
+                    }
+                    .onDelete { offsets in
+                        for i in offsets { library.remove(fields[i].id, from: self.type) }
+                    }
+                    .onMove { library.moveFields(in: self.type, from: $0, to: $1) }
+                } footer: {
+                    let name = Text(type?.name ?? "").font(.authored(.footnote))
+                    if fields.isEmpty {
+                        Text("Add a field to give every \(name) page a place for it.")
+                    } else {
+                        Text("Removing a field takes it off every \(name) page. What's filled in is kept, and comes back if you add the field again.")
+                    }
+                }
+                Section {
+                    Button("Add Field", systemImage: "plus") { adding = true }
+                }
+            }
+            .navigationTitle("\(type?.name ?? "") Fields")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                // Changes apply at once, so Close (as Mentions), and Edit for removing and reordering.
+                ToolbarItem(placement: .cancellationAction) { Button("Close", systemImage: "xmark") { dismiss() } }
+                ToolbarItem(placement: .primaryAction) { EditButton() }
+            }
+            .toolbarVerticalBehavior(.disabled)   // a horizontal bar on the folded Duo, as the other sheets
+            .sheet(item: $editing) { FieldSheet(editing: $0) }
+            .sheet(isPresented: $adding) { FieldSheet(type: self.type) }
+        }
     }
 }
 

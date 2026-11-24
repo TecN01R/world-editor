@@ -45,7 +45,13 @@ struct PageEditor: UIViewRepresentable {
         return PageView(textView: tv, bar: context.coordinator.formatBar)
     }
 
-    func updateUIView(_ view: PageView, context: Context) { context.coordinator.onFocus = onFocus }
+    func updateUIView(_ view: PageView, context: Context) {
+        context.coordinator.onFocus = onFocus
+        // Renamed from elsewhere (the companion filing "Her name is Florica", or its Undo):
+        // the title shows it, unless the author is typing in it.
+        let title = context.coordinator.titleField
+        if !title.isFirstResponder, title.text != library.document.title { title.text = library.document.title }
+    }
 
     /// Bold New York, scaled with Dynamic Type.
     static var titleFont: UIFont { newYork(34, weight: .bold, scaledAs: .largeTitle) }   // the size of the world's title

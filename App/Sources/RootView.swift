@@ -495,7 +495,7 @@ struct EditorView: View {
     private var fieldSheet: Binding<Library.FieldsRequest?> {
         Binding {
             switch library.fieldsRequest {
-            case .addField?, .editField?: library.fieldsRequest
+            case .addField?, .editField?, .editFields?: library.fieldsRequest
             default: nil
             }
         } set: { library.fieldsRequest = $0 }
@@ -540,6 +540,7 @@ struct EditorView: View {
             switch request {
             case .addField(let type): FieldSheet(type: type)
             case .editField(let id): FieldSheet(editing: library.schema.fields.first { $0.id == id })
+            case .editFields(let type): TypeFieldsSheet(type: type)
             case .newType, .newPage: EmptyView()
             }
         }

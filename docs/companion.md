@@ -268,9 +268,14 @@ or better. What is left, from the judges' notes:
 
 ## Trying it again, and the plain model
 
-Try Again (hold the latest reply) keeps every try: "‹ 2 of 3 ›" under the
-reply goes back to one, and the one shown is what the conversation goes on
-from; hold a reply to delete one of its versions (`Conversation.Turn.versions`).
+Try Again (hold the latest reply) keeps every try: swipe between them, or
+use "‹ 2 of 3 ›" under the reply; hold it to delete a version
+(`Conversation.Turn.versions`). The one showing when the author answers is the
+one the conversation goes on from, and it stays that once answered (Kevin,
+2026-11-24): the switcher goes with the answer. Try Again also reads the
+author's message again for filing if nothing came of it the first time and
+nothing was undone (`Turn.needsFiling`; his "I think it was actually a
+bireme" was first read by E2B, which saw "trireme").
 Each reply draws a new seed: AnyLanguageModel otherwise draws one when the
 model loads and reuses it, so Try Again gave the same words (temperature was
 already Gemma's 1.0).
@@ -279,7 +284,19 @@ Plain Model (TRIAL, in the menu; Kevin, 2026-11-24: "remove all your rules
 and context and prompts so I can see how this actually works as a model"):
 the model gets only the conversation, no instructions, examples or pages
 (`CompanionPrompt.plain`). It knows nothing of the page but what's been said.
-The menu's Changes lists everything filed from the conversation, with Undo.
+prompt without its example conversations 4.7 (a draw: better openings, worse
+corrections and "stuck"), Plain Model 1.6 (98% poor: it took his world for
+Star Wars or Hollow Knight, invented names, wrote 100-word help-desk replies).
+None of the 366 replies borrowed the examples' names; the "Dolores and the
+Regent" Kevin saw came from E2B, which the phone had fallen back to.
+Changes (beside the menu in the folded sheet; in the menu unfolded;
+`ChangesView`) lists everything filed from the conversation: a stock grouped
+list, newest message first, headed by the author's message and when they sent
+it; each change a row with an icon for its kind, the page, what it says, and
+a small bordered Undo (or "Changed since", as Undo goes newest first). A field
+changed more than once opens its timeline (Kevin, 2026-11-24): every value it
+was given here, newest first, each with its message and time, the current one
+marked, and Undo on the newest (`Conversation.history`).
 
 ## Filing: structure from the conversation
 
@@ -316,8 +333,15 @@ the companion is filed, never the page's writing.
   page made, type given and field filled on its own line with its own Undo
   (Kevin: "each discrete action has its own undo"). Undo takes back what the
   author hasn't changed since; a new type or field nothing uses any more goes
-  with it; a page they've written on goes to Recently Deleted
-  (`FilingRecord.undo`).
+  with it; a page written on since (by the author, or filed into from another
+  conversation) goes to Recently Deleted (`FilingRecord.undo`). Undo goes
+  newest first for each field and page (Kevin, 2026-11-24, the simpler of two
+  ways offered): a line a later message changed (a corrected value, a page
+  later facts went on or link to, a type later fields were filled under) is
+  greyed, "changed since", until that one is undone
+  (`Conversation.changedLater`). Without it, undoing "Vessel: trireme" and
+  then "bireme (was trireme)" brought the trireme back. What one message did
+  to a page it made goes with that page.
 
 scenarios, then 67 with events, dates and items; the generic ones in git
 plus 11 from Kevin's world):
@@ -368,9 +392,17 @@ About 2.7 s a message on the computer's GPU. New types come from what's said
 1 in 30 filings in the shipped run were still wrong (a ship typed as a Place,
 "Gull Rock" for "Treaty of Gull Rock", a fact pinned on the wrong page): each
 shows as its own line in the conversation, undone in one tap.
+Naming the open page's subject renames it (Kevin on the phone, 2026-11-24:
+"Her name is Florica" on Casperica made a new page Florica and a Name field).
+A fact on the open page whose field is Name, Full name or Called, in the
+author's words and capitalised, becomes the page's title, with Undo; links to
+it follow (`Library.commit`), and the title on screen updates. Facts by the new
+name land on the same page; an untitled page gets its name this way. Other
+×2: all renamed or not as they should; overall facts 91%, nothing filed from
+questions or guesses.
+
 Not yet: a change over time that isn't worded as a correction ("she moved
-to Calloway") leaves the old value, an untitled page isn't named from the
-conversation, and the
+to Calloway") leaves the old value, and the
 page's own writing isn't read.
 
 ## Changing it

@@ -25,8 +25,8 @@ struct CompanionPanel: View {
     /// Folded, a sheet; unfolded, the inspector column beside the page.
     let inSheet: Bool
 
-    /// Folded, a stock sheet: a navigation bar with the title, Close and the
-    /// menu. On the folded Duo a sheet's bar would otherwise go into the side
+    /// Folded, a stock sheet: a navigation bar with the title, Close, Changes
+    /// and the menu. On the folded Duo a sheet's bar would otherwise go into the side
     /// column (tried 2026-11-23); with a couple of controls Apple's advice is to
     /// keep it horizontal (iOS 27.1, `toolbarVerticalBehavior`). Unfolded, the
     /// column has no bar of its own (see below).
@@ -40,7 +40,10 @@ struct CompanionPanel: View {
                         ToolbarItem(placement: .cancellationAction) {
                             Button("Close", systemImage: "xmark") { companion.isOpen = false }
                         }
-                        if ready { ToolbarItem(placement: .primaryAction) { more } }
+                        if ready {
+                            ToolbarItem(placement: .primaryAction) { changesButton }
+                            ToolbarItem(placement: .primaryAction) { more }
+                        }
                     }
             }
             .toolbarVerticalBehavior(.disabled)
@@ -60,7 +63,7 @@ struct CompanionPanel: View {
             LazyVStack(alignment: .leading, spacing: 20) {
                 // Until the model is here, only the download shows (over an empty panel).
                 ForEach(companion.needsDownload || companion.download != nil ? [] : companion.conversation.turns) { turn in
-                    if let thought = companion.thoughts[turn.id] { reasoning(thought, done: true) }
+                    if let thought = companion.thoughts[turn.question] { reasoning(thought, done: true) }
                     reply(turn)
                     if let answer = turn.answer { mine(answer) }
                     if let record = turn.filed, !record.isEmpty { filed(record, from: turn.id) }
@@ -96,7 +99,7 @@ struct CompanionPanel: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, companion.state == .downloadPaused { resume() }
         }
-        .sheet(isPresented: $showingChanges) { changes }
+        .sheet(isPresented: $showingChanges) { ChangesView().environment(library).environment(companion) }
         .confirmationDialog("Start a new conversation about this page?", isPresented: $confirmingNew,
                             titleVisibility: .visible) {
             Button("New Conversation", role: .destructive) {
@@ -114,45 +117,57 @@ struct CompanionPanel: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// A reply. Hold its latest, unanswered one to try again; each try is kept, to go back to.
+    /// A reply. Its latest, unanswered one can be tried again (hold it), and
+    /// each try is kept: swipe between them, or use "‹ 2 of 3 ›" under it. The
+    /// one showing when the author answers is the one the conversation goes on
+    /// from; after that it stays (Kevin, 2026-11-24).
     private func reply(_ turn: Conversation.Turn) -> some View {
-        let idle = companion.state == .idle
+        let waiting = turn.id == companion.conversation.waiting?.id && companion.state == .idle
+        let versions = waiting ? turn.versions ?? [] : []
+        let at = versions.firstIndex(of: turn.question) ?? 0
+        func show(_ i: Int) {
+            guard versions.indices.contains(i) else { return }
+            withAnimation(.smooth(duration: 0.25)) { companion.choose(versions[i], in: turn.id) }
+        }
         return VStack(alignment: .leading, spacing: 4) {
             words(turn.question)
+                .id(turn.question)
+                .transition(.opacity)
                 .contextMenu {
                     copy(turn.question)
-                    if idle, turn.id == companion.conversation.waiting?.id {
+                    if waiting {
                         Button("Try Again", systemImage: "arrow.clockwise", action: retry)
                     }
-                    if idle, turn.versions != nil {
+                    if versions.count > 1 {
                         Button("Delete This Version", systemImage: "trash", role: .destructive) {
                             companion.delete(turn.question, in: turn.id)
                         }
                     }
                 }
-            if let versions = turn.versions, let at = versions.firstIndex(of: turn.question) {
-                versionPicker(versions, at: at, of: turn.id)
-                    .disabled(!idle)
+                // Left for the next try, right for the one before, as pages turn.
+                .simultaneousGesture(DragGesture(minimumDistance: 30).onEnded { drag in
+                    let (x, y) = (drag.translation.width, drag.translation.height)
+                    guard versions.count > 1, abs(x) > 2 * abs(y) else { return }
+                    show(x < 0 ? at + 1 : at - 1)
+                })
+            if versions.count > 1 {
+                HStack(spacing: 0) {
+                    versionButton("Previous Version", "chevron.left") { show(at - 1) }
+                        .disabled(at == 0)
+                    Text("\(at + 1) of \(versions.count)")
+                        .monospacedDigit()
+                    versionButton("Next Version", "chevron.right") { show(at + 1) }
+                        .disabled(at == versions.count - 1)
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                // One adjustable element for VoiceOver: swipe up or down to change version.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Version")
+                .accessibilityValue("\(at + 1) of \(versions.count)")
+                .accessibilityAdjustableAction { show($0 == .increment ? at + 1 : at - 1) }
             }
         }
-    }
-
-    /// "‹ 2 of 3 ›" under a reply tried more than once: the one shown is the one the conversation goes on from.
-    private func versionPicker(_ versions: [String], at: Int, of turn: UUID) -> some View {
-        HStack(spacing: 12) {
-            Button("Previous Version", systemImage: "chevron.left") { companion.choose(versions[at - 1], in: turn) }
-                .disabled(at == 0)
-            Text("\(at + 1) of \(versions.count)")
-                .monospacedDigit()
-            Button("Next Version", systemImage: "chevron.right") { companion.choose(versions[at + 1], in: turn) }
-                .disabled(at == versions.count - 1)
-        }
-        .labelStyle(.iconOnly)
-        .buttonStyle(.borderless)
-        .font(.footnote)
-        .foregroundStyle(.secondary)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Version \(at + 1) of \(versions.count)")
     }
 
     /// The models write Markdown: bold, italics, code and links show as such
@@ -180,40 +195,21 @@ struct CompanionPanel: View {
             .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
-    /// Everything filed from this conversation, newest first, under the message
-    /// it came from, each with its Undo: the same lines as under each message.
-    private var changes: some View {
-        NavigationStack {
-            List {
-                ForEach(filedTurns.reversed()) { turn in
-                    Section {
-                        ForEach(library.describe(turn.filed ?? FilingRecord()), id: \.self) { line in
-                            HStack {
-                                filed(line)
-                                Spacer()
-                                undo(line, from: turn.id)
-                                    .buttonStyle(.borderless)
-                            }
-                        }
-                    } header: {
-                        Text(turn.answer ?? "").font(.authored(.footnote)).textCase(nil)
-                    }
-                }
-            }
-            .overlay {
-                if filedTurns.isEmpty {   // all undone while it's open
-                    ContentUnavailableView("No Changes", systemImage: "clock.arrow.circlepath",
-                                           description: Text("What the companion adds to your pages from this conversation shows here."))
-                }
-            }
-            .navigationTitle("Changes")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done", systemImage: "checkmark") { showingChanges = false }
-                }
-            }
+    /// An arrow beside "2 of 3", with the HIG's minimum touch size.
+    private func versionButton(_ title: LocalizedStringKey, _ symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: symbol)
+                .labelStyle(.iconOnly)
+                .frame(minWidth: barHeight, minHeight: barHeight)
+                .contentShape(.rect)
         }
+        .buttonStyle(.borderless)
+    }
+
+    /// What the companion added to the pages from this conversation, with Undo.
+    private var changesButton: some View {
+        Button("Changes", systemImage: "clock.arrow.circlepath") { showingChanges = true }
+            .disabled(filedTurns.isEmpty)
     }
 
     /// The turns something is still filed from.
@@ -221,12 +217,22 @@ struct CompanionPanel: View {
         companion.conversation.turns.filter { !($0.filed?.isEmpty ?? true) }
     }
 
+    /// Undo goes newest first: what a later message changed waits until that's undone (Kevin, 2026-11-24).
     private func undo(_ line: FilingLine, from turn: UUID) -> some View {
-        Button("Undo", systemImage: "arrow.uturn.backward") {
+        let waits = companion.conversation.changedLater(line.action, in: turn, elsewhere: companion.others)
+        return Button("Undo", systemImage: "arrow.uturn.backward") {
             companion.undoFiling(line.action, from: turn, in: library)
         }
         .labelStyle(.iconOnly)
+        .disabled(waits)
         .accessibilityLabel(Text("Undo: \(filed(line))"))
+        .accessibilityHint(waits ? Text("Something filed since changed this. Undo that first.") : Text(""))
+    }
+
+    /// A filed line, saying so when a later message changed it.
+    private func filed(_ line: FilingLine, from turn: UUID) -> Text {
+        companion.conversation.changedLater(line.action, in: turn, elsewhere: companion.others)
+            ? Text("\(filed(line)) · changed since") : filed(line)
     }
 
     /// What was filed from the author's message, under it: each page made,
@@ -236,7 +242,7 @@ struct CompanionPanel: View {
             Label("Added to Your Pages", systemImage: "square.stack.3d.up")
             ForEach(library.describe(record), id: \.self) { line in
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    filed(line)
+                    filed(line, from: turn)
                     undo(line, from: turn)
                 }
             }
@@ -251,6 +257,10 @@ struct CompanionPanel: View {
     /// "New page: Myriddea (Place)", "Casperica · Character", "Casperica · Origin: Myriddea".
     private func filed(_ line: FilingLine) -> Text {
         let page = Text(line.page).font(.authored(.footnote))
+        if case .renamed(_, let was, _) = line.action {
+            let old = was.isEmpty ? Text("untitled") : Text(was).font(.authored(.footnote))
+            return Text("\(page) · renamed, was \(old)")
+        }
         if line.isNew {
             let type = line.type.map { Text(" (\(Text($0).font(.authored(.footnote))))") } ?? Text("")
             return Text("New page: \(page)\(type)")
@@ -455,8 +465,7 @@ struct CompanionPanel: View {
                 .disabled(companion.conversation.turns.isEmpty)
             ShareLink("Share Conversation", item: transcript)
                 .disabled(companion.conversation.turns.isEmpty)
-            Button("Changes", systemImage: "clock.arrow.circlepath") { showingChanges = true }
-                .disabled(filedTurns.isEmpty)
+            if !inSheet { changesButton }   // the sheet has it beside the menu (Kevin, 2026-11-24)
             Toggle("Think Before Replying", systemImage: "lightbulb",
                    isOn: Binding { companion.thinks } set: { companion.thinks = $0 })
             // TRIAL (Kevin, 2026-11-24): the model on its own.

@@ -10,10 +10,22 @@ public struct Conversation: Codable, Hashable, Sendable {
         /// The author's answer, in their words; nil while the question waits.
         public var answer: String?
         public var asked: Date
+        /// When they answered (conversations from before it was kept: nil).
+        public var answered: Date?
+        /// The open page's fields and title when they answered: the first reading of the
+        /// answer may change only what's still as it was then.
+        public var seen: [UUID: FieldValue]?
+        public var seenTitle: String?
         /// What was filed from the answer (types, fields, new pages), until undone.
         public var filed: FilingRecord?
+
+        /// Its answer is still to be filed: never read, or read with nothing found and
+        /// nothing undone, so Try Again reads it again (Kevin's "I think it was actually a
+        /// bireme", read by a weaker model the first time, 2026-11-24).
+        public var needsFiling: Bool { answer != nil && (filed?.filedNothing ?? true) }
         /// Every reply it gave here, oldest first, once Try Again made more than one;
-        /// `question` is the one chosen, which the conversation goes on from.
+        /// `question` is the one chosen: the one showing when the author answered,
+        /// which the conversation goes on from (Kevin, 2026-11-24).
         public var versions: [String]?
 
         public init(id: UUID = UUID(), question: String, answer: String? = nil, asked: Date = Date(),
@@ -37,6 +49,22 @@ public struct Conversation: Codable, Hashable, Sendable {
     /// The question waiting for an answer, if any.
     public var waiting: Turn? { turns.last.flatMap { $0.answer == nil ? $0 : nil } }
 
+    /// Whether something filed since changed what `action` (filed from `turn`) did, so it
+    /// can't be undone until that is: Undo goes newest first for each field and page
+    /// (Kevin, 2026-11-24), so taking back an old value never revives one already undone.
+    /// `elsewhere`: the world's other conversations, whose filings can change this page too.
+    public func changedLater(_ action: FilingRecord.Entry, in turn: UUID, elsewhere: [Conversation] = []) -> Bool {
+        guard let t = turns.firstIndex(where: { $0.id == turn }), let actions = turns[t].filed?.actions,
+              let at = actions.firstIndex(of: action) else { return false }
+        func changes(_ turn: Turn) -> Bool { (turn.filed?.actions ?? []).contains { action.isChanged(by: $0, sameMessage: false) } }
+        // When each was filed (older records: when it was answered).
+        func filed(_ turn: Turn) -> Date { turn.filed?.date ?? turn.answered ?? turn.asked }
+        let when = filed(turns[t])
+        return actions[(at + 1)...].contains { action.isChanged(by: $0, sameMessage: true) }
+            || turns[(t + 1)...].contains(where: changes)
+            || elsewhere.contains { $0.page != page && $0.turns.contains { filed($0) > when && changes($0) } }
+    }
+
     /// Everything the author said here, in their words.
     public var authorText: String { turns.compactMap(\.answer).joined(separator: "\n") }
 
@@ -59,25 +87,52 @@ public struct Conversation: Codable, Hashable, Sendable {
         if !earlier.isEmpty, let i = turns.indices.last { turns[i].versions = earlier + [question] }
     }
 
-    /// Makes `version` the reply the conversation goes on from.
+    /// Makes `version` the reply the conversation goes on from, while it waits for an answer
+    /// (once answered, the one they answered stays).
     public mutating func choose(_ version: String, in turn: UUID) {
-        guard let i = turns.firstIndex(where: { $0.id == turn }), turns[i].versions?.contains(version) == true else { return }
+        guard let i = turns.firstIndex(where: { $0.id == turn }), turns[i].answer == nil,
+              turns[i].versions?.contains(version) == true else { return }
         turns[i].question = version
     }
 
-    /// Deletes one of a turn's versions (never its last); if it was the chosen one, the one before it is chosen.
+    /// Deletes one of a waiting turn's versions (never its last); if it was the chosen one, the one before it is chosen.
     public mutating func delete(_ version: String, in turn: UUID) {
-        guard let i = turns.firstIndex(where: { $0.id == turn }), var versions = turns[i].versions,
+        guard let i = turns.firstIndex(where: { $0.id == turn }), turns[i].answer == nil, var versions = turns[i].versions,
               versions.count > 1, let at = versions.firstIndex(of: version) else { return }
         versions.remove(at: at)
         if turns[i].question == version { turns[i].question = versions[max(at - 1, 0)] }
         turns[i].versions = versions.count > 1 ? versions : nil
     }
 
-    public mutating func answer(_ text: String) {
+    public mutating func answer(_ text: String, at date: Date = Date()) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let i = turns.indices.last, turns[i].answer == nil else { return }
         turns[i].answer = trimmed
+        turns[i].answered = date
+    }
+
+    /// One value filing gave a field, for the field's timeline.
+    public struct FieldChange: Hashable, Sendable, Identifiable {
+        public var turn: UUID
+        public var action: FilingRecord.Entry
+        public var value: FieldValue
+        /// The author's message it came from, and when they sent it.
+        public var message: String
+        public var date: Date
+        /// Itself: the same value can be filed again from another message.
+        public var id: Self { self }
+    }
+
+    /// Every value filing gave `field` of `page` in this conversation and that hasn't
+    /// been undone, oldest first (Kevin, 2026-11-24: a timeline for a field changed more than once).
+    public func history(of field: UUID, on page: UUID) -> [FieldChange] {
+        turns.flatMap { turn in
+            (turn.filed?.actions ?? []).compactMap { action -> FieldChange? in
+                guard action.page == page, action.field == field, let value = action.value else { return nil }
+                return FieldChange(turn: turn.id, action: action, value: value, message: turn.answer ?? "",
+                                   date: turn.answered ?? turn.asked)
+            }
+        }
     }
 }
 

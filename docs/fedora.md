@@ -49,7 +49,9 @@ scripts/run-on-phone.sh
 ```
 
 Pulls, rebuilds what changed, installs and launches. Handy if the service is
-stopped or you want it immediately.
+stopped or you want it immediately. Launching wakes the phone and asks for its
+passcode; `scripts/run-on-phone.sh --no-launch` installs only, and the app
+opens with the new build the next time Kevin opens it.
 
 ## Limits to know about
 

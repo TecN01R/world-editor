@@ -63,6 +63,8 @@ final class Library {
     /// A sheet or alert the page's fields asked for, shown by the editor.
     enum FieldsRequest: Identifiable, Hashable {
         case newType, addField(type: UUID), editField(UUID), newPage(field: UUID)
+        /// A type's fields, to remove, reorder or edit ("Edit Character Fields…").
+        case editFields(type: UUID)
         var id: Self { self }
     }
     var fieldsRequest: FieldsRequest?
@@ -118,6 +120,13 @@ final class Library {
         saveSchema()
     }
 
+    /// Reorders a type's fields, for every page of it.
+    func moveFields(in type: UUID, from offsets: IndexSet, to destination: Int) {
+        guard let i = schema.types.firstIndex(where: { $0.id == type }) else { return }
+        schema.types[i].fields.move(fromOffsets: offsets, toOffset: destination)
+        saveSchema()
+    }
+
     /// Takes a field off a type, for every page of it. The field stays in the
     /// shared list, and values stay saved on the pages, so nothing is lost.
     func remove(_ field: UUID, from type: UUID) {
@@ -144,18 +153,38 @@ final class Library {
 
     /// Files what the model read out of `message` (`Filer` keeps only the
     /// author's own words, and replaces nothing) and saves it.
-    func file(_ filings: Filings, message: String, on page: UUID) -> FilingRecord {
+    /// - Parameter again: the record of an earlier reading that found nothing (Try Again
+    ///   reads the message again): only values still as it saw them may be corrected.
+    /// - Parameter sent: the open page's fields and title when the author sent the
+    ///   message: only what's still as it was then on that page is changed.
+    func file(_ filings: Filings, message: String, on page: UUID, again: FilingRecord? = nil,
+              sent: (values: [UUID: FieldValue], title: String)? = nil) -> FilingRecord {
         var pages = pages, schema = schema
-        let record = Filer.file(filings, message: message, open: page, pages: &pages, schema: &schema)
+        let open = pages.first { $0.id == page }
+        let seen = again?.seen ?? sent?.values ?? open?.values ?? [:]
+        let seenTitle = again.map { $0.seenTitle } ?? sent?.title ?? open?.title
+        var record = Filer.file(filings, message: message, open: page, pages: &pages, schema: &schema,
+                                replaceable: { p, field, was in p == page ? seen[field] == was : again == nil },
+                                renames: seenTitle != nil && seenTitle == open?.title)
+        record.seen = seen
+        record.seenTitle = seenTitle
+        record.date = Date()
         if !record.isEmpty { commit(pages, schema) }
         return record
     }
 
     /// Takes back one thing filing did (`FilingRecord.undo`). A page it made
     /// goes, or, if the author wrote on it since, goes to Recently Deleted.
-    func undo(_ action: FilingRecord.Entry, of record: inout FilingRecord) {
+    /// - Parameters:
+    ///   - kept: pages the author has talked about in their own conversation, kept (in
+    ///     Recently Deleted) rather than deleted if this made them.
+    ///   - others: every other filing record in the world, whose types and fields go too
+    ///     once nothing uses them (`FilingRecord.tidy`).
+    func undo(_ action: FilingRecord.Entry, of record: inout FilingRecord, kept: (UUID) -> Bool = { _ in false },
+              others: [FilingRecord] = []) {
         var pages = pages, schema = schema
-        let made = record.undo(action, pages: &pages, schema: &schema)
+        let made = record.undo(action, pages: &pages, schema: &schema, kept: kept, deleted: recentlyDeleted)
+        FilingRecord.tidy(others.flatMap(\.entries), pages: pages + recentlyDeleted, schema: &schema)
         if let made, !made.edited {
             if selection == made.page { selection = nil }
             pendingSaves.removeValue(forKey: made.page)?.cancel()
@@ -175,28 +204,49 @@ final class Library {
             saveSchema()
         }
         for page in new where old[page.id] != page { scheduleSave(page) }
+        // Renamed (by filing, or its Undo): links to it everywhere show the new name, as in `update`.
+        for page in new where old[page.id].map({ $0.heading != page.heading }) ?? false {
+            for j in pages.indices where pages[j].id != page.id && pages[j].retitleLinks(to: page.id, as: page.heading) {
+                scheduleSave(pages[j])
+            }
+        }
     }
 
-    /// What a filing did, as the conversation shows it: pages by their names now.
+    /// What a filing did, as the conversation shows it: pages by their names now. Every
+    /// action gets a line, even one whose page, type or field has since been deleted
+    /// (named as deleted): Undo goes newest first, so a hidden line could block an older one.
     func describe(_ record: FilingRecord) -> [FilingLine] {
-        func name(_ id: UUID) -> String? { pages.first { $0.id == id }?.heading }
-        return record.actions.compactMap { action -> FilingLine? in
+        record.actions.compactMap { action -> FilingLine? in
+            let page = action.page.map(filedName) ?? Self.deletedPage
             switch action {
             case .created(let id, _):
-                guard let page = pages.first(where: { $0.id == id }) else { return nil }
-                return FilingLine(action: action, page: page.heading, detail: nil, type: schema.type(page.type)?.name)
-            case .typed(let id, let type):
-                return name(id).map { FilingLine(action: action, page: $0, detail: schema.type(type)?.name, type: nil) }
-            case .value(let id, let fieldID, let value), .replaced(let id, let fieldID, _, let value):
-                guard let page = name(id), let field = schema.fields.first(where: { $0.id == fieldID }),
-                      let shown = value.display(pageName: name) else { return nil }
-                var detail = "\(field.name): \(shown)"
-                if case .replaced(_, _, let was, _) = action, let old = was.display(pageName: name) { detail += " (was \(old))" }
+                let type = (pages.first { $0.id == id } ?? recentlyDeleted.first { $0.id == id })?.type
+                return FilingLine(action: action, page: page, detail: nil, type: schema.type(type)?.name)
+            case .typed(_, let type):
+                return FilingLine(action: action, page: page, detail: schema.type(type)?.name ?? "Deleted type", type: nil)
+            case .renamed:
+                return FilingLine(action: action, page: page, detail: nil, type: nil)
+            case .value(_, let fieldID, let value), .replaced(_, let fieldID, _, let value):
+                let field = schema.fields.first { $0.id == fieldID }?.name ?? "Deleted field"
+                var detail = "\(field): \(filedValue(value))"
+                if case .replaced(_, _, let was, _) = action { detail += " (was \(filedValue(was)))" }
                 return FilingLine(action: action, page: page, detail: detail, type: nil)
-            default:
+            case .newType, .newField, .fieldAdded:
                 return nil
             }
         }
+    }
+
+    static let deletedPage = "Deleted page"
+
+    /// A page's name as filing lines show it: in Recently Deleted too, else as deleted.
+    func filedName(_ id: UUID) -> String {
+        (pages.first { $0.id == id } ?? recentlyDeleted.first { $0.id == id })?.heading ?? Self.deletedPage
+    }
+
+    /// A filed value as filing lines show it (a link by its page's name).
+    func filedValue(_ value: FieldValue) -> String {
+        value.display { self.filedName($0) } ?? ""
     }
 
     /// "Name: value" lines for a page's fields, for search.
@@ -330,7 +380,11 @@ final class Library {
 
     /// Pages with an `@` link to `id`, most recent first.
     func mentions(of id: UUID) -> [WriterCore.Document] {
-        pages.filter { $0.id != id && $0.mentions(id) }
+        // A link in a field the page's type no longer shows doesn't count (its value is kept, unseen).
+        pages.filter { page in
+            page.id != id && (page.paragraphs.contains { $0.links.contains { $0.page == id } }
+                              || fields(of: page).contains { page.values[$0.id] == .page(id) })
+        }
     }
 
     /// Moves a page to Recently Deleted (an empty one just goes).
