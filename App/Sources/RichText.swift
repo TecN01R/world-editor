@@ -21,13 +21,29 @@ enum RichText {
         return style
     }
 
+    /// The style of text with `attributes`: its font's weight and slant, and its lines.
+    static func style(of attributes: [NSAttributedString.Key: Any]) -> InlineStyle {
+        var style = style(of: attributes[.font] as? UIFont)
+        if (attributes[.underlineStyle] as? Int ?? 0) != 0 { style.insert(.underline) }
+        if (attributes[.strikethroughStyle] as? Int ?? 0) != 0 { style.insert(.strikethrough) }
+        return style
+    }
+
+    /// The attributes that show `style` over the page's `base` font.
+    static func attributes(_ style: InlineStyle, base: UIFont) -> [NSAttributedString.Key: Any] {
+        var attributes: [NSAttributedString.Key: Any] = [.font: font(base, style)]
+        if style.contains(.underline) { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
+        if style.contains(.strikethrough) { attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
+        return attributes
+    }
+
     /// `text` with `attributes`, its fonts adjusted for each run and its `@` links marked.
     static func attributed(_ text: String, runs: [StyleRun], links: [PageLink] = [],
                            attributes: [NSAttributedString.Key: Any]) -> NSMutableAttributedString {
         let s = NSMutableAttributedString(string: text, attributes: attributes)
         if let base = attributes[.font] as? UIFont {
             for run in runs where run.location + run.length <= s.length {
-                s.addAttribute(.font, value: font(base, run.style), range: NSRange(location: run.location, length: run.length))
+                s.addAttributes(Self.attributes(run.style, base: base), range: NSRange(location: run.location, length: run.length))
             }
         }
         for link in links where link.location + link.length <= s.length {
@@ -100,9 +116,16 @@ enum RichText {
     static func runs(in s: NSAttributedString, range: NSRange? = nil) -> [StyleRun] {
         let range = range ?? NSRange(location: 0, length: s.length)
         var runs: [StyleRun] = []
-        s.enumerateAttribute(.font, in: range) { value, r, _ in
-            let style = Self.style(of: value as? UIFont)
-            if !style.isEmpty { runs.append(StyleRun(location: r.location - range.location, length: r.length, style: style)) }
+        s.enumerateAttributes(in: range) { attributes, r, _ in
+            let style = Self.style(of: attributes)
+            guard !style.isEmpty else { return }
+            let location = r.location - range.location
+            // One run for a style however many other attributes (a link) split it.
+            if let last = runs.last, last.style == style, last.location + last.length == location {
+                runs[runs.count - 1].length += r.length
+            } else {
+                runs.append(StyleRun(location: location, length: r.length, style: style))
+            }
         }
         return runs
     }

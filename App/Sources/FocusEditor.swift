@@ -455,7 +455,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         var typing = Self.attributes(CGFloat(max(size, 17)))
         typing[.paragraphStyle] = paragraphStyle
         if let base = typing[.font] as? UIFont {
-            typing[.font] = RichText.font(base, p.style(at: textView.selectedRange.location))
+            typing.merge(RichText.attributes(p.style(at: textView.selectedRange.location), base: base)) { $1 }
         }
         textView.typingAttributes = typing
     }

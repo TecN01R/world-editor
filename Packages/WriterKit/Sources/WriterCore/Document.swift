@@ -9,13 +9,16 @@ public enum ParagraphKind: String, Codable, Hashable, Sendable, CaseIterable {
     public var isList: Bool { self != .body }
 }
 
-/// Character-level emphasis.
+/// Character-level emphasis: what iOS's Format panel offers for text (Kevin, 2026-11-24),
+/// short of fonts, sizes and colours (the writing is New York, sized by Dynamic Type).
 public struct InlineStyle: OptionSet, Codable, Hashable, Sendable {
     public let rawValue: UInt8
     public init(rawValue: UInt8) { self.rawValue = rawValue }
 
     public static let bold = InlineStyle(rawValue: 1 << 0)
     public static let italic = InlineStyle(rawValue: 1 << 1)
+    public static let underline = InlineStyle(rawValue: 1 << 2)
+    public static let strikethrough = InlineStyle(rawValue: 1 << 3)
 }
 
 /// A styled stretch of a paragraph. Offsets are UTF-16 units, the same units

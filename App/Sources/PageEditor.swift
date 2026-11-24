@@ -35,7 +35,8 @@ struct PageEditor: UIViewRepresentable {
         tv.alwaysBounceVertical = true
         tv.keyboardDismissMode = .interactive
         tv.textContainer.lineFragmentPadding = 0   // the writing lines up under the title and fields
-        tv.allowsEditingTextAttributes = true      // ⌘B, ⌘I and the Format menu
+        tv.allowsEditingTextAttributes = true      // ⌘B, ⌘I, ⌘U and the edit menu's Format
+        tv.textFormattingConfiguration = PageEditor.formatting
         tv.titleField = context.coordinator.titleField
         tv.onFocus = { [weak coordinator = context.coordinator] in coordinator?.onFocus() }
         let fields = UIHostingController(rootView: PageFields { [weak tv] in tv?.fieldsHeight = $0 }.environment(library))
@@ -59,6 +60,14 @@ struct PageEditor: UIViewRepresentable {
         if !title.isFirstResponder, title.text != library.document.title { title.text = library.document.title }
         context.coordinator.showChanges()
     }
+
+    /// What iOS's Format panel offers on a page (the edit menu's, and the bar's button's): the
+    /// four text styles and the lists, which pages keep. No fonts, sizes, colours or alignment:
+    /// the writing is New York, sized by Dynamic Type, and a page keeps none of them.
+    static let formatting = UITextFormattingViewController.Configuration(groups: [
+        .group([.component(.fontAttributes, .automatic)]),
+        .group([.component(.listStyles, .automatic)]),
+    ])
 
     /// Bold New York, scaled with Dynamic Type.
     static var titleFont: UIFont { newYork(34, weight: .bold, scaledAs: .largeTitle) }   // the size of the world's title
@@ -85,7 +94,7 @@ struct PageEditor: UIViewRepresentable {
     static let ink = UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 1, alpha: 0.88) : .label }
 
     @MainActor
-    final class Coordinator: NSObject, UITextViewDelegate, UITextFieldDelegate {
+    final class Coordinator: NSObject, UITextViewDelegate, UITextFieldDelegate, UITextFormattingViewController.Delegate {
         let library: Library
         weak var textView: UITextView?
         /// Replacing the text moves the selection; that isn't the user moving the caret.
@@ -98,7 +107,7 @@ struct PageEditor: UIViewRepresentable {
         var onWriting: (Bool) -> Void = { _ in }
         var onEditing: (Bool) -> Void = { _ in }
         private var observers: [NSObjectProtocol] = []
-        lazy var formatBar = FormatBar(onAction: { [weak self] action in self?.perform(action) })
+        lazy var formatBar = FormatBar(onFormat: { [weak self] in self?.showFormatting() })
 
         lazy var titleField: UITextField = {
             let f = UITextField()
@@ -213,7 +222,7 @@ struct PageEditor: UIViewRepresentable {
             let (i, offset) = library.document.locate(tv.selectedRange.location)
             let p = library.document.paragraphs[i]
             var attrs = PageEditor.attributes(p.kind)
-            attrs[.font] = RichText.font(PageEditor.font, p.style(at: offset))
+            attrs.merge(RichText.attributes(p.style(at: offset), base: PageEditor.font)) { $1 }
             tv.typingAttributes = attrs
         }
 
@@ -355,19 +364,79 @@ struct PageEditor: UIViewRepresentable {
 
         // MARK: Formatting
 
-        private func perform(_ action: FormatBar.Action) {
+        /// iOS's own Format panel, from the bar's button (Kevin, 2026-11-24: "Can I just get a
+        /// button for this then?"): iOS offers no way to open the edit menu's, so the page
+        /// shows it and makes the changes it asks for, through iOS's own commands where there
+        /// are some. As a popover unfolded, a sheet folded.
+        private func showFormatting() {
             guard let tv = textView else { return }
-            switch action {
-            case .style(let style):
-                // iOS's own Bold and Italic, as ⌘B, ⌘I and the edit menu's Format: Undo takes
-                // them back, and with nothing selected they're for what's typed next.
-                if style == .bold { tv.toggleBoldface(nil) } else { tv.toggleItalics(nil) }
-                if !selection.isEmpty { textViewDidChange(tv) }
-            case .list(let kind):
-                toggleKind(kind, in: selection)
+            let panel = UITextFormattingViewController(configuration: PageEditor.formatting)
+            panel.delegate = self
+            panel.formattingDescriptor = formattingNow(tv)
+            panel.modalPresentationStyle = .popover
+            if let popover = panel.popoverPresentationController {
+                popover.sourceView = formatBar
+                popover.sourceRect = formatBar.bounds
+                popover.adaptiveSheetPresentationController.detents = [.medium()]
             }
-            updateFormatBar()
-            UISelectionFeedbackGenerator().selectionChanged()
+            var host = tv.window?.rootViewController
+            while let next = host?.presentedViewController { host = next }
+            host?.present(panel, animated: true)
+        }
+
+        /// What the selection (or, with none, what's typed next) has, for the panel to show.
+        private func formattingNow(_ tv: UITextView) -> UITextFormattingViewController.FormattingDescriptor {
+            tv.selectedRange.length > 0
+                ? .init(string: tv.textStorage, range: tv.selectedRange)
+                : .init(attributes: tv.typingAttributes)
+        }
+
+        func textFormattingViewController(_ panel: UITextFormattingViewController,
+                                          didChangeValue change: UITextFormattingViewController.ChangeValue) {
+            guard let tv = textView else { return }
+            // iOS's own Bold, Italic and Underline, as ⌘B, ⌘I, ⌘U: Undo takes them back, and
+            // with nothing selected they're for what's typed next.
+            switch change {
+            case .bold: tv.toggleBoldface(nil)
+            case .italic: tv.toggleItalics(nil)
+            case .underline: tv.toggleUnderline(nil)
+            case .strikethrough(let on): strike(on)
+            case .textList(let list):
+                let kind: ParagraphKind = switch list {
+                case nil: .body
+                case .decimal?: .numbered
+                default: .bullet
+                }
+                let current = library.document.paragraphs[library.document.locate(selection.lowerBound).index].kind
+                if kind != current { toggleKind(kind == .body ? current : kind, in: selection) }
+            default: break   // not offered (`PageEditor.formatting`)
+            }
+            if !selection.isEmpty { textViewDidChange(tv) }
+            panel.formattingDescriptor = formattingNow(tv)
+        }
+
+        /// Back to writing once the panel closes.
+        func textFormattingDidFinish(_ panel: UITextFormattingViewController) {
+            textView?.becomeFirstResponder()
+        }
+
+        /// The edit menu's Format panel, iOS's own, changed the text itself: the page as shown.
+        func textView(_ tv: UITextView, didEndFormattingWith viewController: UITextFormattingViewController) {
+            textViewDidChange(tv)
+        }
+
+        /// Strikethrough (iOS has no command for it): on the selection, as one step Undo takes
+        /// back, or with none, on what's typed next.
+        private func strike(_ on: Bool) {
+            guard let tv = textView else { return }
+            let range = tv.selectedRange
+            let value: Int? = on ? NSUnderlineStyle.single.rawValue : nil
+            guard range.length > 0 else { return tv.typingAttributes[.strikethroughStyle] = value }
+            let before = library.document.paragraphs
+            if let value { tv.textStorage.addAttribute(.strikethroughStyle, value: value, range: range) }
+            else { tv.textStorage.removeAttribute(.strikethroughStyle, range: range) }
+            textViewDidChange(tv)
+            undoably(back: before, named: "Strikethrough")
         }
 
         /// Makes the paragraphs in `range` a `kind` list, or plain when all already are, as one
@@ -392,12 +461,7 @@ struct PageEditor: UIViewRepresentable {
         }
 
         private func updateFormatBar() {
-            guard let tv = textView else { return }
             let doc = library.document, range = selection
-            func active(_ style: InlineStyle) -> Bool {
-                range.isEmpty ? RichText.style(of: tv.typingAttributes[.font] as? UIFont).contains(style)
-                              : doc.has(style, in: range)
-            }
             let caret = doc.locate(range.lowerBound)
             let p = doc.paragraphs[caret.index]
             // Caret in a link: a button to open its page (tapping the link itself may just place the caret).
@@ -407,7 +471,7 @@ struct PageEditor: UIViewRepresentable {
                     self?.open(page.id)
                 }
             }
-            formatBar.update(bold: active(.bold), italic: active(.italic), kind: p.kind, open: open)
+            formatBar.update(open: open)
             updateMentionMenu(at: caret)
         }
 
@@ -439,7 +503,6 @@ struct PageEditor: UIViewRepresentable {
 /// Customised at Kevin's request: the stock toolbar folds extra items into
 /// "•••" and spans the whole keyboard.
 final class FormatBar: UIView {
-    enum Action { case style(InlineStyle), list(ParagraphKind) }
 
     /// Open, for the link at the caret.
     struct OpenButton {
@@ -459,12 +522,10 @@ final class FormatBar: UIView {
     private let stack = UIStackView()
     private var buttons: [UIButton] = []
 
-    init(onAction: @escaping (Action) -> Void) {
+    /// - Parameter onFormat: opens iOS's Format panel.
+    init(onFormat: @escaping () -> Void) {
         super.init(frame: CGRect(x: 0, y: 0, width: 320, height: 44 + Self.gap))
-        buttons = [Self.button(symbol: "bold", label: "Bold") { onAction(.style(.bold)) },
-                   Self.button(symbol: "italic", label: "Italic") { onAction(.style(.italic)) },
-                   Self.button(symbol: "list.bullet", label: "Bulleted List") { onAction(.list(.bullet)) },
-                   Self.button(symbol: "list.number", label: "Numbered List") { onAction(.list(.numbered)) }]
+        buttons = [Self.button(symbol: "textformat", label: "Format", action: onFormat)]
 
         capsule.cornerConfiguration = .capsule()
         capsule.clipsToBounds = true
@@ -543,9 +604,8 @@ final class FormatBar: UIView {
     /// The extra button beside formatting, so the bar's only rebuilt when it changes.
     private var shownExtra: String?
 
-    /// Formatting, plus a button to open the link at the caret.
-    func update(bold: Bool, italic: Bool, kind: ParagraphKind, open: OpenButton?) {
-        for (b, on) in zip(buttons, [bold, italic, kind == .bullet, kind == .numbered]) { b.isSelected = on }
+    /// Format, plus a button to open the link at the caret.
+    func update(open: OpenButton?) {
         let key = open.map { "\($0.name) \($0.page)" }
         guard key != shownExtra else { return }
         shownExtra = key

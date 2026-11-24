@@ -87,6 +87,18 @@ final class RichTextTests: XCTestCase {
         XCTAssertTrue(d.paragraphs.allSatisfy { $0.runs.isEmpty })
     }
 
+    /// Underline and strikethrough (iOS's Format panel's) are kept with the page like bold.
+    func testUnderlineAndStrikethroughAreKept() throws {
+        var d = Document(paragraphs: [Paragraph(text: "ab cd")])
+        d.toggle(.underline, in: 0..<2)
+        d.toggle(.strikethrough, in: 1..<4)
+        XCTAssertTrue(d.has(.underline, in: 0..<2))
+        XCTAssertTrue(d.has(.strikethrough, in: 1..<4))
+        XCTAssertFalse(d.has(.underline, in: 3..<5))
+        let saved = try JSONDecoder().decode(Document.self, from: JSONEncoder().encode(d))
+        XCTAssertEqual(saved.paragraphs[0].runs, d.paragraphs[0].runs)
+    }
+
     func testTogglePartlyStyledSelectionStylesAll() {
         var d = Document(paragraphs: [Paragraph(text: "abcd", runs: [StyleRun(location: 0, length: 2, style: .italic)])])
         d.toggle(.italic, in: 0..<4)
