@@ -248,6 +248,11 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
 
     // MARK: UITextViewDelegate
 
+    /// Holding or selecting text: iOS's edit menu, its Format only Bold and Italic.
+    func textView(_ tv: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
+        RichText.editMenu(suggestedActions)
+    }
+
     /// Focus is for the words: links show, but tapping one just places the caret.
     func textView(_ tv: UITextView, primaryActionFor textItem: UITextItem, defaultAction: UIAction) -> UIAction? { nil }
 

@@ -271,6 +271,11 @@ struct PageEditor: UIViewRepresentable {
             return .init(menu: UIMenu(children: [open]))
         }
 
+        /// Holding or selecting text: iOS's edit menu, its Format only Bold and Italic.
+        func textView(_ tv: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
+            RichText.editMenu(suggestedActions)
+        }
+
         /// Tapping a link opens its page.
         func textView(_ tv: UITextView, primaryActionFor textItem: UITextItem, defaultAction: UIAction) -> UIAction? {
             guard case .link(let url) = textItem.content, let page = RichText.page(url) else { return defaultAction }

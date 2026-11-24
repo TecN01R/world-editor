@@ -41,6 +41,29 @@ enum RichText {
         attributed(p.text, runs: p.runs, links: p.links, attributes: attributes)
     }
 
+    // MARK: Edit menu
+
+    /// The edit menu as iOS suggests it, its Format holding only what pages keep: Bold and
+    /// Italic, iOS's own. Its "More…" (iOS's whole Format panel: fonts, sizes, colours, text
+    /// styles, alignment…) and anything else in it go (Kevin, 2026-11-24). Format is the menu
+    /// with iOS's Bold in it, whatever iOS calls it.
+    static func editMenu(_ suggested: [UIMenuElement]) -> UIMenu {
+        UIMenu(children: keepingPageFormatting(suggested))
+    }
+
+    private static let pageFormatting: Set<Selector> = [#selector(UIResponder.toggleBoldface(_:)),
+                                                        #selector(UIResponder.toggleItalics(_:))]
+
+    private static func keepingPageFormatting(_ elements: [UIMenuElement]) -> [UIMenuElement] {
+        elements.map { element in
+            guard let menu = element as? UIMenu else { return element }
+            let isFormat = menu.children.contains { ($0 as? UICommand).map { pageFormatting.contains($0.action) } ?? false }
+            return menu.replacingChildren(isFormat
+                ? menu.children.filter { ($0 as? UICommand).map { pageFormatting.contains($0.action) } ?? false }
+                : keepingPageFormatting(menu.children))
+        }
+    }
+
     // MARK: @ links
 
     static func url(_ page: UUID) -> URL { URL(string: "world-editor://page/\(page.uuidString)")! }
