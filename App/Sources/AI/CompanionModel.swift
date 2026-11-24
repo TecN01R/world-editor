@@ -12,6 +12,14 @@ protocol CompanionModel: Sendable {
     /// before it; the last is the whole reply. `thinking`: reason first, if the
     /// model can. Throws `PromptTooLong` when the prompt doesn't fit the model.
     func stream(_ prompt: CompanionPrompt, thinking: Bool) -> AsyncThrowingStream<Reasoned, Error>
+    // Declared here, not only defaulted below, so a model's own versions are the
+    // ones called through `any CompanionModel` (a default that isn't a
+    // requirement is always the one used, whatever the model).
+    var isInstalled: Bool { get }
+    func downloadSize() async -> Int64?
+    var version: String? { get }
+    func availableUpdate() async -> ModelUpdate?
+    func install(_ update: ModelUpdate) async throws
 }
 
 extension CompanionModel {
