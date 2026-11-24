@@ -80,20 +80,62 @@ public struct Conversation: Codable, Hashable, Sendable {
     /// The question waiting for an answer, if any.
     public var waiting: Turn? { turns.last.flatMap { $0.answer == nil ? $0 : nil } }
 
+    /// One filed change, and the answer it was filed from.
+    public struct Filed: Hashable, Sendable {
+        public var action: FilingRecord.Entry
+        public var turn: UUID
+        public init(action: FilingRecord.Entry, turn: UUID) {
+            self.action = action
+            self.turn = turn
+        }
+    }
+
     /// Whether something filed since changed what `action` (filed from `turn`) did, so it
     /// can't be undone until that is: Undo goes newest first for each field and page
     /// (Kevin, 2026-11-24), so taking back an old value never revives one already undone.
     /// `elsewhere`: the world's other conversations, whose filings can change this page too.
-    public func changedLater(_ action: FilingRecord.Entry, in turn: UUID, elsewhere: [Conversation] = []) -> Bool {
+    /// - Parameter except: changes to leave out (being undone with it, `undoChain`).
+    public func changedLater(_ action: FilingRecord.Entry, in turn: UUID, elsewhere: [Conversation] = [],
+                             except: Set<Filed> = []) -> Bool {
         guard let t = turns.firstIndex(where: { $0.id == turn }), let actions = turns[t].filed?.actions,
               let at = actions.firstIndex(of: action) else { return false }
-        func changes(_ turn: Turn) -> Bool { (turn.filed?.actions ?? []).contains { action.isChanged(by: $0, sameMessage: false) } }
+        func changed(by later: FilingRecord.Entry, from id: UUID, sameMessage: Bool) -> Bool {
+            !except.contains(Filed(action: later, turn: id)) && action.isChanged(by: later, sameMessage: sameMessage)
+        }
+        func changes(_ turn: Turn) -> Bool {
+            (turn.filed?.actions ?? []).contains { changed(by: $0, from: turn.id, sameMessage: false) }
+        }
         // When each was filed (older records: when it was answered).
         func filed(_ turn: Turn) -> Date { turn.filed?.date ?? turn.answered ?? turn.asked }
         let when = filed(turns[t])
-        return actions[(at + 1)...].contains { action.isChanged(by: $0, sameMessage: true) }
+        return actions[(at + 1)...].contains { changed(by: $0, from: turn, sameMessage: true) }
             || turns[(t + 1)...].contains(where: changes)
             || elsewhere.contains { $0.page != page && $0.turns.contains { filed($0) > when && changes($0) } }
+    }
+
+    /// What undoing `action` (filed from `turn`) takes back with it: everything filed
+    /// since in this conversation that changed what it did, and whatever changed those,
+    /// in the order to undo them, newest first, `action` last (Kevin, 2026-11-24: "undo
+    /// to this point and all layered changes would be undone"). nil when something filed
+    /// from another conversation built on one of them: that's undone there first.
+    public func undoChain(_ action: FilingRecord.Entry, in turn: UUID, elsewhere: [Conversation] = []) -> [Filed]? {
+        // Every action in the order filed, with the index of the message it came from.
+        let all = turns.enumerated().flatMap { t, turn in
+            (turn.filed?.actions ?? []).map { (message: t, filed: Filed(action: $0, turn: turn.id)) }
+        }
+        guard let start = all.firstIndex(where: { $0.filed == Filed(action: action, turn: turn) }) else { return nil }
+        // Oldest first: each later one joins if it changed something already in the chain.
+        var chain = [all[start]]
+        for later in all[(start + 1)...] where chain.contains(where: {
+            $0.filed.action.isChanged(by: later.filed.action, sameMessage: $0.message == later.message)
+        }) {
+            chain.append(later)
+        }
+        let undone = Set(chain.map { $0.filed })
+        // Built on from elsewhere: changedLater would still hold once these are undone.
+        guard !undone.contains(where: { changedLater($0.action, in: $0.turn, elsewhere: elsewhere, except: undone) })
+        else { return nil }
+        return chain.reversed().map { $0.filed }
     }
 
     /// Everything the author said here, in their words.

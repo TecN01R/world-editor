@@ -364,6 +364,18 @@ final class Companion {
         setFiled(record, turn: turn, page: conversation.page)   // kept when all undone, so it isn't filed again
     }
 
+    /// What undoing `action` takes back with it, newest first, itself last (nil: built on
+    /// from another conversation, to be undone there).
+    func undoChain(_ action: FilingRecord.Entry, from turn: UUID) -> [Conversation.Filed]? {
+        conversation.undoChain(action, in: turn, elsewhere: others)
+    }
+
+    /// Undo to here: `action` and everything filed since that built on it, newest first
+    /// (Kevin, 2026-11-24: "undo to this point and all layered changes would be undone").
+    func undoThrough(_ action: FilingRecord.Entry, from turn: UUID, in library: Library) {
+        for filed in undoChain(action, from: turn) ?? [] { undoFiling(filed.action, from: filed.turn, in: library) }
+    }
+
     /// Asking again failed or was dropped: the reply it would have replaced comes back.
     private func restoreRetracted() {
         guard let old = retracted else { return }   // cleared when another page opens
