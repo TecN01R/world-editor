@@ -10,11 +10,11 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Rotation crash: check it's gone
 
 ## Stock-first audit (plan approved 2026-11-24): batches
-- [ ] 1 Data safety and filing accuracy
-- [ ] 2 The two bugs and the rotation crash
-- [ ] 3 Open page in sync; editing crash risks
-- [ ] 4 Smooth typing
-- [ ] 5 Smooth replies
+- [ ] 1 Data safety and filing accuracy (pushed 5931105; waiting for the phone)
+- [ ] 2 The two bugs and the rotation crash (pushed 484d2ab; waiting for the phone)
+- [ ] 3 Open page in sync; editing crash risks (pushed 606a88a; waiting for the phone)
+- [ ] 4 Smooth typing (saving off the main thread pushed 7c046d4; fields animation and Focus controls fade still to do)
+- [ ] 5 Smooth replies (pushed 7c046d4; waiting for the phone)
 - [ ] 6 Faster replies (unload policy, then append-only history and filing)
 - [ ] 7 One companion
 - [ ] 8 Format bar through stock; try iOS's "Aa" panel
@@ -48,6 +48,9 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Does the companion speak first on pages too?
 
 ## Waiting on Kevin
+- [ ] Editing bar: Focus and Done share one capsule (plain checkmark) or stay apart (tinted Done)?
+- [ ] Done in Focus mode: keep, or let Exit Focus also close the keyboard?
+- [ ] The one-time wobble of the pages list: folded or unfolded, once per launch or per install? A screen recording would settle it
 - [ ] Approve the his-words design, and three answers: fix spelling? turn "she" into the
       page's name? place words that contradict the page?
 - [ ] Instructions: your preferences as an editable menu item, or a private file?

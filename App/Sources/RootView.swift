@@ -602,15 +602,13 @@ struct EditorView: View {
 
     /// Closes the keyboard (the iPhone keyboard has no key for it) and, in
     /// Focus, leaves it: Focus is for editing, so there's nothing to stay for.
-    private var done: some ToolbarContent {
-        ToolbarItem(placement: .confirmationAction) {
-            Button("Done", systemImage: "checkmark") {
-                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                // Done now, not when the keyboard's notice arrives: the page coming
-                // back from Focus would otherwise take the keyboard straight back.
-                typing = false
-                if focusMode { withAnimation(.smooth(duration: 0.3)) { focusMode = false } }
-            }
+    private var doneButton: some View {
+        Button("Done", systemImage: "checkmark") {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            // Done now, not when the keyboard's notice arrives: the page coming
+            // back from Focus would otherwise take the keyboard straight back.
+            typing = false
+            if focusMode { withAnimation(.smooth(duration: 0.3)) { focusMode = false } }
         }
     }
 
@@ -717,33 +715,33 @@ struct EditorView: View {
                     .keyboardShortcut(.cancelAction)
                 }
                 // Done here also leaves Focus, an editing-only mode (Kevin).
-                if typing { done }
+                if typing { ToolbarItem(placement: .confirmationAction) { doneButton } }
             } else if editing {
-                // Editing the page: Done (the iPhone keyboard has no key to close it) and Focus,
-                // each in its own glass and never in "•••", the companion and Mentions in a
-                // menu (Kevin, 2026-11-24). Back and the sidebar button stay, as in Notes.
-                // (Swapping the bar while any keyboard was up, search's or an alert's, hid
-                // the sidebar button and the companion's; Kevin, 2026-11-24.)
-                done
+                // Editing the page: Focus and Done (the iPhone keyboard has no key to close it)
+                // together in one glass, never in "•••", the companion and Mentions in a menu
+                // beside them (Kevin, 2026-11-24). Back and the sidebar button stay, as in
+                // Notes. (Swapping the bar while any keyboard was up, search's or an alert's,
+                // hid the sidebar button and the companion's; Kevin, 2026-11-24.)
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu("More", systemImage: "ellipsis") {
                         companionButton
                         mentionsButton
                     }
                 }
+                ToolbarSpacer(.fixed, placement: .topBarTrailing)
                 // Focus is for the writing: offered only while it has the keyboard, not the
                 // title or a field (Kevin). Unfolded, in the top row at its right end;
                 // folded, in the side column.
-                if writing {
-                    ToolbarSpacer(.fixed, placement: .topBarTrailing)
-                    ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    if writing {
                         Button("Focus Mode", systemImage: "arrow.up.left.and.arrow.down.right") {
                             withAnimation(.smooth(duration: 0.3)) { focusMode = true }
                         }
                     }
-                    .visibilityPriority(.high)
-                    .axisBehavior(folded ? .automatic : .horizontalOnly)
+                    doneButton
                 }
+                .visibilityPriority(.high)
+                .axisBehavior(folded ? .automatic : .horizontalOnly)
             } else {
                 // The companion's button at the bottom as on every screen (Kevin, 2026-11-24):
                 // folded, at the foot of the Duo's side column; unfolded, at the bottom's
