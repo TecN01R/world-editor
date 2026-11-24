@@ -22,7 +22,7 @@ struct CompanionPanel: View {
     @ScaledMetric(relativeTo: .body) private var barHeight: CGFloat = 44
     /// The system's standard margin, for the conversation and the message bar.
     private static let margin: CGFloat = 20
-    /// Folded, a sheet; unfolded, the inspector column beside the page.
+    /// Folded, a sheet; unfolded, the column beside the page.
     let inSheet: Bool
     /// A conversation about the whole world, beside (unfolded) or over (folded) the
     /// world's conversation list (`WorldConversationList`): its bar has Changes and the menu.
