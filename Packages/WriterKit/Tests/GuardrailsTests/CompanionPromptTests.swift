@@ -177,14 +177,15 @@ final class CompanionPromptTests: XCTestCase {
     // MARK: With lookups (the search tools design: retrieval, search_pages, or both)
 
     /// Pages for the lookup prompts, invented: the Kestrel's builder is only in a field.
-    private func lookupWorld() -> (pages: [CompanionPrompt.Page], lookup: PageLookup) {
+    /// `more` are added after them.
+    private func lookupWorld(more: [CompanionPrompt.Page] = []) -> (pages: [CompanionPrompt.Page], lookup: PageLookup) {
         let pages: [CompanionPrompt.Page] = [
             .init(name: "Port Vell", type: "Place", writing: "A harbour town on the salt coast."),
             .init(name: "Kai", type: "Character", writing: "Mends nets on the quay."),
             .init(name: "The Kestrel", type: "Ship", writing: "Fast, narrow, always leaking. A rower's ship."),
             .init(name: "Portraits", writing: "Sketches of the crew."),
             .init(name: "The Salt Wars", type: "Event", writing: "Three summers of raids along the coast."),
-        ]
+        ] + more
         let lookup = PageLookup(pages: pages.map { page in
             PageLookup.Page(heading: page.name, type: page.type, fields: page.name == "The Kestrel" ? ["Built by: Tomas Reyes"] : [],
                             paragraphs: [(id: UUID(), text: page.writing)])
@@ -260,16 +261,18 @@ final class CompanionPromptTests: XCTestCase {
         }
     }
 
-    /// Shown only part of their pages with no search (retrieval alone, "R+"), it's told to say
-    /// plainly when it doesn't see what they ask about, in the search case's place.
+    /// With a lookup but no search (retrieval alone, "R2"), it's told to say plainly when it
+    /// doesn't see what they ask about, in the search case's place.
     func testRetrievalAloneAddsTheNotShownInstruction() {
         let (pages, lookup) = lookupWorld()
         let retrieval = CompanionPrompt.Lookup(pages: lookup, retrieving: true, searching: false)
         let instructions = CompanionPrompt.instructions(lookup: retrieval)
         XCTAssertEqual(instructions, CompanionPrompt.instructions.replacingOccurrences(
             of: "say that.\n- If they asked what you think",
-            with: "say that.\n- If they ask about something of theirs that isn't in what you're shown of their pages here, "
-                + "say plainly that you don't see it: that part is theirs to tell you.\n- If they asked what you think"))
+            with: "say that.\n- If they ask about something of theirs that isn't anywhere in what you're shown of their pages here, "
+                + "even with what several of them say put together, say plainly that you don't see it: that part is theirs "
+                + "to tell you. A question about the real world is answered as above, even when it comes up in their world."
+                + "\n- If they asked what you think"))
         XCTAssertFalse(instructions.contains(PageLookup.toolName))
         var talk = Conversation(page: UUID(), aboutWorld: true)
         talk.answer("who founded the Guild of Lamps?")
@@ -308,31 +311,81 @@ final class CompanionPromptTests: XCTestCase {
         }
     }
 
-    /// The world's conversation with a lookup lists every page by name, those bearing on what
-    /// they've said first, in place of each page's opening, then what the pages say about
-    /// their last message.
-    func testTheWorldWithALookupListsItsPagesByName() {
+    /// A world that fits whole is shown with a lookup as without one, every page's opening
+    /// and no passages; only its instructions gain the lookup's case.
+    func testASmallWorldWithALookupIsShownWhole() {
         let (pages, lookup) = lookupWorld()
         var talk = Conversation(page: UUID(), aboutWorld: true)
         talk.answer("who built the Kestrel again?")
-        let prompt = CompanionPrompt(world: "Tidewater", pages: pages, conversation: talk,
-                                     lookup: .init(pages: lookup, retrieving: true, searching: true))
-        XCTAssertTrue(prompt.system.hasSuffix("""
-            only part of their pages is shown here):
+        let today = CompanionPrompt(world: "Tidewater", pages: pages, conversation: talk).system
+        XCTAssertTrue(today.hasSuffix("""
+            (for reference; the writer didn't just say this):
 
-            Their world, \u{201C}Tidewater\u{201D}, and its pages, by name:
-            - The Kestrel (Ship)
-            - Port Vell (Place)
-            - Kai (Character)
-            - Portraits
-            - The Salt Wars (Event)
-
-            What their pages say about what they just said:
-            - The Kestrel (Ship): Built by: Tomas Reyes \u{201C}Fast, narrow, always leaking. A rower's ship.\u{201D}
+            Their world, \u{201C}Tidewater\u{201D}, and its pages:
+            - The Kestrel (Ship): Fast, narrow, always leaking. A rower's ship.
+            - Port Vell (Place): A harbour town on the salt coast.
+            - Kai (Character): Mends nets on the quay.
+            - Portraits: Sketches of the crew.
+            - The Salt Wars (Event): Three summers of raids along the coast.
             """))
+        for searching in [false, true] {
+            let with = CompanionPrompt.Lookup(pages: lookup, retrieving: true, searching: searching)
+            let prompt = CompanionPrompt(world: "Tidewater", pages: pages, conversation: talk, lookup: with)
+            XCTAssertEqual(prompt.system, today.replacingOccurrences(of: CompanionPrompt.instructions,
+                                                                     with: CompanionPrompt.instructions(lookup: with)))
+            XCTAssertTrue(prompt.system.contains(searching ? CompanionPrompt.searchInstruction : CompanionPrompt.notShownInstruction))
+        }
         let empty = CompanionPrompt(world: "New World", pages: [], conversation: Conversation(page: UUID()),
                                     lookup: .init(pages: PageLookup(pages: []), retrieving: true, searching: true))
-        XCTAssertTrue(empty.system.hasSuffix("Their world, \u{201C}New World\u{201D}, has no pages yet."))
+        XCTAssertTrue(empty.system.hasSuffix("(for reference; the writer didn't just say this):\n\n"
+                                             + "Their world, \u{201C}New World\u{201D}, has no pages yet."))
+    }
+
+    /// A world too big to show whole is, with a lookup, the pages bearing most on what's been
+    /// said with their openings, the rest by name, and what the pages say about the last
+    /// message, all within the room of today's summary; the heading says only part is shown.
+    func testABigWorldWithALookupShowsWhatFitsAndTheRestByName() throws {
+        let reefs = (1...30).map { CompanionPrompt.Page(name: "Reef \($0)", type: "Place",
+                                                        writing: String(repeating: "Coral and old wrecks under green water. ", count: 6)) }
+        let (pages, lookup) = lookupWorld(more: reefs)
+        var talk = Conversation(page: UUID(), aboutWorld: true)
+        talk.answer("who built the Kestrel again?")
+        let prompt = CompanionPrompt(world: "Tidewater", pages: pages, conversation: talk,
+                                     lookup: .init(pages: lookup, retrieving: true, searching: false)).system
+        let background = try XCTUnwrap(prompt.components(separatedBy: CompanionPrompt.examples + "\n\n").last)
+        let blocks = background.components(separatedBy: "\n\n")
+        XCTAssertEqual(blocks.count, 4)
+        XCTAssertEqual(blocks[0], "What the app shows you of the writer's pages (for reference; the writer didn't just say this; "
+                                  + "only part of their pages is shown here):")
+        XCTAssertTrue(blocks[1].hasPrefix("""
+            Their world, \u{201C}Tidewater\u{201D}, and its pages:
+            - The Kestrel (Ship): Fast, narrow, always leaking. A rower's ship.
+            - Port Vell (Place): A harbour town on the salt coast.
+            - Kai (Character): Mends nets on the quay.
+            - Portraits: Sketches of the crew.
+            - The Salt Wars (Event): Three summers of raids along the coast.
+            - Reef 1 (Place): Coral and old wrecks
+            """))
+        XCTAssertTrue(blocks[2].hasPrefix("Their other pages, by name:\n- Reef "))
+        XCTAssertTrue(blocks[2].hasSuffix("- Reef 30 (Place)"))
+        XCTAssertEqual(blocks[3], """
+            What their pages say about what they just said:
+            - The Kestrel (Ship): Built by: Tomas Reyes \u{201C}Fast, narrow, always leaking. A rower's ship.\u{201D}
+            """)
+        // Every page once, with its opening or by name, in the room today's summary has.
+        let lines = blocks[1...2].flatMap { $0.components(separatedBy: "\n") }
+        for page in pages {
+            XCTAssertEqual(lines.filter { $0.hasPrefix(CompanionPrompt.listed(page.name, type: page.type)) }.count, 1, page.name)
+        }
+        let world = blocks[1...3].map { $0.split(separator: "\n", maxSplits: 1).last ?? "" }.map(\.count).reduce(0, +)
+        XCTAssertLessThanOrEqual(world, 6000 * 2 / 3)
+
+        // One page longer than its opening is enough for it to be only part shown.
+        let long = [CompanionPrompt.Page(name: "Ledger", writing: String(repeating: "Tolls paid at the lamp. ", count: 40))]
+        let ledger = CompanionPrompt(world: "Tidewater", pages: long, conversation: talk,
+                                     lookup: .init(pages: PageLookup(pages: []), retrieving: true, searching: false)).system
+        XCTAssertTrue(ledger.contains("only part of their pages is shown here):\n\nTheir world, \u{201C}Tidewater\u{201D}, "
+                                      + "and its pages:\n- Ledger: Tolls paid"))
     }
 
     func testKeywordsAreWhatATextIsAbout() {
