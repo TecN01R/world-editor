@@ -309,12 +309,13 @@ struct PageEditor: UIViewRepresentable {
             let loc = doc.paragraphStarts[p] + min(library.cursor.offset, doc.paragraphs[p].length)
             tv.selectedRange = NSRange(location: loc, length: 0)
             updateTypingAttributes()
-            // A new page starts in its title; otherwise carry on writing.
+            // A new page starts in its title, keyboard up, as a new note does in
+            // Notes; any other page opens where you left off, keyboard down
+            // until you tap (Kevin, 2026-11-23).
             let startInTitle = doc.isEmpty && !Screenshots.isActive
             guard !Screenshots.opensMara || Screenshots.showsMentions else { return }   // CI: the page at rest
             DispatchQueue.main.async { [titleField] in
                 if startInTitle { titleField.becomeFirstResponder(); return }
-                tv.becomeFirstResponder()
                 tv.scrollRangeToVisible(tv.selectedRange)
             }
         }
