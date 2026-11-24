@@ -18,9 +18,13 @@ struct PageEditor: UIViewRepresentable {
     /// a keyboard elsewhere (search in the pages list, an alert, the companion).
     private let onEditing: (Bool) -> Void
 
-    init(keepsKeyboard: Bool = false, onWriting: @escaping (Bool) -> Void = { _ in },
+    /// Counts taps on the toolbar's Format button: each one shows iOS's Format panel.
+    private let formatRequest: Int
+
+    init(keepsKeyboard: Bool = false, formatRequest: Int = 0, onWriting: @escaping (Bool) -> Void = { _ in },
          onEditing: @escaping (Bool) -> Void = { _ in }, onFocus: @escaping () -> Void) {
         self.keepsKeyboard = keepsKeyboard
+        self.formatRequest = formatRequest
         self.onWriting = onWriting
         self.onEditing = onEditing
         self.onFocus = onFocus
@@ -49,11 +53,16 @@ struct PageEditor: UIViewRepresentable {
         context.coordinator.onEditing = onEditing
         context.coordinator.render(selection: nil)
         context.coordinator.restoreCaret()
-        return PageView(textView: tv, bar: context.coordinator.formatBar)
+        context.coordinator.formatRequest = formatRequest
+        return PageView(textView: tv)
     }
 
     func updateUIView(_ view: PageView, context: Context) {
         context.coordinator.onFocus = onFocus
+        if formatRequest != context.coordinator.formatRequest {   // the Format button, tapped
+            context.coordinator.formatRequest = formatRequest
+            context.coordinator.showFormatting()
+        }
         // Renamed from elsewhere (the companion filing "Her name is Florica", or its Undo):
         // the title shows it, unless the author is typing in it.
         let title = context.coordinator.titleField
@@ -152,29 +161,8 @@ struct PageEditor: UIViewRepresentable {
         var onWriting: (Bool) -> Void = { _ in }
         var onEditing: (Bool) -> Void = { _ in }
         private var observers: [NSObjectProtocol] = []
-        lazy var formatBar = FormatBar { [weak self] action in
-            switch action {
-            case .style(let style): self?.toggle(style)
-            case .list(let kind): self?.list(kind)
-            case .format: self?.showFormatting()
-            }
-        }
-
-        /// iOS's own Bold and Italic, as ⌘B and ⌘I: Undo takes them back, and with nothing
-        /// selected they're for what's typed next.
-        private func toggle(_ style: InlineStyle) {
-            guard let tv = textView else { return }
-            if style == .bold { tv.toggleBoldface(nil) } else { tv.toggleItalics(nil) }
-            if !selection.isEmpty { textViewDidChange(tv) }
-            updateFormatBar()
-            UISelectionFeedbackGenerator().selectionChanged()
-        }
-
-        private func list(_ kind: ParagraphKind) {
-            toggleKind(kind, in: selection)
-            updateFormatBar()
-            UISelectionFeedbackGenerator().selectionChanged()
-        }
+        /// The Format button's taps shown so far.
+        var formatRequest = 0
 
         lazy var titleField: UITextField = {
             let f = UITextField()
@@ -323,12 +311,10 @@ struct PageEditor: UIViewRepresentable {
         }
 
         func textViewDidBeginEditing(_ tv: UITextView) {
-            (tv.superview as? PageView)?.showBar(true)
             onWriting(true)
             updateFormatBar()   // the @ menu can only appear once writing
         }
         func textViewDidEndEditing(_ tv: UITextView) {
-            (tv.superview as? PageView)?.showBar(false)
             onWriting(false)
             closeMentionMenu()
         }
@@ -436,19 +422,20 @@ struct PageEditor: UIViewRepresentable {
 
         // MARK: Formatting
 
-        /// iOS's own Format panel, from the bar's button (Kevin, 2026-11-24: "Can I just get a
-        /// button for this then?"): iOS offers no way to open the edit menu's, so the page
-        /// shows it and makes the changes it asks for, through iOS's own commands where there
-        /// are some. As a popover unfolded, a sheet folded.
-        private func showFormatting() {
+        /// iOS's own Format panel, from the toolbar's Format button (Kevin, 2026-11-24: "Can I
+        /// just get a button for this then?"): iOS offers no way to open the edit menu's, so the
+        /// page shows it and makes the changes it asks for, through iOS's own commands where
+        /// there are some. A popover at the selection unfolded, a sheet folded.
+        func showFormatting() {
             guard let tv = textView else { return }
             let panel = UITextFormattingViewController(configuration: PageEditor.formatting)
             panel.delegate = self
             panel.formattingDescriptor = formattingNow(tv)
             panel.modalPresentationStyle = .popover
             if let popover = panel.popoverPresentationController {
-                popover.sourceView = formatBar
-                popover.sourceRect = formatBar.bounds
+                popover.sourceView = tv
+                popover.sourceRect = tv.selectedTextRange.map { tv.firstRect(for: $0) }
+                    .flatMap { $0.isNull || $0.isEmpty ? nil : $0 } ?? tv.caretRect(for: tv.selectedTextRange?.start ?? tv.beginningOfDocument)
                 popover.adaptiveSheetPresentationController.detents = [.medium()]
             }
             var host = tv.window?.rootViewController
@@ -586,24 +573,9 @@ struct PageEditor: UIViewRepresentable {
             undo.setActionName(name)
         }
 
+        /// The `@` menu, as the caret moves.
         private func updateFormatBar() {
-            let doc = library.document, range = selection
-            let caret = doc.locate(range.lowerBound)
-            let p = doc.paragraphs[caret.index]
-            // Caret in a link: a button to open its page (tapping the link itself may just place the caret).
-            let linked = range.isEmpty ? p.link(at: caret.offset).flatMap { link in library.pages.first { $0.id == link.page } } : nil
-            let open = linked.map { page in
-                FormatBar.OpenButton(name: page.heading, page: page.id) { [weak self] in
-                    self?.open(page.id)
-                }
-            }
-            func on(_ style: InlineStyle) -> Bool {
-                guard let tv = textView else { return false }
-                return range.isEmpty ? RichText.style(of: tv.typingAttributes, base: PageEditor.font(p.role)).contains(style)
-                                     : doc.has(style, in: range)
-            }
-            formatBar.update(bold: on(.bold), italic: on(.italic), kind: p.kind, open: open)
-            updateMentionMenu(at: caret)
+            updateMentionMenu(at: library.document.locate(selection.lowerBound))
         }
 
         func restoreCaret() {
@@ -628,186 +600,24 @@ struct PageEditor: UIViewRepresentable {
     }
 }
 
-/// Bold, Italic, the two lists and Format (iOS's Format panel) above the
-/// keyboard, plus Open while the caret is in a link. One glass capsule with a small gap below it, in
-/// the page's column, scrolling sideways when its buttons don't fit, as in Notes.
-/// Customised at Kevin's request: the stock toolbar folds extra items into
-/// "•••" and spans the whole keyboard.
-final class FormatBar: UIView {
-    /// Open, for the link at the caret.
-    struct OpenButton {
-        /// The page's name.
-        let name: String
-        /// The page it opens, so a button is never reused for another page.
-        let page: UUID
-        let action: () -> Void
-    }
-
-    private static let gap: CGFloat = 8
-    /// 44 pt at the default text size, growing with Dynamic Type.
-    private var barHeight: CGFloat { UIFontMetrics.default.scaledValue(for: 44, compatibleWith: traitCollection) }
-    private lazy var heightConstraint = capsule.heightAnchor.constraint(equalToConstant: barHeight)
-    private let capsule = UIVisualEffectView(effect: UIGlassEffect())
-    private let scroll = UIScrollView()
-    private let stack = UIStackView()
-    /// Bold, Italic, the two lists, and Format.
-    private let buttons: [UIButton]
-
-    enum Action { case style(InlineStyle), list(ParagraphKind), format }
-
-    init(onAction: @escaping (Action) -> Void) {
-        buttons = [Self.button(symbol: "bold", label: "Bold") { onAction(.style(.bold)) },
-                   Self.button(symbol: "italic", label: "Italic") { onAction(.style(.italic)) },
-                   Self.button(symbol: "list.bullet", label: "Bulleted List") { onAction(.list(.bullet)) },
-                   Self.button(symbol: "list.number", label: "Numbered List") { onAction(.list(.numbered)) },
-                   Self.button(symbol: "textformat", label: "Format") { onAction(.format) }]
-        super.init(frame: CGRect(x: 0, y: 0, width: 320, height: 44 + Self.gap))
-
-        capsule.cornerConfiguration = .capsule()
-        capsule.clipsToBounds = true
-        scroll.showsHorizontalScrollIndicator = false
-        stack.axis = .horizontal
-        for v in [capsule, scroll, stack] as [UIView] { v.translatesAutoresizingMaskIntoConstraints = false }
-        scroll.addSubview(stack)
-        capsule.contentView.addSubview(scroll)
-        addSubview(capsule)
-
-        let pad: CGFloat = 8
-        let fit = capsule.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: 2 * pad)
-        fit.priority = .defaultHigh   // as wide as its buttons, until the column's width runs out
-        NSLayoutConstraint.activate([
-            capsule.centerXAnchor.constraint(equalTo: centerXAnchor),
-            capsule.leadingAnchor.constraint(greaterThanOrEqualTo: leadingAnchor, constant: 12),
-            capsule.topAnchor.constraint(equalTo: topAnchor),
-            heightConstraint,
-            fit,
-            scroll.leadingAnchor.constraint(equalTo: capsule.contentView.leadingAnchor),
-            scroll.trailingAnchor.constraint(equalTo: capsule.contentView.trailingAnchor),
-            scroll.topAnchor.constraint(equalTo: capsule.contentView.topAnchor),
-            scroll.bottomAnchor.constraint(equalTo: capsule.contentView.bottomAnchor),
-            stack.leadingAnchor.constraint(equalTo: scroll.contentLayoutGuide.leadingAnchor, constant: pad),
-            stack.trailingAnchor.constraint(equalTo: scroll.contentLayoutGuide.trailingAnchor, constant: -pad),
-            stack.topAnchor.constraint(equalTo: scroll.contentLayoutGuide.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
-            stack.heightAnchor.constraint(equalTo: scroll.frameLayoutGuide.heightAnchor),
-        ])
-        show(buttons)
-        tintAdjustmentMode = .normal   // stays bright while the @ menu is up, as in Notes
-        addInteraction(UILargeContentViewerInteraction())   // press and hold at large text sizes
-        registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (bar: FormatBar, _: UITraitCollection) in
-            bar.heightConstraint.constant = bar.barHeight
-            bar.invalidateIntrinsicContentSize()
-        }
-    }
-    required init?(coder: NSCoder) { fatalError() }
-
-    override var intrinsicContentSize: CGSize { CGSize(width: UIView.noIntrinsicMetric, height: barHeight + Self.gap) }
-
-    /// Only the capsule takes touches; taps beside or below it reach the page.
-    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        capsule.frame.contains(point)
-    }
-
-    private static func button(symbol: String? = nil, title: String? = nil, label: String,
-                               action: @escaping () -> Void) -> UIButton {
-        var config = UIButton.Configuration.plain()
-        config.image = symbol.flatMap { UIImage(systemName: $0) }
-        config.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .title3)
-        config.title = title
-        config.baseForegroundColor = .label
-        config.cornerStyle = .capsule
-        config.titleLineBreakMode = .byTruncatingTail   // one line; the bar scrolls instead
-        config.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14)
-        let b = UIButton(configuration: config, primaryAction: UIAction { _ in action() })
-        b.accessibilityLabel = label
-        b.showsLargeContentViewer = true
-        b.largeContentTitle = label
-        b.largeContentImage = config.image
-        b.widthAnchor.constraint(greaterThanOrEqualToConstant: 56).isActive = true   // even slots, as in Notes
-        b.setContentCompressionResistancePriority(.required, for: .horizontal)   // scroll, never squeeze
-        b.configurationUpdateHandler = { b in   // on: shaded, as Notes' bar shows it
-            b.configuration?.background.backgroundColor = b.isSelected ? .tertiarySystemFill : .clear
-        }
-        return b
-    }
-
-    private func show(_ views: [UIView]) {
-        for v in stack.arrangedSubviews { v.removeFromSuperview() }
-        for v in views { stack.addArrangedSubview(v) }
-        scroll.contentOffset = .zero
-    }
-
-    /// The extra button beside formatting, so the bar's only rebuilt when it changes.
-    private var shownExtra: String?
-
-    /// Bold, Italic and the lists as the selection is, plus a button to open the link at the caret.
-    func update(bold: Bool, italic: Bool, kind: ParagraphKind, open: OpenButton?) {
-        for (b, on) in zip(buttons, [bold, italic, kind == .bullet, kind == .numbered]) { b.isSelected = on }
-        let key = open.map { "\($0.name) \($0.page)" }
-        guard key != shownExtra else { return }
-        shownExtra = key
-        show(buttons + (open.map { [Self.button(for: $0)] } ?? []))
-    }
-
-    private static func button(for open: OpenButton) -> UIButton {
-        let label = "Open \(open.name)"
-        let b = button(title: label, label: label, action: open.action)
-        // The page's name is the author's: New York; "Open" is the app's.
-        var title = AttributedString("Open ")
-        title.uiKit.font = .preferredFont(forTextStyle: .body)
-        var name = AttributedString(open.name)
-        name.uiKit.font = .authored(.body)
-        b.configuration?.attributedTitle = title + name
-        return b
-    }
-}
-
-/// The page: its text view, with the format bar floating just above the
-/// keyboard while writing. The bar is part of the page, not the keyboard's
-/// accessory view: an accessory counts as keyboard, which shortens the Duo's
-/// side column and pushes toolbar items into "•••" (Notes does the same).
+/// The page: its text view. Formatting is iOS's own Format panel, from the toolbar's
+/// Format button.
 final class PageView: UIView {
     let textView: PageTextView
-    private let bar: FormatBar
 
-    init(textView: PageTextView, bar: FormatBar) {
+    init(textView: PageTextView) {
         self.textView = textView
-        self.bar = bar
         super.init(frame: .zero)
-        keyboardLayoutGuide.followsUndockedKeyboard = true
-        for v in [textView, bar] as [UIView] { v.translatesAutoresizingMaskIntoConstraints = false; addSubview(v) }
+        textView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(textView)
         NSLayoutConstraint.activate([
             textView.leadingAnchor.constraint(equalTo: leadingAnchor),
             textView.trailingAnchor.constraint(equalTo: trailingAnchor),
             textView.topAnchor.constraint(equalTo: topAnchor),
             textView.bottomAnchor.constraint(equalTo: bottomAnchor),
-            bar.leadingAnchor.constraint(equalTo: safeAreaLayoutGuide.leadingAnchor),
-            bar.trailingAnchor.constraint(equalTo: safeAreaLayoutGuide.trailingAnchor),
-            bar.bottomAnchor.constraint(equalTo: keyboardLayoutGuide.topAnchor),
         ])
-        showBar(textView.isFirstResponder)
-        // Tells the text view the bar floats over its bottom edge, so iOS
-        // softens the writing under it, as under a stock toolbar (scroll edge
-        // effect). "Automatic" would resolve to none without a stock toolbar.
-        let edge = UIScrollEdgeElementContainerInteraction()
-        edge.scrollView = textView
-        edge.edge = .bottom
-        bar.addInteraction(edge)
-        textView.bottomEdgeEffect.style = .soft
     }
     required init?(coder: NSCoder) { fatalError() }
-
-    override func layoutSubviews() {
-        super.layoutSubviews()
-        let height = bar.isHidden ? 0 : bar.intrinsicContentSize.height   // follows Dynamic Type
-        if textView.barHeight != height { textView.barHeight = height }
-    }
-
-    /// The bar shows only while writing, like the keyboard it sits on.
-    func showBar(_ shown: Bool) {
-        bar.isHidden = !shown
-        textView.barHeight = shown ? bar.intrinsicContentSize.height : 0
-    }
 }
 
 /// The page's text view. Lays out the title above the writing whenever its
@@ -863,7 +673,6 @@ final class PageTextView: PlainPasteTextView {
 
 
     /// The format bar's height while it floats over the bottom of the page.
-    var barHeight: CGFloat = 0 { didSet { setNeedsLayout() } }
 
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -889,10 +698,9 @@ final class PageTextView: PlainPasteTextView {
         let inset = UIEdgeInsets(top: top + 14, left: lead, bottom: 40, right: side)
         if textContainerInset != inset { textContainerInset = inset }
 
-        // The format bar floats over the bottom of the page (which stops at the
-        // keyboard, though any part still under it counts); keep everything
-        // scrollable above them.
-        let covered = max(0, bounds.maxY - keyboardLayoutGuide.layoutFrame.minY) + barHeight
+        // The page stops at the keyboard, though any part still under it counts: keep
+        // everything scrollable above it.
+        let covered = max(0, bounds.maxY - keyboardLayoutGuide.layoutFrame.minY)
         if contentInset.bottom != covered {
             contentInset.bottom = covered
             verticalScrollIndicatorInsets.bottom = covered

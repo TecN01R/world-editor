@@ -607,6 +607,8 @@ struct EditorView: View {
     @State private var editing = false
     /// The page's writing has the keyboard (not its title, a field or the companion).
     @State private var writing = false
+    /// Taps on Format, for the page to show iOS's Format panel.
+    @State private var formatRequest = 0
 
     /// The companion, beside the page (unfolded) or a sheet (folded). ⌥⌘I is the system's
     /// shortcut for an inspector.
@@ -665,7 +667,8 @@ struct EditorView: View {
                     .ignoresSafeArea()   // the whole display; bars appear over it
                     .transition(.opacity)
             } else {
-                PageEditor(keepsKeyboard: typing, onWriting: { writing = $0 }, onEditing: { editing = $0 }) {   // stops at the keyboard, as iOS lays pages out
+                PageEditor(keepsKeyboard: typing, formatRequest: formatRequest,
+                           onWriting: { writing = $0 }, onEditing: { editing = $0 }) {   // stops at the keyboard, as iOS lays pages out
                     withAnimation(.smooth(duration: 0.3)) { focusMode = true }
                 }
                     .transition(.opacity)
@@ -681,7 +684,11 @@ struct EditorView: View {
         // Unfolded, iOS hid the page's bottom bar (the companion's button) while the companion's
         // column was closed, keeping the top's (Kevin's screenshots, 2026-11-24): asked for.
         .toolbar(focusMode ? .automatic : .visible, for: .bottomBar)
-        .navigationBarBackButtonHidden(focusMode)
+        // Folded, while the page's writing has the keyboard, Back steps aside: the side column
+        // above the keyboard holds Back and two buttons, counted however they're grouped, and
+        // Format, Focus and Done are three (Kevin's screenshot, 2026-11-24). It's back when the
+        // keyboard goes down.
+        .navigationBarBackButtonHidden(focusMode || (folded && editing && writing))
         .toolbar(removing: focusMode ? .sidebarToggle : nil)
         // While the page has the keyboard, Done shows, as in Notes. Focus is for
         // writing, so the keyboard going down (Done, or swiped away) leaves it (Kevin).
@@ -751,8 +758,11 @@ struct EditorView: View {
                 // Focus is for the writing: offered only while it has the keyboard, not the
                 // title or a field (Kevin). Where iOS puts the bar's buttons, with Done (pinned to
                 // the top row unfolded, it sat over the companion's column; Kevin, 2026-11-24).
+                // Format (iOS's Format panel) with it, in one glass, in place of the floating bar
+                // (Kevin, 2026-11-24).
                 if writing {
-                    ToolbarItem(placement: .topBarTrailing) {
+                    ToolbarItemGroup(placement: .topBarTrailing) {
+                        Button("Format", systemImage: "textformat") { formatRequest += 1 }
                         Button("Focus Mode", systemImage: "arrow.up.left.and.arrow.down.right") {
                             withAnimation(.smooth(duration: 0.3)) { focusMode = true }
                         }
