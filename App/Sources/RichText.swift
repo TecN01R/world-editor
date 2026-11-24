@@ -47,17 +47,17 @@ enum RichText {
     /// 2026-11-24): iOS's own Bold and Italic, then `more` (the lists, in Edit mode). Its
     /// "More…" (iOS's whole Format panel: fonts, sizes, colours, text styles, alignment…) and
     /// anything else in it go. Format is iOS's Format, Font or Text Style menu, or whichever
-    /// holds iOS's Bold, its Bold and Italic gathered from however iOS nests them.
+    /// holds Bold or Italic itself, its Bold and Italic gathered from however iOS nests them.
     static func editMenu(_ suggested: [UIMenuElement], more: [UIMenuElement] = []) -> UIMenu {
         UIMenu(children: keepingPageFormatting(suggested, more: more))
     }
 
-    private static let pageFormatting: Set<Selector> = [#selector(UIResponder.toggleBoldface(_:)),
-                                                        #selector(UIResponder.toggleItalics(_:))]
+    private static let pageFormattingActions: Set<Selector> = [#selector(UIResponder.toggleBoldface(_:)),
+                                                               #selector(UIResponder.toggleItalics(_:))]
     private static let formatMenus: Set<UIMenu.Identifier> = [.format, .font, .textStyle]
 
     private static func isPageFormatting(_ element: UIMenuElement) -> Bool {
-        (element as? UICommand).map { pageFormatting.contains($0.action) } ?? false
+        (element as? UICommand).map { pageFormattingActions.contains($0.action) } ?? false
     }
 
     /// Bold and Italic in `menu`, however deep.
@@ -68,11 +68,14 @@ enum RichText {
         }
     }
 
+    /// `elements` with Format rebuilt, however deep; menus without Bold or Italic stay as they are.
     private static func keepingPageFormatting(_ elements: [UIMenuElement], more: [UIMenuElement]) -> [UIMenuElement] {
         elements.map { element in
-            guard let menu = element as? UIMenu, !pageFormatting(in: menu).isEmpty else { return element }
+            guard let menu = element as? UIMenu else { return element }
+            let boldAndItalic = pageFormatting(in: menu)
+            guard !boldAndItalic.isEmpty else { return element }
             if formatMenus.contains(menu.identifier) || menu.children.contains(where: isPageFormatting) {
-                return menu.replacingChildren(pageFormatting(in: menu) + more)
+                return menu.replacingChildren(boldAndItalic + more)
             }
             return menu.replacingChildren(keepingPageFormatting(menu.children, more: more))
         }
