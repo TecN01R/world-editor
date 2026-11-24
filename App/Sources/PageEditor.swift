@@ -400,7 +400,7 @@ struct PageEditor: UIViewRepresentable {
             case .bold: tv.toggleBoldface(nil)
             case .italic: tv.toggleItalics(nil)
             case .underline: tv.toggleUnderline(nil)
-            case .strikethrough(let on): strike(on)
+            case .strikethrough(let on): strike(on, in: tv)
             case .textList(let list):
                 let kind: ParagraphKind = switch list {
                 case nil: .body
@@ -408,6 +408,7 @@ struct PageEditor: UIViewRepresentable {
                 default: .bullet
                 }
                 let current = library.document.paragraphs[library.document.locate(selection.lowerBound).index].kind
+                // No list: the current one toggled off.
                 if kind != current { toggleKind(kind == .body ? current : kind, in: selection) }
             default: break   // not offered (`PageEditor.formatting`)
             }
@@ -427,14 +428,19 @@ struct PageEditor: UIViewRepresentable {
 
         /// Strikethrough (iOS has no command for it): on the selection, as one step Undo takes
         /// back, or with none, on what's typed next.
-        private func strike(_ on: Bool) {
-            guard let tv = textView else { return }
+        private func strike(_ on: Bool, in tv: UITextView) {
             let range = tv.selectedRange
             let value: Int? = on ? NSUnderlineStyle.single.rawValue : nil
-            guard range.length > 0 else { return tv.typingAttributes[.strikethroughStyle] = value }
+            guard range.length > 0 else {
+                tv.typingAttributes[.strikethroughStyle] = value
+                return
+            }
             let before = library.document.paragraphs
-            if let value { tv.textStorage.addAttribute(.strikethroughStyle, value: value, range: range) }
-            else { tv.textStorage.removeAttribute(.strikethroughStyle, range: range) }
+            if let value {
+                tv.textStorage.addAttribute(.strikethroughStyle, value: value, range: range)
+            } else {
+                tv.textStorage.removeAttribute(.strikethroughStyle, range: range)
+            }
             textViewDidChange(tv)
             undoably(back: before, named: "Strikethrough")
         }
@@ -497,13 +503,12 @@ struct PageEditor: UIViewRepresentable {
     }
 }
 
-/// Bold, italic, bulleted and numbered list above the keyboard, plus Open
-/// while the caret is in a link. One glass capsule with a small gap below it, in
+/// Format (iOS's Format panel) above the keyboard, plus Open while the
+/// caret is in a link. One glass capsule with a small gap below it, in
 /// the page's column, scrolling sideways when its buttons don't fit, as in Notes.
 /// Customised at Kevin's request: the stock toolbar folds extra items into
 /// "•••" and spans the whole keyboard.
 final class FormatBar: UIView {
-
     /// Open, for the link at the caret.
     struct OpenButton {
         /// The page's name.
@@ -520,12 +525,12 @@ final class FormatBar: UIView {
     private let capsule = UIVisualEffectView(effect: UIGlassEffect())
     private let scroll = UIScrollView()
     private let stack = UIStackView()
-    private var buttons: [UIButton] = []
+    private let formatButton: UIButton
 
     /// - Parameter onFormat: opens iOS's Format panel.
     init(onFormat: @escaping () -> Void) {
+        formatButton = Self.button(symbol: "textformat", label: "Format", action: onFormat)
         super.init(frame: CGRect(x: 0, y: 0, width: 320, height: 44 + Self.gap))
-        buttons = [Self.button(symbol: "textformat", label: "Format", action: onFormat)]
 
         capsule.cornerConfiguration = .capsule()
         capsule.clipsToBounds = true
@@ -555,7 +560,7 @@ final class FormatBar: UIView {
             stack.bottomAnchor.constraint(equalTo: scroll.contentLayoutGuide.bottomAnchor),
             stack.heightAnchor.constraint(equalTo: scroll.frameLayoutGuide.heightAnchor),
         ])
-        show(buttons)
+        show([formatButton])
         tintAdjustmentMode = .normal   // stays bright while the @ menu is up, as in Notes
         addInteraction(UILargeContentViewerInteraction())   // press and hold at large text sizes
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (bar: FormatBar, _: UITraitCollection) in
@@ -589,9 +594,6 @@ final class FormatBar: UIView {
         b.largeContentImage = config.image
         b.widthAnchor.constraint(greaterThanOrEqualToConstant: 56).isActive = true   // even slots, as in Notes
         b.setContentCompressionResistancePriority(.required, for: .horizontal)   // scroll, never squeeze
-        b.configurationUpdateHandler = { b in
-            b.configuration?.background.backgroundColor = b.isSelected ? .tertiarySystemFill : .clear
-        }
         return b
     }
 
@@ -609,7 +611,7 @@ final class FormatBar: UIView {
         let key = open.map { "\($0.name) \($0.page)" }
         guard key != shownExtra else { return }
         shownExtra = key
-        show(buttons + (open.map { [Self.button(for: $0)] } ?? []))
+        show([formatButton] + (open.map { [Self.button(for: $0)] } ?? []))
     }
 
     private static func button(for open: OpenButton) -> UIButton {

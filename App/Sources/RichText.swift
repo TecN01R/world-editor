@@ -37,7 +37,7 @@ enum RichText {
         return attributes
     }
 
-    /// `text` with `attributes`, its fonts adjusted for each run and its `@` links marked.
+    /// `text` with `attributes`, each run styled and its `@` links marked.
     static func attributed(_ text: String, runs: [StyleRun], links: [PageLink] = [],
                            attributes: [NSAttributedString.Key: Any]) -> NSMutableAttributedString {
         let s = NSMutableAttributedString(string: text, attributes: attributes)
