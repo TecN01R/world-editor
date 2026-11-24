@@ -52,6 +52,18 @@ final class WorldConversationTests: XCTestCase {
         XCTAssertEqual(prompt.turns.map(\.text), [CompanionPrompt.openedWorld, "What's in your head?", "a drowned city"])
     }
 
+    /// With no page open, each page's filled fields show beside its name.
+    func testTheWorldFilingPromptShowsFilledFields() {
+        let age = FieldDefinition(name: "Age", kind: .text)
+        let character = PageType(name: "Character", fields: [age.id])
+        var mara = Document(title: "Mara", paragraphs: [Paragraph(text: "")])
+        mara.type = character.id
+        mara.values[age.id] = .text("61")
+        let prompt = FilingPrompt(world: [mara, Document(title: "Verran", paragraphs: [Paragraph(text: "")])],
+                                  schema: Schema(fields: [age], types: [character]), asked: nil, message: "Mara is 62.")
+        XCTAssertTrue(prompt.message.contains("Their pages: Mara (Age: 61), Verran"))
+    }
+
     func testTheFilingPromptHasNoOpenPage() {
         let pages = [Document(title: "Ilsa", paragraphs: [Paragraph(text: "")])]
         let prompt = FilingPrompt(world: pages, schema: Schema(), asked: nil, message: "Ilsa is from Verran.")

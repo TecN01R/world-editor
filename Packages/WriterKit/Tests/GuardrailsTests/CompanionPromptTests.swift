@@ -116,10 +116,18 @@ final class CompanionPromptTests: XCTestCase {
             """)                                                                    // related first; the rest as they were
         let long = CompanionPrompt.worldSummary([.init(name: "Mara", writing: String(repeating: "lighthouse ", count: 50))], focus: "")
         XCTAssertLessThan(long.count, 180)                                          // openings are cut short
-        // A big world is cut down to what fits, the related pages first.
+        // A big world is cut down to what fits, the related pages first; once openings don't
+        // fit, pages are still named while there's room (a review, 2026-11-24: names were lost).
         XCTAssertEqual(CompanionPrompt.worldSummary(pages, focus: "Verran", maxCharacters: 70),
-                       "- Verran (Place): A seafaring nation of rowers and traders")
+                       "- Verran (Place): A seafaring nation of rowers and traders\n- My World")
         XCTAssertEqual(CompanionPrompt.worldSummary(pages, focus: "", maxCharacters: 2), "")
+    }
+
+    /// Fields show beside a page's name in the world's list.
+    func testTheWorldShowsFields() {
+        let mara = CompanionPrompt.Page(name: "Mara", type: "Character", fields: "Species: Selkie\nAge: 61", writing: "Keeps the lighthouse.")
+        XCTAssertEqual(CompanionPrompt.worldSummary([mara], focus: ""),
+                       "- Mara (Character) [Species: Selkie; Age: 61]: Keeps the lighthouse.")
     }
 
     func testRemembersWhatTheAuthorSaidElsewhere() {
@@ -137,6 +145,15 @@ final class CompanionPromptTests: XCTestCase {
         let prompt = CompanionPrompt(page: .init(name: "Tomas", writing: "He writes to his sister Mara."), earlier: earlier,
                                      conversation: Conversation(page: UUID()))
         XCTAssertTrue(prompt.system.contains("\n\nFrom your earlier conversations:\n- On their page \u{201C}Mara\u{201D}, you said"))
+    }
+
+    /// A world conversation remembered elsewhere: worded as one, and a turn the writer began
+    /// has nothing of the companion's before it.
+    func testMemoryOfAWorldConversationTheWriterBegan() {
+        var world = Conversation(page: UUID(), aboutWorld: true)
+        world.answer("Mara keeps the lighthouse at Verran")
+        let memory = CompanionPrompt.memory([(page: "", conversation: world)], focus: "Mara")
+        XCTAssertEqual(memory, "- In a conversation about their whole world, the writer said: \u{201C}Mara keeps the lighthouse at Verran\u{201D}")
     }
 
     /// A long conversation keeps its newest exchanges, within a count and a length.

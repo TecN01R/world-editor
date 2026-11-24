@@ -285,7 +285,7 @@ public struct CompanionPrompt: Equatable, Sendable {
         return [head, "[\u{2026}]", tail].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.joined(separator: "\n")
     }
 
-    /// The rest of the world, a line a page: its name, type and opening.
+    /// The rest of the world, a line a page: its name, type, filled fields and opening.
     /// Pages that share words with `focus` (the open page and what the author
     /// has said about it) come first, most shared first, so those are what a
     /// big world is cut down to. Until `maxCharacters`.
@@ -300,9 +300,12 @@ public struct CompanionPrompt: Equatable, Sendable {
         for (_, page, _) in ordered {
             let opening = oneLine(page.writing)
             guard !page.name.isEmpty || !opening.isEmpty else { continue }
-            let line = "- " + (page.name.isEmpty ? "Untitled" : page.name) + (page.type.map { " (\($0))" } ?? "")
-                + (opening.isEmpty ? "" : ": " + opening.prefix(perPage))
-            guard used + line.count <= maxCharacters else { break }
+            let fields = oneLine(page.fields.replacingOccurrences(of: "\n", with: "; "), maxCharacters: 200)
+            let head = "- " + (page.name.isEmpty ? "Untitled" : page.name) + (page.type.map { " (\($0))" } ?? "")
+                + (page.fields.isEmpty ? "" : " [\(fields)]")
+            // As much of its opening as fits, then less, then none: every page is named while there's room.
+            let withOpening: [String] = opening.isEmpty ? [] : [perPage, 160].map { head + ": " + opening.prefix($0) }
+            guard let line = (withOpening + [head]).first(where: { used + $0.count <= maxCharacters }) else { break }
             lines.append(line)
             used += line.count + 1
         }
@@ -317,13 +320,20 @@ public struct CompanionPrompt: Equatable, Sendable {
                        maxCharacters: Int = 1500) -> String {
         let topic = keywords(focus)
         let said = conversations.flatMap { c in
-            c.conversation.turns.compactMap { t in t.answer.map { (page: c.page, reply: t.question, answer: $0, asked: t.asked) } }
+            c.conversation.turns.compactMap { t in
+                t.answer.map { (page: c.page, world: c.conversation.aboutWorld, reply: t.question, answer: $0, asked: t.asked) }
+            }
         }.filter { !keywords($0.page + " " + $0.answer).isDisjoint(with: topic) }.sorted { $0.asked > $1.asked }
         var lines: [String] = [], used = 0
-        for (page, reply, answer, _) in said {
-            let place = page.isEmpty ? "an untitled page of theirs" : "their page \u{201C}\(page)\u{201D}"
-            let line = "- On \(place), you said \u{201C}\(oneLine(reply, maxCharacters: 160))\u{201D} "
-                + "and the writer replied: \u{201C}\(oneLine(answer))\u{201D}"
+        for (page, world, reply, answer, _) in said {
+            let place = if world { "In a conversation about their whole world" }
+                else if page.isEmpty { "On an untitled page of theirs" }
+                else { "On their page \u{201C}\(page)\u{201D}" }
+            // A turn the writer began (a world conversation's first) has nothing of the companion's before it.
+            let line = reply.isEmpty
+                ? "- \(place), the writer said: \u{201C}\(oneLine(answer))\u{201D}"
+                : "- \(place), you said \u{201C}\(oneLine(reply, maxCharacters: 160))\u{201D} "
+                    + "and the writer replied: \u{201C}\(oneLine(answer))\u{201D}"
             guard used + line.count <= maxCharacters else { break }
             lines.append(line)
             used += line.count + 1

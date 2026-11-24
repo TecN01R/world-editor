@@ -205,6 +205,7 @@ final class Companion {
         library.conversationsDirectory.flatMap { try? ConversationStore(directory: $0) }?.delete(id)
         if conversation.page == id { conversation = Conversation(page: UUID(), aboutWorld: true) }
         if library.lastWorldConversation == id { library.lastWorldConversation = nil }
+        others.removeAll { $0.page == id }   // so it no longer holds Undo back
         loadWorldConversations(in: library)
     }
 
@@ -251,9 +252,9 @@ final class Companion {
         let page = library.pages.first { $0.id == page.id } ?? page   // as it is now, not when it opened
         let others = library.pages.filter { $0.id != page.id }
         let earlier = (store?.all() ?? []).filter { $0.page != page.id }.map { talk in
-            (page: Self.isAboutWorld(talk, in: library) ? "\(library.world.name) as a whole"
-                                                        : others.first { $0.id == talk.page }?.heading ?? "",
-             conversation: talk)
+            var talk = talk
+            talk.aboutWorld = Self.isAboutWorld(talk, in: library)   // memory words it as such
+            return (page: talk.aboutWorld ? "" : others.first { $0.id == talk.page }?.heading ?? "", conversation: talk)
         }
         let isWorld = conversation.aboutWorld   // a conversation about the whole world: no page open
         var reply = Reasoned(reply: "")
@@ -265,7 +266,7 @@ final class Companion {
                 if plain {
                     prompt = CompanionPrompt.plain(conversation, maxTurnCharacters: 6000 / room)
                 } else if isWorld {
-                    prompt = CompanionPrompt(world: library.world.name, pages: others.map { library.companionPage($0) },
+                    prompt = CompanionPrompt(world: library.world.name, pages: others.map { library.companionPage($0, fields: true) },
                                              earlier: earlier, conversation: conversation,
                                              maxCharacters: 6000 / room, maxTurnCharacters: 6000 / room)
                 } else {
@@ -313,8 +314,11 @@ final class Companion {
     private func file(_ turn: Conversation.Turn, page: UUID, aboutWorld: Bool, in library: Library) {
         guard turn.needsFiling, let message = turn.answer, Filer.states(message) else { return }
         let previous = filing
+        let world = store?.directory   // the world it was said in
         filing = Task {
             await previous?.value
+            // Still the open world (the author may have switched worlds since).
+            guard world == library.conversationsDirectory else { return }
             // A world conversation has no page of its own; it files into the pages it names.
             guard let doc = aboutWorld ? library.worldSubject(page) : library.pages.first(where: { $0.id == page }) else { return }
             let filings: Filings
@@ -329,7 +333,8 @@ final class Companion {
             // Gone meanwhile (a new conversation, another world): nothing to file into.
             let there = conversation.page == page ? conversation.turns.contains { $0.id == turn.id }
                                                   : store?.load(page).turns.contains { $0.id == turn.id } == true
-            guard there, aboutWorld || library.pages.contains(where: { $0.id == page }) else { return }
+            guard there, world == library.conversationsDirectory,
+                  aboutWorld || library.pages.contains(where: { $0.id == page }) else { return }
             // Kept even when empty: Try Again reads the message again only if nothing came of it.
             let sent = turn.seen.map { (values: $0, title: turn.seenTitle ?? "") }
             setFiled(library.file(filings, message: message, on: page, again: turn.filed, sent: sent), turn: turn.id, page: page)

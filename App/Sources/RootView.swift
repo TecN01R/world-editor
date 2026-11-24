@@ -108,7 +108,8 @@ struct RootView: View {
             companion.folded = size == .compact
             // Unfolding with the companion open: the page and the companion side by
             // side, the pages list put away (as opening it unfolded does).
-            if size == .regular, companion.isOpen, !focusMode { columns = .detailOnly }
+            // (Not over the world's conversations, which sit beside the list.)
+            if size == .regular, companion.isOpen, !focusMode, library.selection != library.world.id { columns = .detailOnly }
         }
         // Applied at the root: status bar visibility is decided by the top controller.
         .statusBarHidden(chromeHidden)
@@ -297,7 +298,8 @@ struct PageList: View {
             // The companion for the whole world, not one page (Kevin, 2026-11-24): opens like
             // a page, full screen folded and beside the list unfolded.
             ToolbarItem(placement: .primaryAction) {
-                Button("Companion", systemImage: "bubble.left.and.text.bubble.right", action: openCompanion)
+                // Named apart from a page's own companion button, which shows beside it unfolded.
+                Button("World Conversations", systemImage: "bubble.left.and.text.bubble.right", action: openCompanion)
                     .accessibilityHint("Talk with the companion about your whole world.")
             }
             ToolbarItem(placement: .primaryAction) {
@@ -670,8 +672,17 @@ struct WorldCompanionView: View {
                         }
                         .padding(.vertical, 2)
                     }
-                    .swipeActions {
-                        Button("Delete", systemImage: "trash", role: .destructive) { deleting = talk }
+                    // Delete only asks, as for a type: no destructive role or full swipe, and
+                    // the question comes from the row.
+                    .swipeActions(allowsFullSwipe: false) {
+                        Button("Delete", systemImage: "trash") { deleting = talk }.tint(.red)
+                    }
+                    .confirmationDialog("Delete this conversation?",
+                                        isPresented: Binding { deleting?.page == talk.page } set: { if !$0 { deleting = nil } },
+                                        titleVisibility: .visible) {
+                        Button("Delete Conversation", role: .destructive) { companion.deleteWorldConversation(talk.page, in: library) }
+                    } message: {
+                        Text("What it added to your pages stays.")
                     }
                 }
             }
@@ -699,19 +710,15 @@ struct WorldCompanionView: View {
                         library.lastWorldConversation = id
                     }
             }
-            .confirmationDialog("Delete this conversation?", isPresented: Binding { deleting != nil } set: { if !$0 { deleting = nil } },
-                                titleVisibility: .visible, presenting: deleting) { talk in
-                Button("Delete Conversation", role: .destructive) { companion.deleteWorldConversation(talk.page, in: library) }
-            } message: { _ in
-                Text("What it added to your pages stays.")
-            }
         }
         .task(id: library.world.id) {
             companion.loadWorldConversations(in: library)
-            if let last = library.lastWorldConversation, companion.worldConversations.contains(where: { $0.page == last }) {
-                path = [last]   // back where they were
+            // Back where they were, even a conversation not yet begun (folding and unfolding
+            // rebuild this view and its path).
+            if let last = library.lastWorldConversation {
+                path = [last]
             } else if companion.worldConversations.isEmpty {
-                start()         // nothing to list: begin
+                start()   // nothing to list: begin
             }
         }
         // Back at the list: next time, the list.

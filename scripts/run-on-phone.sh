@@ -15,7 +15,11 @@ scripts/fetch-llama.sh   # llama.cpp's framework, which xtool.yml copies into th
 reachable() {
     command -v pymobiledevice3 >/dev/null || return 0   # can't tell: let xtool try
     local devices
-    devices=$(timeout 15 pymobiledevice3 usbmux list 2>/dev/null | tr -d '[:space:]')
+    if ! devices=$(timeout 15 pymobiledevice3 usbmux list 2>/dev/null); then
+        echo "Can't reach the usbmux daemon (netmuxd down? USBMUXD_SOCKET_ADDRESS=${USBMUXD_SOCKET_ADDRESS:-default})." >&2
+        exit 2
+    fi
+    devices=$(tr -d '[:space:]' <<<"$devices")
     [[ -n "$devices" && "$devices" != "[]" ]]
 }
 unreachable() {
@@ -29,4 +33,4 @@ if [[ "${1:-}" == "--no-launch" ]]; then
     exec timeout 600 xtool install xtool/WorldEditor.ipa
 fi
 reachable || unreachable
-exec xtool dev "$@"
+exec timeout 900 xtool dev "$@"   # never waits for a phone that drops out for good

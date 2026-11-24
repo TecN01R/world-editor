@@ -136,7 +136,7 @@ public struct FilingPrompt: Equatable, Sendable {
     ///   - page: the open page's title, its type's name and its "Name: value" field lines;
     ///     nil in the world's own conversation, where no page is open.
     ///   - types: the world's types, each with its field names.
-    ///   - others: the other pages' titles.
+    ///   - others: the other pages' titles (with no page open, each with its filled fields).
     ///   - asked: what the companion said that the message answers.
     public init(page: (title: String, type: String?, fields: String)?, types: [(name: String, fields: [String])],
                 others: [String], asked: String?, message: String) {
@@ -172,8 +172,15 @@ extension FilingPrompt {
 
     /// The prompt for `message`, sent from the world's own conversation: no page open.
     public init(world pages: [Document], schema: Schema, asked: String?, message: String) {
+        // With no page open, each page's filled fields show with its name: the model can see
+        // what's already set before it gives a field a value.
+        let others = pages.map { page -> String in
+            let filled = page.fieldText(schema.fields(of: schema.type(page.type))) { id in pages.first { $0.id == id }?.heading }
+                .split(separator: "\n").joined(separator: "; ")
+            return filled.isEmpty ? page.heading : "\(page.heading) (\(filled))"
+        }
         self.init(page: nil, types: schema.types.map { (name: $0.name, fields: schema.fields(of: $0).map(\.name)) },
-                  others: pages.map(\.heading), asked: asked, message: message)
+                  others: others, asked: asked, message: message)
     }
 
     /// The prompt for `message`, sent from `page`'s conversation in a world of `pages` and `schema`.
