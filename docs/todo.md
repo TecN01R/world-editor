@@ -16,7 +16,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] 5 Smooth replies (pushed 7c046d4; waiting for the phone)
 - [ ] 6 Faster replies (pushed: background kept per conversation, earlier replies as cached, filing on a pause; Kevin to try 4–5 messages, then read the CACHE/SPEED lines)
 - [ ] 7 One companion (needs Kevin's look on the phone; next after he's checked the current build)
-- [ ] 8 Format bar through stock (Bold/Italic are iOS's own, lists undoable, Open in the link's menu; iOS has no public way to show its "Aa" panel from a button)
+- [ ] 8 Format bar: kept as it was (Bold, Italic, lists; iOS's own Bold/Italic, undoable lists). iOS's Format panel, text styles and the keyboard toolbar were tried and dropped (Kevin, 2026-11-24)
 - [ ] 9 Stock swaps: bubbles and the menu's title done; left: a stack in the sidebar for conversations and filters, UIPageControl for Focus dots
 - [ ] 10 Focus with iOS's zoom (needs Kevin's look on the phone)
 - [ ] 11 Clean-up: download cancel/expiry and ordered progress done; TRIAL logging stays until the speed and Live Activity tests are read; thinking plumbing kept for search

@@ -3,8 +3,9 @@ import WriterCore
 
 /// A text view whose pastes and drops arrive as plain text in the current style, so
 /// another app's fonts and colours (black text, invisible in dark mode) never
-/// get in, nor images. `@` links survive copy and paste within the app: they
-/// travel beside the text on the pasteboard, so other apps still get ordinary text.
+/// get in, nor images, and with no underline, which pages don't store. `@` links
+/// survive copy and paste within the app: they travel beside the text on the
+/// pasteboard, so other apps still get ordinary text.
 class PlainPasteTextView: UITextView, UITextPasteDelegate {
     private static let linksType = "app.world-editor.links"
 
@@ -67,6 +68,12 @@ class PlainPasteTextView: UITextView, UITextPasteDelegate {
     }
 
     override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
-        action == #selector(paste(_:)) ? UIPasteboard.general.hasStrings : super.canPerformAction(action, withSender: sender)
+        switch action {
+        case #selector(toggleUnderline(_:)): false
+        case #selector(paste(_:)): UIPasteboard.general.hasStrings
+        default: super.canPerformAction(action, withSender: sender)
+        }
     }
+
+    override func toggleUnderline(_ sender: Any?) {}
 }

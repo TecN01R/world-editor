@@ -5,89 +5,29 @@ import WriterCore
 /// and the attributed strings the text views edit. Bold and italic live in
 /// font traits, so UIKit's own ⌘B/⌘I and Format menu stay in sync for free.
 enum RichText {
-    /// `base` (a paragraph's own face: a title's is bold already) with `style`'s bold and italic.
     static func font(_ base: UIFont, _ style: InlineStyle) -> UIFont {
         var traits = base.fontDescriptor.symbolicTraits
-        if style.contains(.bold) { traits.insert(.traitBold) }
-        if style.contains(.italic) { traits.insert(.traitItalic) }
+        if style.contains(.bold) { traits.insert(.traitBold) } else { traits.remove(.traitBold) }
+        if style.contains(.italic) { traits.insert(.traitItalic) } else { traits.remove(.traitItalic) }
         guard let d = base.fontDescriptor.withSymbolicTraits(traits) else { return base }
         return UIFont(descriptor: d, size: base.pointSize)
     }
 
-    /// Bold and italic in `font`, beyond what its paragraph's own face has (`base`: a title is
-    /// bold already, so its bold isn't the author's).
-    static func style(of font: UIFont?, base: UIFont? = nil) -> InlineStyle {
+    static func style(of font: UIFont?) -> InlineStyle {
         guard let traits = font?.fontDescriptor.symbolicTraits else { return [] }
-        let own = base?.fontDescriptor.symbolicTraits ?? []
         var style: InlineStyle = []
-        if traits.contains(.traitBold), !own.contains(.traitBold) { style.insert(.bold) }
-        if traits.contains(.traitItalic), !own.contains(.traitItalic) { style.insert(.italic) }
+        if traits.contains(.traitBold) { style.insert(.bold) }
+        if traits.contains(.traitItalic) { style.insert(.italic) }
         return style
     }
 
-    /// The style of text with `attributes`: its font's weight and slant, its lines and its
-    /// highlight.
-    static func style(of attributes: [NSAttributedString.Key: Any], base: UIFont? = nil) -> InlineStyle {
-        var style = style(of: attributes[.font] as? UIFont, base: base)
-        if (attributes[.underlineStyle] as? Int ?? 0) != 0 { style.insert(.underline) }
-        if (attributes[.strikethroughStyle] as? Int ?? 0) != 0 { style.insert(.strikethrough) }
-        if attributes[.textHighlightStyle] != nil {
-            let scheme = attributes[.textHighlightColorScheme]
-            let raw = (scheme as? NSAttributedString.TextHighlightColorScheme)?.rawValue ?? scheme as? String
-            style.highlight = highlights.first { $0.scheme.rawValue == raw }?.highlight ?? .standard
-        }
-        return style
-    }
-
-    /// The attributes that show `style` over the page's `base` font.
-    static func attributes(_ style: InlineStyle, base: UIFont) -> [NSAttributedString.Key: Any] {
-        var attributes: [NSAttributedString.Key: Any] = [.font: font(base, style)]
-        if style.contains(.underline) { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
-        if style.contains(.strikethrough) { attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
-        if let highlight = style.highlight, let scheme = highlights.first(where: { $0.highlight == highlight })?.scheme {
-            attributes[.textHighlightStyle] = NSAttributedString.TextHighlightStyle.default
-            attributes[.textHighlightColorScheme] = scheme
-        }
-        return attributes
-    }
-
-    /// iOS's highlight colours (which suit dark and light mode alike), as a page keeps them, as
-    /// text shows them, and as the Format panel names them.
-    static let highlights: [(highlight: InlineStyle.Highlight, scheme: NSAttributedString.TextHighlightColorScheme,
-                             panel: UITextFormattingViewController.Highlight)] = [
-        (.standard, .default, .default), (.purple, .purple, .purple), (.pink, .pink, .pink),
-        (.orange, .orange, .orange), (.mint, .mint, .mint), (.blue, .blue, .blue),
-    ]
-
-    // MARK: Paragraphs
-
-    /// One step of indent, from the margin.
-    static let indentStep: CGFloat = 28
-
-    static let alignments: [(alignment: ParagraphAlignment, text: NSTextAlignment,
-                             panel: UITextFormattingViewController.TextAlignment)] = [
-        (.natural, .natural, .natural), (.left, .left, .left), (.center, .center, .center),
-        (.right, .right, .right), (.justified, .justified, .justified),
-    ]
-
-    /// A paragraph's text style, list, alignment and indent, from the attributes at its start
-    /// (its line break, when it's empty). Its text style is the one whose size its font has.
-    static func layout(of attributes: [NSAttributedString.Key: Any]) -> Paragraph {
-        let style = attributes[.paragraphStyle] as? NSParagraphStyle
-        let size = (attributes[.font] as? UIFont)?.pointSize ?? PageEditor.font.pointSize
-        let role = ParagraphRole.allCases.min { abs(PageEditor.font($0).pointSize - size) < abs(PageEditor.font($1).pointSize - size) }
-        return Paragraph(kind: kind(of: style), role: role ?? .body,
-                         alignment: alignments.first { $0.text == style?.alignment }?.alignment ?? .natural,
-                         indent: Int(((style?.headIndent ?? 0) / indentStep).rounded()))
-    }
-
-    /// `text` with `attributes`, each run styled and its `@` links marked.
+    /// `text` with `attributes`, its fonts adjusted for each run and its `@` links marked.
     static func attributed(_ text: String, runs: [StyleRun], links: [PageLink] = [],
                            attributes: [NSAttributedString.Key: Any]) -> NSMutableAttributedString {
         let s = NSMutableAttributedString(string: text, attributes: attributes)
         if let base = attributes[.font] as? UIFont {
             for run in runs where run.location + run.length <= s.length {
-                s.addAttributes(Self.attributes(run.style, base: base), range: NSRange(location: run.location, length: run.length))
+                s.addAttribute(.font, value: font(base, run.style), range: NSRange(location: run.location, length: run.length))
             }
         }
         for link in links where link.location + link.length <= s.length {
@@ -157,19 +97,12 @@ enum RichText {
     }
 
     /// Style runs of `range`, relative to its start.
-    static func runs(in s: NSAttributedString, range: NSRange? = nil, base: UIFont? = nil) -> [StyleRun] {
+    static func runs(in s: NSAttributedString, range: NSRange? = nil) -> [StyleRun] {
         let range = range ?? NSRange(location: 0, length: s.length)
         var runs: [StyleRun] = []
-        s.enumerateAttributes(in: range) { attributes, r, _ in
-            let style = Self.style(of: attributes, base: base)
-            guard !style.isEmpty else { return }
-            let location = r.location - range.location
-            // One run for a style however many other attributes (a link) split it.
-            if let last = runs.last, last.style == style, last.location + last.length == location {
-                runs[runs.count - 1].length += r.length
-            } else {
-                runs.append(StyleRun(location: location, length: r.length, style: style))
-            }
+        s.enumerateAttribute(.font, in: range) { value, r, _ in
+            let style = Self.style(of: value as? UIFont)
+            if !style.isEmpty { runs.append(StyleRun(location: r.location - range.location, length: r.length, style: style)) }
         }
         return runs
     }
@@ -194,10 +127,10 @@ enum RichText {
         return list.markerFormat == .decimal ? .numbered : .bullet
     }
 
-    /// The whole text view's content as paragraphs. The final line has no character to carry
-    /// its paragraph style when empty, so `trailing` (its text style, list, alignment and
-    /// indent) stands in for it.
-    static func paragraphs(from s: NSAttributedString, trailing: Paragraph) -> [Paragraph] {
+    /// The whole text view's content as paragraphs. The final line has no
+    /// character to carry its paragraph style when empty, so `trailingKind`
+    /// (the typing attributes' list) stands in for it.
+    static func paragraphs(from s: NSAttributedString, trailingKind: ParagraphKind) -> [Paragraph] {
         let ns = s.string as NSString
         var result: [Paragraph] = []
         var location = 0
@@ -205,11 +138,14 @@ enum RichText {
             let end = ns.range(of: "\n", range: NSRange(location: location, length: ns.length - location)).location
             let lineEnd = end == NSNotFound ? ns.length : end
             let range = NSRange(location: location, length: lineEnd - location)
-            let layout = location < ns.length ? layout(of: s.attributes(at: location, effectiveRange: nil)) : trailing
-            result.append(Paragraph(text: ns.substring(with: range), kind: layout.kind, role: layout.role,
-                                    alignment: layout.alignment, indent: layout.indent,
-                                    runs: runs(in: s, range: range, base: PageEditor.font(layout.role)),
-                                    links: links(in: s, range: range)))
+            let kind: ParagraphKind
+            if location < ns.length {
+                kind = Self.kind(of: s.attribute(.paragraphStyle, at: location, effectiveRange: nil) as? NSParagraphStyle)
+            } else {
+                kind = trailingKind   // empty final line
+            }
+            result.append(Paragraph(text: ns.substring(with: range), kind: kind,
+                                    runs: runs(in: s, range: range), links: links(in: s, range: range)))
             guard end != NSNotFound else { return result }
             location = end + 1
         }

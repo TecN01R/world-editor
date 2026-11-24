@@ -9,37 +9,13 @@ public enum ParagraphKind: String, Codable, Hashable, Sendable, CaseIterable {
     public var isList: Bool { self != .body }
 }
 
-/// Character-level emphasis: what iOS's Format panel offers for text (Kevin, 2026-11-24),
-/// short of fonts, sizes and colours (the writing is New York, sized by Dynamic Type).
+/// Character-level emphasis.
 public struct InlineStyle: OptionSet, Codable, Hashable, Sendable {
     public let rawValue: UInt8
     public init(rawValue: UInt8) { self.rawValue = rawValue }
 
     public static let bold = InlineStyle(rawValue: 1 << 0)
     public static let italic = InlineStyle(rawValue: 1 << 1)
-    public static let underline = InlineStyle(rawValue: 1 << 2)
-    public static let strikethrough = InlineStyle(rawValue: 1 << 3)
-
-    /// iOS's highlight behind the text, in one of its colours, which suit dark and light
-    /// mode alike: nil for none. Kept in bits 4 to 6.
-    public var highlight: Highlight? {
-        get { Highlight(rawValue: (rawValue >> 4) & 0b111) }
-        set { self = InlineStyle(rawValue: (rawValue & 0b1111) | ((newValue?.rawValue ?? 0) << 4)) }
-    }
-
-    public enum Highlight: UInt8, CaseIterable, Sendable {
-        case standard = 1, purple, pink, orange, mint, blue
-    }
-}
-
-/// What a paragraph is, as Notes' text styles: its size grows with Dynamic Type, its
-/// face is always New York (Kevin, 2026-11-24).
-public enum ParagraphRole: String, Codable, CaseIterable, Hashable, Sendable {
-    case body, title, heading, subheading
-}
-
-public enum ParagraphAlignment: String, Codable, CaseIterable, Hashable, Sendable {
-    case natural, left, center, right, justified
 }
 
 /// A styled stretch of a paragraph. Offsets are UTF-16 units, the same units
@@ -77,24 +53,16 @@ public struct Paragraph: Identifiable, Hashable, Sendable {
     public var id: UUID
     public private(set) var text: String
     public var kind: ParagraphKind
-    public var role: ParagraphRole
-    public var alignment: ParagraphAlignment
-    /// How many steps in from the margin.
-    public var indent: Int
     /// Sorted, non-overlapping, non-empty runs; unstyled text has no run.
     public private(set) var runs: [StyleRun]
     /// Sorted, non-overlapping `@` links.
     public private(set) var links: [PageLink]
 
-    public init(id: UUID = UUID(), text: String = "", kind: ParagraphKind = .body, role: ParagraphRole = .body,
-                alignment: ParagraphAlignment = .natural, indent: Int = 0,
+    public init(id: UUID = UUID(), text: String = "", kind: ParagraphKind = .body,
                 runs: [StyleRun] = [], links: [PageLink] = []) {
         self.id = id
         self.text = text
         self.kind = kind
-        self.role = role
-        self.alignment = alignment
-        self.indent = indent
         self.runs = []
         self.links = []
         setText(text, runs: runs, links: links)
@@ -190,13 +158,11 @@ public struct Paragraph: Identifiable, Hashable, Sendable {
         return true
     }
 
-    /// The text, styling and links from `range`, as a new paragraph of the same kind, style,
-    /// alignment and indent.
+    /// The text, styling and links from `range`, as a new paragraph of the same kind.
     func slice(_ range: Range<Int>, id: UUID = UUID()) -> Paragraph {
         let units = Array(text.utf16), styles = self.styles, targets = self.targets
         let r = range.clamped(to: 0..<units.count)
-        return Paragraph(id: id, text: String(decoding: units[r], as: UTF16.self), kind: kind, role: role,
-                         alignment: alignment, indent: indent,
+        return Paragraph(id: id, text: String(decoding: units[r], as: UTF16.self), kind: kind,
                          runs: Self.runs(from: Array(styles[r])), links: Self.links(from: Array(targets[r])))
     }
 
@@ -227,7 +193,7 @@ public struct Paragraph: Identifiable, Hashable, Sendable {
 }
 
 extension Paragraph: Codable {
-    private enum CodingKeys: String, CodingKey { case id, text, kind, role, alignment, indent, runs, links }
+    private enum CodingKeys: String, CodingKey { case id, text, kind, runs, links }
 
     // Older pages have only id and text; plain paragraphs are written that way too.
     public init(from decoder: Decoder) throws {
@@ -235,9 +201,6 @@ extension Paragraph: Codable {
         self.init(id: try c.decode(UUID.self, forKey: .id),
                   text: try c.decode(String.self, forKey: .text),
                   kind: try c.decodeIfPresent(ParagraphKind.self, forKey: .kind) ?? .body,
-                  role: try c.decodeIfPresent(ParagraphRole.self, forKey: .role) ?? .body,
-                  alignment: try c.decodeIfPresent(ParagraphAlignment.self, forKey: .alignment) ?? .natural,
-                  indent: try c.decodeIfPresent(Int.self, forKey: .indent) ?? 0,
                   runs: try c.decodeIfPresent([StyleRun].self, forKey: .runs) ?? [],
                   links: try c.decodeIfPresent([PageLink].self, forKey: .links) ?? [])
     }
@@ -247,9 +210,6 @@ extension Paragraph: Codable {
         try c.encode(id, forKey: .id)
         try c.encode(text, forKey: .text)
         if kind != .body { try c.encode(kind, forKey: .kind) }
-        if role != .body { try c.encode(role, forKey: .role) }
-        if alignment != .natural { try c.encode(alignment, forKey: .alignment) }
-        if indent != 0 { try c.encode(indent, forKey: .indent) }
         if !runs.isEmpty { try c.encode(runs, forKey: .runs) }
         if !links.isEmpty { try c.encode(links, forKey: .links) }
     }
@@ -409,17 +369,14 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
     }
 
     /// Split paragraph `index` at `offset` (Return). The new paragraph continues
-    /// a list, its alignment and indent, like Notes; after a title or heading, at its
-    /// end, comes writing. Returns the new paragraph's index.
+    /// a list, like Notes. Returns the new paragraph's index.
     @discardableResult
     public mutating func split(at index: Int, offset: Int) -> Int {
         guard paragraphs.indices.contains(index) else { return index }
         let p = paragraphs[index]
         let cut = max(0, min(offset, p.length))
         paragraphs[index] = p.slice(0..<cut, id: p.id)
-        var rest = p.slice(cut..<p.length)
-        if rest.text.isEmpty { rest.role = .body }
-        paragraphs.insert(rest, at: index + 1)
+        paragraphs.insert(p.slice(cut..<p.length), at: index + 1)
         modified = Date()
         return index + 1
     }
@@ -491,36 +448,12 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
     /// List buttons: every paragraph the selection touches becomes `kind`, or
     /// body text again if they all already were.
     public mutating func toggleKind(_ kind: ParagraphKind, in range: Range<Int>) {
-        let touched = touched(range)
+        // A selection ending just past a line break (as selecting whole lines does)
+        // leaves the next paragraph alone.
+        let touched = paragraphIndices(range.isEmpty ? range : range.lowerBound..<(range.upperBound - 1))
         let target: ParagraphKind = touched.allSatisfy { paragraphs[$0].kind == kind } ? .body : kind
         for i in touched { paragraphs[i].kind = target }
         modified = Date()
-    }
-
-    /// Gives the paragraphs `range` touches a text style.
-    public mutating func setRole(_ role: ParagraphRole, in range: Range<Int>) {
-        for i in touched(range) { paragraphs[i].role = role }
-        modified = Date()
-    }
-
-    public mutating func setAlignment(_ alignment: ParagraphAlignment, in range: Range<Int>) {
-        for i in touched(range) { paragraphs[i].alignment = alignment }
-        modified = Date()
-    }
-
-    /// Moves the paragraphs `range` touches `steps` in (or out, when negative), from the
-    /// margin up to `maxIndent`.
-    public mutating func indent(by steps: Int, in range: Range<Int>) {
-        for i in touched(range) { paragraphs[i].indent = min(max(paragraphs[i].indent + steps, 0), Self.maxIndent) }
-        modified = Date()
-    }
-
-    public static let maxIndent = 8
-
-    /// The paragraphs a selection is about: one ending just past a line break (as selecting
-    /// whole lines does) leaves the next alone.
-    private func touched(_ range: Range<Int>) -> ClosedRange<Int> {
-        paragraphIndices(range.isEmpty ? range : range.lowerBound..<(range.upperBound - 1))
     }
 
     public func paragraphIndices(_ range: Range<Int>) -> ClosedRange<Int> {

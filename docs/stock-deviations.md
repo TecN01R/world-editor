@@ -13,8 +13,8 @@ deviation.
 
 | What | What iOS has | Why it stays |
 |---|---|---|
-| **Format button** in the toolbar, in one glass with Focus (Kevin, 2026-11-24), opening iOS's own Format panel | iOS opens its Format panel from the edit menu only | iOS gives apps no way to open the edit menu's panel; the panel itself (`UITextFormattingViewController`) is iOS's, shown by the page, which makes its changes (Bold, Italic, Underline through iOS's own commands). It offers what pages keep: Title, Heading, Subheading and Body (New York, growing with Dynamic Type), bold, italic, underline, strikethrough, highlight, alignment, lists and indent. iOS's keyboard toolbar was tried: on the folded Duo it made the keyboard taller and pushed Focus and Done into "•••". |
-| **Editing toolbar** (Kevin, 2026-11-24): while the page's own writing has the keyboard, Format and Focus (one glass) and Done in blue; folded, Back steps aside until the keyboard goes down, as the side column above the keyboard holds three buttons however they're grouped; the companion and Mentions wait for the keyboard to go down | Notes keeps its bar and adds Done | His call. Built from stock toolbar items; only what shows when is ours. |
+| **Format bar** floating above the keyboard (Bold, Italic, two lists, Open for a link) | The keyboard's accessory bar; the edit menu's Format; the "Aa" formatting panel (`UITextFormattingViewController`) | Kevin allows this one. The accessory bar counts as keyboard on the Duo: it shortens the side column and pushes toolbar items into "•••". Its actions are iOS's own (`toggleBoldface`, `toggleItalics`); lists are the page's, undoable. iOS has no public call to show its "Aa" panel from an app's button. |
+| **Editing toolbar** (Kevin, 2026-11-24): while the page's own writing, title or a field has the keyboard, folded and unfolded show the same three: Back or the sidebar button, Focus, and Done (blue); the companion and Mentions wait for the keyboard to go down | Notes keeps its bar and adds Done | His call. Built from stock toolbar items; only what shows when is ours. |
 | **`@` mention menu** (a popover of pages as you type `@`) | No public mention or autocomplete API for text views (Notes' `>>` is private) | Nothing stock to use. Built from a stock popover and list cells. |
 | **Title field and fields above the writing**, inside the page's text view | Notes uses the first line as the title | The page's name and its fields are separate from the writing by design. |
 | **Focus mode** (one paragraph per page, sized to fit, never scrolls) | Nothing like it | Kevin's own feature (`docs/focus-mode.md`). |
@@ -37,9 +37,7 @@ deviation.
 - The split view and the companion: iOS lays them out; the app no longer moves the
   pages list while the Duo rotates, folds or unfolds. iOS's default companion width.
 - Back and the sidebar button never disappear while typing.
-- Formatting through iOS's own Format panel, from one button; Bold, Italic and Underline
-  through iOS's own commands (with Undo). Pages keep underline, strikethrough, highlight,
-  text styles, alignment and indent.
+- Bold and Italic through iOS's own commands (with Undo).
 - Paste and drop through iOS's paste delegate.
 - A link's own long-press menu has Open.
 - The model and version as the companion menu's title, not a disabled button.
