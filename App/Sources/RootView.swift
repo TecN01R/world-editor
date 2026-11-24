@@ -48,18 +48,23 @@ struct RootView: View {
     private var companionShown: Bool { companion.isOpen && pageShown }
 
     var body: some View {
-        @Bindable var library = library
         // Focus mode takes the whole display: the pages list steps aside when unfolded.
         NavigationSplitView(columnVisibility: $columns, preferredCompactColumn: $column) {
             if conversationsShown {
-                WorldConversationList(selection: $worldConversation, start: startConversation) {
+                WorldConversationList(selection: Binding { worldConversation } set: {
+                    worldConversation = $0
+                    if $0 != nil { closeDrawer() }
+                }, start: startConversation) {
                     conversationsShown = false
                 }
             } else {
-                PageList(selection: $library.selection, titleInBar: sizeClass == .regular,
-                         openWorldConversations: openWorldConversations) {
+                PageList(selection: Binding { library.selection } set: {
+                    library.selection = $0
+                    if $0 != nil { closeDrawer() }
+                }, titleInBar: sizeClass == .regular, openWorldConversations: openWorldConversations) {
                     library.newPage()
                     column = .detail
+                    closeDrawer()
                 }
             }
         } detail: {
@@ -222,6 +227,14 @@ struct RootView: View {
     private func startConversation() {
         worldConversation = UUID()
         column = .detail
+        closeDrawer()
+    }
+
+    /// Unfolded, a choice in the pages list's drawer (a page, a conversation, a new one)
+    /// closes it to show what was chosen, as iOS's own drawer does in portrait (Kevin,
+    /// 2026-11-24). Only the author's choices: never iOS's layout changes.
+    private func closeDrawer() {
+        if sizeClass == .regular { withAnimation { columns = .detailOnly } }
     }
 }
 
@@ -665,6 +678,9 @@ struct EditorView: View {
         // sidebar button. The bar draws over the writing, which ignores the
         // safe area and so never reflows.
         .toolbar(chromeHidden ? .hidden : .automatic, for: .navigationBar)
+        // Unfolded, iOS hid the page's bottom bar (the companion's button) while the companion's
+        // column was closed, keeping the top's (Kevin's screenshots, 2026-11-24): asked for.
+        .toolbar(focusMode ? .automatic : .visible, for: .bottomBar)
         .navigationBarBackButtonHidden(focusMode)
         .toolbar(removing: focusMode ? .sidebarToggle : nil)
         // While the page has the keyboard, Done shows, as in Notes. Focus is for
@@ -744,7 +760,8 @@ struct EditorView: View {
                     ToolbarSpacer(.fixed, placement: .topBarTrailing)
                 }
                 // Focus is for the writing: offered only while it has the keyboard, not the
-                // title or a field (Kevin). Unfolded, in the top row; folded, in the side column.
+                // title or a field (Kevin). Where iOS puts the bar's buttons, with Done (pinned to
+                // the top row unfolded, it sat over the companion's column; Kevin, 2026-11-24).
                 if writing {
                     ToolbarItem(placement: .topBarTrailing) {
                         Button("Focus Mode", systemImage: "arrow.up.left.and.arrow.down.right") {
@@ -752,7 +769,6 @@ struct EditorView: View {
                         }
                     }
                     .visibilityPriority(.high)
-                    .axisBehavior(folded ? .automatic : .horizontalOnly)
                 }
                 ToolbarItem(placement: .confirmationAction) { doneButton }
             } else {
