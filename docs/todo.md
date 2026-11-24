@@ -22,6 +22,13 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] 11 Clean-up: download cancel/expiry and ordered progress done; TRIAL logging stays until the speed and Live Activity tests are read; thinking plumbing kept for search
 - [ ] 12 docs/stock-deviations.md (written; check it reads right)
 
+## A companion for 8 GB+ phones, not just the Duo (Kevin, 2026-11-24; plan approved)
+- [ ] 1 Research report: models, engines (iOS and Android), phone memory and speed (running)
+- [ ] 3 Benchmark mode on the Duo, held to an 8 GB phone's memory
+- [ ] 4 iOS: models by tier, chosen from the phone's memory; bigger downloads offered where they fit
+- [ ] Speed floor for the weakest phone: Kevin to set, from the report's numbers
+- [ ] Android app: later, its own native project
+
 ## Your words into your pages (design: claude.ai/artifact/4GgWK8rCVJUdjwsTrVW9QT)
 - [ ] Placement with authorship marks and per-placement Undo, once the design is approved
 - [ ] Amend CLAUDE.md and docs/ai-charter.md to the new rule when it ships
