@@ -30,9 +30,6 @@ final class Companion {
     /// version keeps its own), for this session only: shown collapsed, never saved
     /// or sent back to the model (its makers' advice).
     private(set) var thoughts: [String: String] = [:]
-    /// The companion's message field has the keyboard: the page's Done and Focus aren't for
-    /// it (Kevin, 2026-11-24); its keyboard goes down by swiping the conversation down.
-    var composing = false
     /// The panel is showing: beside the page unfolded, a sheet folded. Opening it
     /// prepares the open page's reply, if one is due (`prepareSoon`).
     var isOpen = false {
@@ -85,6 +82,8 @@ final class Companion {
     private var model: any CompanionModel = AppleModel()
     private var store: ConversationStore?
     private var preparing: Task<Void, Never>?
+    /// Counts asks, so one dropped for a newer one knows it.
+    private var asks = 0
     /// The page open now (a world conversation's stand-in), whose reply is prepared when the companion opens.
     private var opened: (page: WriterCore.Document, library: Library)?
     /// Filing what the author last said; the next reply waits for it (one model, one job at a time).
@@ -266,7 +265,12 @@ final class Companion {
         guard !conversation.aboutWorld || !conversation.turns.isEmpty else { return }
         if let reason = await model.unavailableReason { state = .unavailable(reason); return }
         state = .thinking
-        defer { self.writing = nil; self.reasoning = nil; self.reading = nil }
+        // The reply as it's written is this ask's until a newer one takes over: an ask
+        // dropped for another (asking again, another page) leaves the newer one's alone.
+        asks += 1
+        let ask = asks
+        (writing, reasoning, reading) = (nil, nil, nil)
+        defer { if asks == ask { (writing, reasoning, reading) = (nil, nil, nil) } }
         await filing?.value
         // Dropped while filing finished (another page opened, or asked again): whoever
         // dropped it owns the conversation and the reply taken back now.

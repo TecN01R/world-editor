@@ -13,7 +13,6 @@ struct CompanionPanel: View {
     @Environment(Companion.self) private var companion
     @Environment(\.scenePhase) private var scenePhase
     @State private var message = ""
-    @FocusState private var composing: Bool
     @State private var confirmingNew = false
     @State private var showingChanges = false
     /// Where the conversation is scrolled: the newest message, as in Messages.
@@ -94,7 +93,7 @@ struct CompanionPanel: View {
                     // No reply after it (being tried again): under the message meanwhile.
                     if i == turns.count - 1, let record = turn.filed, !record.isEmpty { filed(record, from: turn.id) }
                 }
-                status
+                Live { status }   // as the reply is written, only this redraws, not every message
             }
             .padding(.horizontal, Self.margin)   // the system's standard margin
             .padding(.vertical)
@@ -108,12 +107,14 @@ struct CompanionPanel: View {
         .scrollPosition($position)
         .scrollDismissesKeyboard(.interactively)
         .overlay {
-            if let download = companion.download {
-                downloading(download)
-            } else if companion.needsDownload {
-                downloadOffer
-            } else if companion.conversation.turns.isEmpty {
-                empty
+            Live {   // the download's progress and the first reply redraw only this
+                if let download = companion.download {
+                    downloading(download)
+                } else if companion.needsDownload {
+                    downloadOffer
+                } else if companion.conversation.turns.isEmpty {
+                    empty
+                }
             }
         }
         .safeAreaBar(edge: .bottom) {
@@ -135,6 +136,13 @@ struct CompanionPanel: View {
         } message: {
             Text("This conversation, and your messages in it, will be deleted.")
         }
+    }
+
+    /// Content that reads what changes as a reply is written (each word, the reading bar)
+    /// in a view of its own, so only it redraws then, not the whole conversation.
+    private struct Live<Content: View>: View {
+        @ViewBuilder let content: () -> Content
+        var body: some View { content() }
     }
 
     /// The companion's words: plain text, the width of the panel.
@@ -341,12 +349,10 @@ struct CompanionPanel: View {
         case .thinking:
             if let thought = partialReasoning { reasoning(thought, done: partialReply != nil) }
             if let writing = partialReply {
-                // As it's written: new words fade in, and a pulsing dot shows it
-                // isn't done yet (as the AI apps show it).
+                // As it's written, with a pulsing dot while it isn't done yet (as the AI apps
+                // show it). No fade per word: it faded the whole reply each time.
                 VStack(alignment: .leading, spacing: 8) {
                     words(writing)
-                        .contentTransition(.opacity)
-                        .animation(.easeOut(duration: 0.2), value: writing)
                     if companion.reading == nil {
                         Image(systemName: "circle.fill")
                             .font(.caption2)
@@ -509,9 +515,6 @@ struct CompanionPanel: View {
                     .frame(minHeight: barHeight)
                     .glassEffect(.regular.interactive(), in: .rect(cornerRadius: barHeight / 2))
                     .disabled(!canWrite)
-                    .focused($composing)
-                    .onChange(of: composing) { _, now in companion.composing = now }
-                    .onDisappear { companion.composing = false }   // closed with the keyboard up: the page's again
                 Button(action: send) {
                     Image(systemName: "arrow.up")
                         .fontWeight(.semibold)

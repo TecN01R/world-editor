@@ -100,7 +100,7 @@ final class Library {
         // Deleted pages too, so one recovered later doesn't name a missing type.
         for i in recentlyDeleted.indices where recentlyDeleted[i].type == id {
             recentlyDeleted[i].type = nil
-            try? store?.save(recentlyDeleted[i])
+            write(recentlyDeleted[i])
         }
         schema.removeType(id)
         saveSchema()
@@ -194,7 +194,7 @@ final class Library {
         if let made, !made.edited {
             if selection == made.page { selection = nil }
             pendingSaves.removeValue(forKey: made.page)?.cancel()
-            try? store?.delete(made.page)
+            erase(made.page)
             if store != nil { PageIndex.remove(made.page) }
         }
         commit(pages, schema)
@@ -434,10 +434,10 @@ final class Library {
         guard let i = pages.firstIndex(where: { $0.id == id }) else { return }
         var page = pages.remove(at: i)
         if store != nil { PageIndex.remove(id) }
-        guard !page.isEmpty else { try? store?.delete(id); return }
+        guard !page.isEmpty else { erase(id); return }
         page.deleted = .now
         recentlyDeleted.insert(page, at: 0)
-        try? store?.save(page)
+        write(page)
     }
 
     /// Back from Recently Deleted, to its place by date among the pages.
@@ -446,13 +446,13 @@ final class Library {
         var page = recentlyDeleted.remove(at: i)
         page.deleted = nil
         pages.insert(page, at: pages.firstIndex { $0.modified < page.modified } ?? pages.count)
-        try? store?.save(page)
+        write(page)
         if store != nil { PageIndex.update(page, fields: fieldText(page)) }
     }
 
     func deleteForGood(_ id: UUID) {
         recentlyDeleted.removeAll { $0.id == id }
-        try? store?.delete(id)
+        erase(id)
         conversationStore?.delete(id)   // its talk goes with it
     }
 
@@ -461,13 +461,14 @@ final class Library {
         for page in recentlyDeleted where page.goesForGood! <= .now { deleteForGood(page.id) }
     }
 
-    /// Applies a user edit to the open page.
+    /// Applies a user edit to the open page, which goes to the top of the list (once: moving
+    /// it on every keystroke redrew everything showing the list).
     func update(_ change: (inout WriterCore.Document) -> Void) {
         guard let i = pages.firstIndex(where: { $0.id == selection }) else { return }
-        let heading = pages[i].heading
-        change(&pages[i])
-        let page = pages.remove(at: i)
-        pages.insert(page, at: 0)
+        if i != 0 { pages.move(fromOffsets: [i], toOffset: 0) }
+        let heading = pages[0].heading
+        change(&pages[0])
+        let page = pages[0]
         scheduleSave(page)
         // Renamed: links to it everywhere show the new name, as in Apple Notes.
         guard page.heading != heading else { return }
@@ -485,31 +486,49 @@ final class Library {
         talk?.delete(id)
         pendingSaves.removeValue(forKey: id)?.cancel()
         pages.removeAll { $0.id == id }
-        try? store?.delete(id)
+        erase(id)
     }
 
     private func scheduleSave(_ page: WriterCore.Document) {
         pendingSaves[page.id]?.cancel()
         let fields = fieldText(page)
-        pendingSaves[page.id] = Task { [store] in
+        pendingSaves[page.id] = Task {
             try? await Task.sleep(for: .milliseconds(400))
-            guard !Task.isCancelled, let store else { return }
-            try? store.save(page)
+            guard !Task.isCancelled, store != nil else { return }
+            write(page)
             PageIndex.update(page, fields: fields)
         }
+    }
+
+    /// Page files are written and removed in order on one queue of their own, so saving
+    /// never holds up typing, and a delete is never undone by a save still waiting to run.
+    private let disk = DispatchQueue(label: "app.world-editor.pages", qos: .userInitiated)
+
+    private func write(_ page: WriterCore.Document) {
+        guard let store else { return }
+        disk.async { try? store.save(page) }
+    }
+
+    private func erase(_ id: UUID) {
+        guard let store else { return }
+        disk.async { try? store.delete(id) }
     }
 
     /// Saves a page now if it has an edit waiting (leaving it, or the app going away).
     func flush(_ id: UUID) {
         guard let task = pendingSaves.removeValue(forKey: id) else { return }
         task.cancel()
-        if let store, let page = pages.first(where: { $0.id == id }), !page.isEmpty {
-            try? store.save(page)
+        if store != nil, let page = pages.first(where: { $0.id == id }), !page.isEmpty {
+            write(page)
             PageIndex.update(page, fields: fieldText(page))
         }
     }
 
-    func flushAll() { for id in Array(pendingSaves.keys) { flush(id) } }
+    /// Saves every edit waiting, and waits for them to be on disk (the app going away).
+    func flushAll() {
+        for id in Array(pendingSaves.keys) { flush(id) }
+        disk.sync {}
+    }
 }
 
 /// Launch arguments for CI screenshots (never used otherwise):
