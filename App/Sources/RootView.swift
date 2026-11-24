@@ -1,3 +1,4 @@
+import Combine
 import CoreSpotlight
 import SwiftUI
 import WriterCore
@@ -460,6 +461,8 @@ struct EditorView: View {
     }
 
     private var folded: Bool { sizeClass == .compact }
+    /// The keyboard is up: the toolbar shows only Done.
+    @State private var typing = false
 
     /// A page field's "New Place…": the field it fills.
     private var newPageField: FieldDefinition? {
@@ -504,8 +507,11 @@ struct EditorView: View {
         // sidebar button. The bar draws over the writing, which ignores the
         // safe area and so never reflows.
         .toolbar(chromeHidden ? .hidden : .automatic, for: .navigationBar)
-        .navigationBarBackButtonHidden(focusMode)
-        .toolbar(removing: focusMode ? .sidebarToggle : nil)
+        .navigationBarBackButtonHidden(focusMode || typing)
+        .toolbar(removing: focusMode || typing ? .sidebarToggle : nil)
+        // While the keyboard is up, the bar holds only Done, as in Notes.
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in typing = true }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in typing = false }
         .animation(.easeInOut(duration: 0.25), value: chromeHidden)
         .sheet(isPresented: $showMentions) { MentionsView() }
         .sheet(item: fieldSheet) { request in
@@ -553,6 +559,14 @@ struct EditorView: View {
                         withAnimation(.smooth(duration: 0.3)) { focusMode = false }
                     }
                     .keyboardShortcut(.cancelAction)
+                }
+            } else if typing {
+                // Typing: Done closes the keyboard (the iPhone keyboard has no key
+                // for it), and nothing else shows (Kevin, 2026-11-23).
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done", systemImage: "checkmark") {
+                        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                    }
                 }
             } else {
                 // Focus, stock in both postures (Kevin, 2026-11-23). Unfolded: kept in
