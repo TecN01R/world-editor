@@ -217,13 +217,14 @@ struct CompanionPanel: View {
         Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = text }
     }
 
-    /// The author's words: a glass bubble on the right, in New York.
+    /// The author's words: a bubble on the right, in New York. A plain fill, not glass:
+    /// Apple keeps Liquid Glass for controls, off content.
     private func mine(_ text: String) -> some View {
         Text(text)
             .font(.authored(.body))
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .glassEffect(.regular, in: .rect(cornerRadius: 20))
+            .background(.fill.secondary, in: .rect(cornerRadius: 20))
             .contextMenu { copy(text) }
             .padding(.leading, 48)
             .frame(maxWidth: .infinity, alignment: .trailing)
@@ -535,8 +536,15 @@ struct CompanionPanel: View {
         Menu { moreItems } label: { Label("More", systemImage: "ellipsis") }
     }
 
-    /// The menu's items: in the bar's menu, and in the one beside the message field.
+    /// The menu's items: in the bar's menu, and in the one beside the message field. What
+    /// it's running heads them, as a menu's own title (a line to read; a menu has no plain text).
     @ViewBuilder private var moreItems: some View {
+        Section([Companion.modelName, companion.modelVersion, Self.appVersion].compactMap { $0 }.joined(separator: " · ")) {
+            items
+        }
+    }
+
+    @ViewBuilder private var items: some View {
         Button("New Conversation", systemImage: "square.and.pencil") {
             // A world conversation: another one, this one kept in the list; a page's: after confirming.
             if let newConversation { newConversation() } else { confirmingNew = true }
@@ -549,14 +557,6 @@ struct CompanionPanel: View {
         Toggle(isOn: Binding { companion.plain } set: { companion.plain = $0 }) {
             Label("Plain Model", systemImage: "cube")
             Text("No instructions or pages, only the conversation")
-        }
-        Section {
-            // What it's running, as a line to read (a menu has no plain text).
-            Button {} label: {
-                Text(Companion.modelName)
-                Text([companion.modelVersion, Self.appVersion].compactMap { $0 }.joined(separator: " · "))
-            }
-            .disabled(true)
         }
     }
 

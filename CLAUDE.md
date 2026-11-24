@@ -46,6 +46,8 @@ only once it's on Kevin's phone and checked, or he has answered it.
 - iOS defaults first: use stock components and take their default look and
   placement (titles, toolbars, sidebar, keyboard bar). Customise only where
   Kevin asks or a default clearly fails a stated rule, and say which is which.
+  Every place the app differs from stock is listed in `docs/stock-deviations.md`
+  with why; a new one gets a line there and is named to Kevin when it ships.
 - Accessibility is not optional: Dynamic Type for all text (Focus mode
   sizes itself to the page), VoiceOver labels on every control, standard
   controls over custom ones.

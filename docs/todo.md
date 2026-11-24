@@ -17,11 +17,11 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] 5 Smooth replies (pushed 7c046d4; waiting for the phone)
 - [ ] 6 Faster replies (pushed: background kept per conversation, earlier replies as cached, filing on a pause; Kevin to try 4–5 messages, then read the CACHE/SPEED lines)
 - [ ] 7 One companion
-- [ ] 8 Format bar through stock; try iOS's "Aa" panel
-- [ ] 9 Stock swaps
+- [ ] 8 Format bar through stock (Bold/Italic are iOS's own, lists undoable, Open in the link's menu; iOS has no public way to show its "Aa" panel from a button)
+- [ ] 9 Stock swaps: bubbles and the menu's title done; left: a stack in the sidebar for conversations and filters, UIPageControl for Focus dots
 - [ ] 10 Focus with iOS's zoom
 - [ ] 11 Clean-up
-- [ ] 12 docs/stock-deviations.md
+- [ ] 12 docs/stock-deviations.md (written; check it reads right)
 
 ## Your words into your pages (design: claude.ai/artifact/4GgWK8rCVJUdjwsTrVW9QT)
 - [ ] Placement with authorship marks and per-placement Undo, once the design is approved
