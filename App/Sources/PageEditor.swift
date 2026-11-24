@@ -152,6 +152,16 @@ struct PageEditor: UIViewRepresentable {
                     }
                 })
             }
+            // Undo and Redo (iOS's for typing and styles, the page's own for lists): the page
+            // as the text view now shows it.
+            for name in [Notification.Name.NSUndoManagerDidUndoChange, .NSUndoManagerDidRedoChange] {
+                observers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
+                    MainActor.assumeIsolated {
+                        guard let self, let tv = self.textView, note.object as? UndoManager === tv.undoManager else { return }
+                        self.textViewDidChange(tv)
+                    }
+                })
+            }
         }
 
         deinit {
@@ -215,8 +225,7 @@ struct PageEditor: UIViewRepresentable {
             guard text == "\n", range.length == 0 else { return true }
             let p = library.document.paragraphs[library.document.locate(range.location).index]
             guard p.kind.isList, p.text.isEmpty else { return true }
-            library.update { $0.toggleKind(p.kind, in: range.location..<range.location) }
-            render(selection: range)
+            toggleKind(p.kind, in: range.location..<range.location)
             return false
         }
 
@@ -249,6 +258,17 @@ struct PageEditor: UIViewRepresentable {
             let (i, offset) = library.document.locate(tv.selectedRange.location)
             library.cursor = (i, offset)
             updateFormatBar()
+        }
+
+        /// Holding a link: Open its page, as tapping it does when not writing.
+        func textView(_ tv: UITextView, menuConfigurationFor textItem: UITextItem,
+                      defaultMenu: UIMenu) -> UITextItem.MenuConfiguration? {
+            guard case .link(let url) = textItem.content, let id = RichText.page(url) else { return .init(menu: defaultMenu) }
+            guard let page = library.pages.first(where: { $0.id == id }) else { return nil }
+            let open = UIAction(title: "Open “\(page.heading)”", image: UIImage(systemName: "arrow.up.right")) { [weak self] _ in
+                self?.open(id)
+            }
+            return .init(menu: UIMenu(children: [open]))
         }
 
         /// Tapping a link opens its page.
@@ -337,21 +357,38 @@ struct PageEditor: UIViewRepresentable {
 
         private func perform(_ action: FormatBar.Action) {
             guard let tv = textView else { return }
-            let range = selection
             switch action {
-            case .style(let style) where range.isEmpty:
-                // No selection: the next characters typed take the style.
-                let current = RichText.style(of: tv.typingAttributes[.font] as? UIFont)
-                tv.typingAttributes[.font] = RichText.font(PageEditor.font, current.symmetricDifference(style))
-                updateFormatBar()
-                return
             case .style(let style):
-                library.update { $0.toggle(style, in: range) }
+                // iOS's own Bold and Italic, as ⌘B, ⌘I and the edit menu's Format: Undo takes
+                // them back, and with nothing selected they're for what's typed next.
+                if style == .bold { tv.toggleBoldface(nil) } else { tv.toggleItalics(nil) }
+                if !selection.isEmpty { textViewDidChange(tv) }
             case .list(let kind):
-                library.update { $0.toggleKind(kind, in: range) }
+                toggleKind(kind, in: selection)
             }
-            render(selection: tv.selectedRange)
+            updateFormatBar()
             UISelectionFeedbackGenerator().selectionChanged()
+        }
+
+        /// Makes the paragraphs in `range` a `kind` list, or plain when all already are, as one
+        /// step Undo takes back.
+        private func toggleKind(_ kind: ParagraphKind, in range: Range<Int>) {
+            let before = library.document.paragraphs
+            library.update { $0.toggleKind(kind, in: range) }
+            render(selection: textView?.selectedRange)
+            undoably(back: before, named: kind == .numbered ? "Numbered List" : "Bulleted List")
+        }
+
+        /// Registers putting the page's paragraphs back as they were, and redoing it the same way.
+        private func undoably(back paragraphs: [Paragraph], named name: String) {
+            guard let undo = textView?.undoManager else { return }
+            undo.registerUndo(withTarget: self) { coordinator in
+                let now = coordinator.library.document.paragraphs
+                coordinator.library.update { $0.setParagraphs(paragraphs) }
+                coordinator.render(selection: coordinator.textView?.selectedRange)
+                coordinator.undoably(back: now, named: name)
+            }
+            undo.setActionName(name)
         }
 
         private func updateFormatBar() {
@@ -366,7 +403,7 @@ struct PageEditor: UIViewRepresentable {
             // Caret in a link: a button to open its page (tapping the link itself may just place the caret).
             let linked = range.isEmpty ? p.link(at: caret.offset).flatMap { link in library.pages.first { $0.id == link.page } } : nil
             let open = linked.map { page in
-                FormatBar.OpenButton(title: "Open \(page.heading)", page: page.id) { [weak self] in
+                FormatBar.OpenButton(name: page.heading, page: page.id) { [weak self] in
                     self?.open(page.id)
                 }
             }
@@ -406,7 +443,8 @@ final class FormatBar: UIView {
 
     /// Open, for the link at the caret.
     struct OpenButton {
-        let title: String
+        /// The page's name.
+        let name: String
         /// The page it opens, so a button is never reused for another page.
         let page: UUID
         let action: () -> Void
@@ -508,14 +546,22 @@ final class FormatBar: UIView {
     /// Formatting, plus a button to open the link at the caret.
     func update(bold: Bool, italic: Bool, kind: ParagraphKind, open: OpenButton?) {
         for (b, on) in zip(buttons, [bold, italic, kind == .bullet, kind == .numbered]) { b.isSelected = on }
-        let key = open.map { "\($0.title) \($0.page)" }
+        let key = open.map { "\($0.name) \($0.page)" }
         guard key != shownExtra else { return }
         shownExtra = key
         show(buttons + (open.map { [Self.button(for: $0)] } ?? []))
     }
 
     private static func button(for open: OpenButton) -> UIButton {
-        button(title: open.title, label: open.title, action: open.action)
+        let label = "Open \(open.name)"
+        let b = button(title: label, label: label, action: open.action)
+        // The page's name is the author's: New York; "Open" is the app's.
+        var title = AttributedString("Open ")
+        title.uiKit.font = .preferredFont(forTextStyle: .body)
+        var name = AttributedString(open.name)
+        name.uiKit.font = .authored(.body)
+        b.configuration?.attributedTitle = title + name
+        return b
     }
 }
 
