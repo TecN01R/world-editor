@@ -67,11 +67,18 @@ enum RichText {
         guard touches else { return false }
         var plain = s.attributes(at: link.location, effectiveRange: nil)
         plain[.link] = nil
-        s.beginEditing()
-        s.removeAttribute(.link, range: link)
-        s.insert(NSAttributedString(string: "@", attributes: plain), at: link.location)
-        s.endEditing()
-        tv.selectedRange = NSRange(location: range.location + 1, length: range.length)
+        // The link's words, plain, with their "@" back: typed like any text, so Undo takes
+        // it back too. (Replacing the whole link isn't an edit inside one, so this returns.)
+        let words = (s.string as NSString).substring(with: link)
+        tv.typingAttributes = plain
+        guard let start = tv.position(from: tv.beginningOfDocument, offset: link.location),
+              let end = tv.position(from: start, offset: link.length),
+              let whole = tv.textRange(from: start, to: end) else { return false }
+        tv.replace(whole, withText: "@" + words)
+        // Then the edit itself, one character on where it's past the "@".
+        tv.selectedRange = range.location >= link.location
+            ? NSRange(location: range.location + 1, length: range.length)
+            : NSRange(location: range.location, length: range.length + 1)   // began before the link: takes the "@" too
         tv.typingAttributes = plain
         if text.isEmpty { tv.deleteBackward() } else { tv.insertText(text) }
         return true

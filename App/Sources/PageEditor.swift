@@ -14,10 +14,15 @@ struct PageEditor: UIViewRepresentable {
     private let keepsKeyboard: Bool
     /// The writing (not the title or a field) has the keyboard, or no longer does.
     private let onWriting: (Bool) -> Void
+    /// The page (its writing, title or a field) has the keyboard, or no longer does: not
+    /// a keyboard elsewhere (search in the pages list, an alert, the companion).
+    private let onEditing: (Bool) -> Void
 
-    init(keepsKeyboard: Bool = false, onWriting: @escaping (Bool) -> Void = { _ in }, onFocus: @escaping () -> Void) {
+    init(keepsKeyboard: Bool = false, onWriting: @escaping (Bool) -> Void = { _ in },
+         onEditing: @escaping (Bool) -> Void = { _ in }, onFocus: @escaping () -> Void) {
         self.keepsKeyboard = keepsKeyboard
         self.onWriting = onWriting
+        self.onEditing = onEditing
         self.onFocus = onFocus
     }
 
@@ -40,6 +45,7 @@ struct PageEditor: UIViewRepresentable {
         context.coordinator.textView = tv
         context.coordinator.keepsKeyboard = keepsKeyboard
         context.coordinator.onWriting = onWriting
+        context.coordinator.onEditing = onEditing
         context.coordinator.render(selection: nil)
         context.coordinator.restoreCaret()
         return PageView(textView: tv, bar: context.coordinator.formatBar)
@@ -51,6 +57,7 @@ struct PageEditor: UIViewRepresentable {
         // the title shows it, unless the author is typing in it.
         let title = context.coordinator.titleField
         if !title.isFirstResponder, title.text != library.document.title { title.text = library.document.title }
+        context.coordinator.showChanges()
     }
 
     /// Bold New York, scaled with Dynamic Type.
@@ -83,9 +90,14 @@ struct PageEditor: UIViewRepresentable {
         weak var textView: UITextView?
         /// Replacing the text moves the selection; that isn't the user moving the caret.
         private var isRendering = false
+        /// The paragraphs the text view holds, as last shown or typed: the page differing
+        /// from them was changed by something else.
+        private var shown: [Paragraph] = []
         var onFocus: () -> Void
         var keepsKeyboard = false
         var onWriting: (Bool) -> Void = { _ in }
+        var onEditing: (Bool) -> Void = { _ in }
+        private var observers: [NSObjectProtocol] = []
         lazy var formatBar = FormatBar(onAction: { [weak self] action in self?.perform(action) })
 
         lazy var titleField: UITextField = {
@@ -116,14 +128,34 @@ struct PageEditor: UIViewRepresentable {
             self.library = library
             self.onFocus = onFocus
             super.init()
+            let center = NotificationCenter.default
             // Text size changed in Settings: show the page at the new size.
-            NotificationCenter.default.addObserver(forName: UIContentSizeCategory.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            observers.append(center.addObserver(forName: UIContentSizeCategory.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
                     guard let self, let tv = self.textView else { return }
                     self.titleField.font = PageEditor.titleFont
                     self.render(selection: tv.selectedRange)
                 }
+            })
+            // The page's writing, title or a field (all inside the text view) taking the
+            // keyboard or giving it up.
+            let editing: [(Notification.Name, Bool)] = [
+                (UITextView.textDidBeginEditingNotification, true), (UITextField.textDidBeginEditingNotification, true),
+                (UITextView.textDidEndEditingNotification, false), (UITextField.textDidEndEditingNotification, false),
+            ]
+            for (name, begins) in editing {
+                observers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
+                    MainActor.assumeIsolated {
+                        guard let self, let tv = self.textView, let view = note.object as? UIView,
+                              view.isDescendant(of: tv) else { return }
+                        self.onEditing(begins)
+                    }
+                })
             }
+        }
+
+        deinit {
+            for observer in observers { NotificationCenter.default.removeObserver(observer) }
         }
 
         private var selection: Range<Int> {
@@ -146,9 +178,23 @@ struct PageEditor: UIViewRepresentable {
                 if i < doc.paragraphs.count - 1 { s.append(NSAttributedString(string: "\n", attributes: attrs)) }
             }
             tv.attributedText = s
-            if let selection { tv.selectedRange = selection }
+            shown = doc.paragraphs
+            if let selection {   // within the text, which may now be shorter
+                let start = min(selection.location, s.length)
+                tv.selectedRange = NSRange(location: start, length: min(selection.length, s.length - start))
+            }
             updateTypingAttributes()
             updateFormatBar()
+        }
+
+        /// The writing changed underneath (filing a description into this page, its Undo, a
+        /// linked page renamed): shown as it is now, or the next keystroke would write the old
+        /// text back over it. Not mid-word (marked text) or while Writing Tools works on it.
+        func showChanges() {
+            guard let tv = textView, tv.markedTextRange == nil, !tv.isWritingToolsActive,
+                  library.document.paragraphs != shown else { return }
+            render(selection: tv.selectedRange)
+            tv.undoManager?.removeAllActions()   // its steps were for the old text
         }
 
         /// New text takes the style before the caret and the caret paragraph's kind.
@@ -175,9 +221,14 @@ struct PageEditor: UIViewRepresentable {
         }
 
         func textViewDidChange(_ tv: UITextView) {
-            let trailing = RichText.kind(of: tv.typingAttributes[.paragraphStyle] as? NSParagraphStyle)
+            // An empty last line has no character to carry its list: the typing attributes
+            // say it while the caret is there; otherwise it stays as it was.
+            let atEnd = tv.selectedRange.location == tv.textStorage.length
+            let trailing = atEnd ? RichText.kind(of: tv.typingAttributes[.paragraphStyle] as? NSParagraphStyle)
+                                 : library.document.paragraphs.last?.kind ?? .body
             let paragraphs = RichText.paragraphs(from: tv.attributedText, trailingKind: trailing)
             library.update { $0.setParagraphs(paragraphs) }
+            shown = library.document.paragraphs
             updateFormatBar()
         }
 

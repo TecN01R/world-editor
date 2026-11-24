@@ -399,7 +399,7 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
 
     /// `text` with every kind of line break ("\r\n", "\r", U+2028, U+2029…) as "\n",
     /// the one paragraphs split on, as pasted text may have any of them.
-    private static func plainLineBreaks(_ text: String) -> String {
+    public static func plainLineBreaks(_ text: String) -> String {
         String(text.map { $0.isNewline ? "\n" : $0 })
     }
 

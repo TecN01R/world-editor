@@ -61,38 +61,7 @@ struct RootView: View {
                 }
             }
         } detail: {
-            // A stack of the detail's own, as Apple advises: in a bare `if`, a split view's
-            // detail can lose its toolbar items after a re-layout (a known iOS bug).
-            NavigationStack {
-                detail
-                    // The page's companion, attached once, so changing pages never rebuilds it
-                    // (Kevin, 2026-11-24, "stop replacing stock components"): unfolded, iOS's
-                    // inspector beside the page, at iOS's own width; folded, iOS's sheet, half or
-                    // full height. Each shows by the size class this update draws with, so folding
-                    // and unfolding swap them at once and keep the companion open. (The
-                    // inspector's own sheet, folded, merged the companion's bar into the page's
-                    // and showed no conversation; Kevin, 2026-11-24, "this weird companion
-                    // header".) iOS opens and closes the inspector itself too (it restores it as
-                    // the Duo unfolds): taken as the author's (never opening it in Focus mode),
-                    // except as the Duo folds or the page goes, when only the column goes.
-                    .inspector(isPresented: Binding { companionShown && sizeClass == .regular } set: { open in
-                        guard sizeClass == .regular, pageShown, !(open && focusMode) else { return }
-                        companion.isOpen = open
-                    }) {
-                        CompanionPanel(inSheet: false)
-                    }
-                    // Swiping the sheet down closes the companion, but only while folded (by both
-                    // this update's size class and the posture flag): unfolding dismisses it too.
-                    .sheet(isPresented: Binding { companionShown && sizeClass == .compact } set: { open in
-                        if !open, companion.folded, sizeClass == .compact { companion.isOpen = false }
-                    }) {
-                        CompanionPanel(inSheet: true)
-                            .presentationDetents([.medium, .large], selection: Binding {
-                                companionFullHeight ? .large : .medium
-                            } set: { companionFullHeight = $0 == .large })
-                            .presentationDragIndicator(.visible)
-                    }
-            }
+            detail
         }
         // Coming back to the app (its icon, the app switcher) opens nothing: it's where
         // the author left it, even while the companion's download runs. Only a tap on the
@@ -181,6 +150,34 @@ struct RootView: View {
             EditorView(focusMode: $focusMode, focusControls: $focusControls, chromeHidden: chromeHidden,
                        onCompanionOpened: putPagesListAway)
             .id(id)
+            // The page's companion, on the page but outside its id, so changing pages never
+            // rebuilds it (Kevin, 2026-11-24, "stop replacing stock components"): unfolded,
+            // iOS's inspector beside the page, at iOS's own width; folded, iOS's sheet, half
+            // or full height. Each shows by the size class this update draws with, so folding
+            // and unfolding swap them at once and keep the companion open. (The inspector's
+            // own sheet, folded, merged the companion's bar into the page's and showed no
+            // conversation; Kevin, 2026-11-24, "this weird companion header".) iOS opens and
+            // closes the inspector itself too (it restores it as the Duo unfolds): taken as
+            // the author's (never opening it in Focus mode), except as the Duo folds or the
+            // page goes, when only the column goes. (In a NavigationStack of the detail's
+            // own, the page's toolbar went missing.)
+            .inspector(isPresented: Binding { companionShown && sizeClass == .regular } set: { open in
+                guard sizeClass == .regular, pageShown, !(open && focusMode) else { return }
+                companion.isOpen = open
+            }) {
+                CompanionPanel(inSheet: false)
+            }
+            // Swiping the sheet down closes the companion, but only while folded (by both
+            // this update's size class and the posture flag): unfolding dismisses it too.
+            .sheet(isPresented: Binding { companionShown && sizeClass == .compact } set: { open in
+                if !open, companion.folded, sizeClass == .compact { companion.isOpen = false }
+            }) {
+                CompanionPanel(inSheet: true)
+                    .presentationDetents([.medium, .large], selection: Binding {
+                        companionFullHeight ? .large : .medium
+                    } set: { companionFullHeight = $0 == .large })
+                    .presentationDragIndicator(.visible)
+            }
         } else {
             ContentUnavailableView("No Page Open", systemImage: "doc.text",
                                    description: Text("Choose a page or start a new one."))
@@ -580,14 +577,28 @@ struct EditorView: View {
     }
 
     private var folded: Bool { sizeClass == .compact }
-    /// The keyboard is up.
+    /// The keyboard is up (in Focus mode, only ever its writing's).
     @State private var typing = false
-    /// The page has the keyboard (its writing, title or a field), not the companion's message
-    /// field: the toolbar adds Done, and Focus while writing (Kevin, 2026-11-24: Done made
-    /// no sense with the companion's field focused).
-    private var pageTyping: Bool { typing && !companion.composing }
+    /// The page has the keyboard (its writing, title or a field), not anything else (search
+    /// in the pages list, an alert, the companion's message field): the toolbar is for
+    /// editing then.
+    @State private var editing = false
     /// The page's writing has the keyboard (not its title, a field or the companion).
     @State private var writing = false
+
+    /// The companion, beside the page (unfolded) or a sheet (folded). ⌥⌘I is the system's
+    /// shortcut for an inspector.
+    private var companionButton: some View {
+        Button(companion.isOpen ? "Hide Companion" : "Companion", systemImage: "bubble.left.and.text.bubble.right") {
+            companion.isOpen.toggle()
+            if companion.isOpen { onCompanionOpened() }
+        }
+        .keyboardShortcut("i", modifiers: [.command, .option])
+    }
+
+    private var mentionsButton: some View {
+        Button("Mentions", systemImage: "at") { showMentions = true }
+    }
 
     /// Closes the keyboard (the iPhone keyboard has no key for it) and, in
     /// Focus, leaves it: Focus is for editing, so there's nothing to stay for.
@@ -634,10 +645,11 @@ struct EditorView: View {
                     .ignoresSafeArea()   // the whole display; bars appear over it
                     .transition(.opacity)
             } else {
-                PageEditor(keepsKeyboard: typing, onWriting: { writing = $0 }) {   // stops at the keyboard, as iOS lays pages out
+                PageEditor(keepsKeyboard: typing, onWriting: { writing = $0 }, onEditing: { editing = $0 }) {   // stops at the keyboard, as iOS lays pages out
                     withAnimation(.smooth(duration: 0.3)) { focusMode = true }
                 }
                     .transition(.opacity)
+                    .onDisappear { (editing, writing) = (false, false) }   // to Focus mode, which has its own
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -705,45 +717,43 @@ struct EditorView: View {
                     .keyboardShortcut(.cancelAction)
                 }
                 // Done here also leaves Focus, an editing-only mode (Kevin).
-                if pageTyping { done }
-            } else {
-                // As in Notes: Back, the sidebar button, the companion and Mentions stay, and
-                // typing on the page adds Done (the iPhone keyboard has no key to close it)
-                // and Focus. (Swapping the whole bar for Done while any keyboard was up hid the
-                // sidebar button and the companion's; Kevin, 2026-11-24.)
-                if pageTyping {
-                    done
-                    // Focus is for the writing: offered only while it has the keyboard,
-                    // not the title, a field or the companion (Kevin). Unfolded, kept
-                    // in the top row at its right end; folded, in the side column.
-                    if writing {
-                        ToolbarSpacer(.fixed, placement: .topBarTrailing)
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button("Focus Mode", systemImage: "arrow.up.left.and.arrow.down.right") {
-                                withAnimation(.smooth(duration: 0.3)) { focusMode = true }
-                            }
+                if typing { done }
+            } else if editing {
+                // Editing the page: Done (the iPhone keyboard has no key to close it) and Focus,
+                // each in its own glass and never in "•••", the companion and Mentions in a
+                // menu (Kevin, 2026-11-24). Back and the sidebar button stay, as in Notes.
+                // (Swapping the bar while any keyboard was up, search's or an alert's, hid
+                // the sidebar button and the companion's; Kevin, 2026-11-24.)
+                done
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu("More", systemImage: "ellipsis") {
+                        companionButton
+                        mentionsButton
+                    }
+                }
+                // Focus is for the writing: offered only while it has the keyboard, not the
+                // title or a field (Kevin). Unfolded, in the top row at its right end;
+                // folded, in the side column.
+                if writing {
+                    ToolbarSpacer(.fixed, placement: .topBarTrailing)
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Focus Mode", systemImage: "arrow.up.left.and.arrow.down.right") {
+                            withAnimation(.smooth(duration: 0.3)) { focusMode = true }
                         }
-                        .axisBehavior(folded ? .automatic : .horizontalOnly)
                     }
+                    .visibilityPriority(.high)
+                    .axisBehavior(folded ? .automatic : .horizontalOnly)
                 }
-                // The companion, beside the page (unfolded) or a sheet (folded), its
-                // button at the bottom as on every screen (Kevin, 2026-11-24): folded, at
-                // the foot of the Duo's side column; unfolded, at the bottom's trailing
-                // end, where the companion opens (alone it sat in the middle: "dumb as
-                // fuck"). ⌥⌘I is the system's shortcut for an inspector.
+            } else {
+                // The companion's button at the bottom as on every screen (Kevin, 2026-11-24):
+                // folded, at the foot of the Duo's side column; unfolded, at the bottom's
+                // trailing end, where the companion opens (alone it sat in the middle:
+                // "dumb as fuck").
                 ToolbarSpacer(.flexible, placement: .bottomBar)
-                ToolbarItem(placement: .bottomBar) {
-                    Button(companion.isOpen ? "Hide Companion" : "Companion", systemImage: "bubble.left.and.text.bubble.right") {
-                        companion.isOpen.toggle()
-                        if companion.isOpen { onCompanionOpened() }
-                    }
-                    .keyboardShortcut("i", modifiers: [.command, .option])
-                }
+                ToolbarItem(placement: .bottomBar) { companionButton }
                 // Shown when there's room; first into "•••" when there isn't.
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Mentions", systemImage: "at") { showMentions = true }
-                }
-                .visibilityPriority(.low)
+                ToolbarItem(placement: .primaryAction) { mentionsButton }
+                    .visibilityPriority(.low)
             }
         }
         .task {

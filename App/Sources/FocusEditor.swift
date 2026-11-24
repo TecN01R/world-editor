@@ -21,6 +21,7 @@ struct FocusEditor: UIViewControllerRepresentable {
     }
     func updateUIViewController(_ vc: FocusViewController, context: Context) {
         vc.setControls(visible: showsControls)
+        vc.showChanges()
     }
 }
 
@@ -54,6 +55,9 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
 
     private var index = 0
     private var size = 0.0   // current font size; 0 until the page is first fitted
+    /// The page's paragraphs as last shown or typed: the page differing from them was
+    /// changed by something else.
+    private var shown: [Paragraph] = []
 
     init(library: Library) {
         self.library = library
@@ -159,6 +163,8 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         size = 0
         let p = paragraphs[index]
         textView.attributedText = RichText.attributed(p, attributes: Self.attributes(17))
+        textView.undoManager?.removeAllActions()   // its steps were for the paragraph shown before
+        shown = paragraphs
         fit()
         let len = (textView.text as NSString).length
         let loc: Int
@@ -178,6 +184,13 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
                 self.textView.alpha = 1
             }
         }
+    }
+
+    /// The writing changed underneath (filing, its Undo, a linked page renamed): shown as it
+    /// is now, caret kept, or the next keystroke would write the old text back. Not mid-word.
+    func showChanges() {
+        guard !shown.isEmpty, textView.markedTextRange == nil, library.document.paragraphs != shown else { return }
+        show(index, caret: .offset(textView.selectedRange.location), direction: 0)
     }
 
     // MARK: Controls
@@ -255,6 +268,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         if controlsVisible { onControlsChange?(false) }   // writing again: out of the way
         library.update { $0.setText(tv.text, runs: RichText.runs(in: tv.attributedText),
                                                  links: RichText.links(in: tv.attributedText), at: index) }
+        shown = library.document.paragraphs
         fit(animated: true)
         updateRail()
     }
