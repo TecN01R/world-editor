@@ -5,9 +5,9 @@ import UIKit
 import WriterCore
 
 /// The companion: talks with the author about the open page like a friend
-/// they think out loud with. What it says comes from its instructions alone
-/// (`CompanionPrompt`): nothing checks or filters a reply afterwards (Kevin's
-/// ruling, 2026-11-23). It never writes into the page (docs/ai-charter.md);
+/// they think out loud with. What it says comes from the model alone, stock, with its
+/// tools (`CompanionPrompt.plain`): nothing checks or filters a reply
+/// afterwards (Kevin's ruling, 2026-11-23). It never writes into the page (docs/ai-charter.md);
 /// once the conversation pauses, what the author said is filed into the world's
 /// types, fields and pages, in their words, with Undo (`Filer`; Kevin's ruling,
 /// 2026-11-23).
@@ -60,42 +60,21 @@ final class Companion {
     /// 2026-11-25: "go for it with the web stuff"): on unless turned off in its menu. Only
     /// the words it looks up leave the phone, never a name from the author's pages.
     var looksUp = UserDefaults.standard.object(forKey: "companionLooksUp") as? Bool ?? true {
-        didSet {
-            UserDefaults.standard.set(looksUp, forKey: "companionLooksUp")
-            background = nil   // its instructions say whether it can
-        }
+        didSet { UserDefaults.standard.set(looksUp, forKey: "companionLooksUp") }
     }
 
-    /// TRIAL (Kevin, 2026-11-24): the model with none of the app's instructions,
-    /// examples or pages, only the conversation, which page is open (`CompanionPrompt.plain`)
-    /// and the tools, described as they're declared, to see how it does on its own.
-    /// Debug builds only (Kevin, 2026-11-25): a release build always reads the whole prompt.
+    /// The companion is the model stock, with its tools (Kevin, 2026-11-25: "I want you to only
+    /// run models stock from now on and only put stock models on my phone, with tools of
+    /// course"; no instruction at all, his choice over one on content of its own):
+    /// `CompanionPrompt.plain`, only the conversation and which page is open. In a debug build
+    /// the author can add instructions of their own (`CompanionInstructions`), kept on the
+    /// phone; nil for none. A release build never has any.
     #if DEBUG
-    var plain = UserDefaults.standard.bool(forKey: "companionPlain") {
-        didSet { UserDefaults.standard.set(plain, forKey: "companionPlain") }
+    var instruction = UserDefaults.standard.string(forKey: "companionInstruction") {
+        didSet { UserDefaults.standard.set(instruction, forKey: "companionInstruction") }
     }
     #else
-    let plain = false
-    #endif
-    /// The author's own instructions and examples (`CompanionInstructions`), kept on the phone,
-    /// in place of the app's: nil for the app's own. The next reply reads them. Debug builds
-    /// only, as the settings are (Kevin, 2026-11-25): a release build always reads the app's.
-    #if DEBUG
-    var texts = CompanionPrompt.Texts(instructions: UserDefaults.standard.string(forKey: "companionInstructions"),
-                                      examples: UserDefaults.standard.string(forKey: "companionExamples")) {
-        didSet {
-            UserDefaults.standard.set(texts.instructions, forKey: "companionInstructions")
-            UserDefaults.standard.set(texts.examples, forKey: "companionExamples")
-            background = nil   // the background kept for follow-ups began with the old ones
-        }
-    }
-
-    /// The app's own instructions and examples for this model, which the settings show and restore.
-    var defaultTexts: (instructions: String, examples: String) {
-        (CompanionPrompt.instructions(searching: model.canSearch, lookingUp: model.canSearch && looksUp), CompanionPrompt.examples)
-    }
-    #else
-    let texts = CompanionPrompt.Texts()
+    let instruction: String? = nil
     #endif
 
     /// The reply Try Again took back, kept as a version of the next one, or put back if that fails.
@@ -139,11 +118,6 @@ final class Companion {
     private var unfiled: [(turn: Conversation.Turn, page: UUID, aboutWorld: Bool, world: URL?, library: Library)] = []
     /// The two minutes after a reply, before what's `unfiled` is filed.
     private var pause: Task<Void, Never>?
-    /// The background of this conversation's prompt as the model read it (and keeps in its
-    /// cache), kept for its follow-ups, so each reads only the new messages: built afresh for
-    /// each reply, it differed early on and the whole prompt was read again. `key` is what it
-    /// rests on: the conversation, its room, and the open page (or, about the world, its pages).
-    private var background: (key: String, system: String)?
     private static let log = Logger(subsystem: "com.tecn01r.worldeditor", category: "companion")
 
     init() {
@@ -343,66 +317,26 @@ final class Companion {
         // dropped it owns the conversation and the reply taken back now.
         guard !Task.isCancelled else { return }
         let page = library.pages.first { $0.id == page.id } ?? page   // as it is now, not when it opened
-        let others = library.pages.filter { $0.id != page.id }
-        let talks = (store?.all() ?? []).filter { $0.page != page.id }
-        let earlier = talks.map { talk in
-            var talk = talk
-            talk.aboutWorld = Self.isAboutWorld(talk, in: library)   // memory words it as such
-            return (page: talk.aboutWorld ? "" : others.first { $0.id == talk.page }?.heading ?? "", conversation: talk)
-        }
         let isWorld = conversation.aboutWorld   // a conversation about the whole world: no page open
-        // What it can search with search_pages: every page, with its type and fields, and
-        // what the author said in their other conversations (this one's words are in the
+        // What its tools reach: every page, with its type and fields, and what the author said
+        // in their other conversations (this one's words are in the prompt already).
+        let talks = (store?.all() ?? []).filter { $0.page != page.id }
         let pageLookup = model.canSearch ? PageLookup(pages: library.pages, schema: library.schema, conversations: talks) : nil
-        let lookup = pageLookup.map { CompanionPrompt.Lookup(pages: $0, open: isWorld ? nil : page.id, retrieving: false,
-                                                             searching: true, lookingUp: looksUp) }
         // A look-up never sends their names: their pages', and those they wrote, unless the
         // phone's dictionary knows the word (a real place's name).
-        let tools = ReplyTools(pages: pageLookup, lookingUp: looksUp && pageLookup != nil, listing: plain,
+        let tools = ReplyTools(pages: pageLookup, lookingUp: looksUp && pageLookup != nil, listing: true,
                                theirNames: WebLookup.theirNames(pages: pageLookup, said: conversation.turns.compactMap(\.answer),
                                                                 known: Self.dictionary()))
         var reply = Reasoned(reply: "")
         do {
             // Unusual text takes more of the model's context than its length
-            // suggests: a prompt that doesn't fit is rebuilt with less background.
+            // suggests: a prompt that doesn't fit is rebuilt with less of the conversation.
             for room in [1, 2, 4] {
-                var prompt: CompanionPrompt
-                if plain {
-                    prompt = CompanionPrompt.plain(conversation, page: isWorld ? nil : page.title,
-                                                   world: isWorld ? library.world.name : nil, maxTurnCharacters: 6000 / room)
-                } else if isWorld {
-                    prompt = CompanionPrompt(world: library.world.name, pages: others.map { library.companionPage($0, fields: true) },
-                                             earlier: earlier, conversation: conversation,
-                                             maxCharacters: 6000 / room, maxTurnCharacters: 6000 / room, lookup: lookup,
-                                             texts: texts)
-                } else {
-                    prompt = CompanionPrompt(page: library.companionPage(page, open: true),
-                                             others: others.map { library.companionPage($0) },
-                                             earlier: earlier, conversation: conversation,
-                                             maxCharacters: 6000 / room, maxTurnCharacters: 6000 / room, lookup: lookup,
-                                             texts: texts)
-                }
-                // Its background as last read, while what it rests on is unchanged. Not before
-                // its first reply, whose background has "Right now…" for its opening only.
-                if !plain, !conversation.turns.isEmpty {
-                    let subject: String
-                    if isWorld {
-                        subject = "\(library.pages.count) \(library.pages.map(\.modified).max()?.timeIntervalSince1970 ?? 0)"
-                    } else {
-                        let openPage = library.companionPage(page, open: true)
-                        subject = [openPage.name, openPage.type ?? "", openPage.fields, openPage.writing]
-                            .joined(separator: "\u{1}")
-                    }
-                    let key = "\(conversation.page) \(room) \(subject)"
-                    if let kept = background, kept.key == key {
-                        prompt.system = kept.system
-                    } else {
-                        background = (key, prompt.system)
-                    }
-                }
+                let prompt = CompanionPrompt.plain(conversation, page: isWorld ? nil : page.title,
+                                                   world: isWorld ? library.world.name : nil,
+                                                   instructions: instruction,
+                                                   maxTurnCharacters: 6000 / room)
                 do {
-                    // Plain Model too has the tools, as their declarations describe them (Kevin,
-                    // 2026-11-25: "otherwise it's kind of useless").
                     for try await partial in model.stream(prompt, tools: tools, thinking: thinks) {
                         guard !Task.isCancelled else { break }
                         reply = partial.reply
@@ -425,7 +359,7 @@ final class Companion {
         }
         guard !Task.isCancelled else { return }   // superseded: leave state to whoever dropped it
         guard conversation.page == page.id else { state = .idle; return }
-        trialLog("REPLY\(plain ? " (plain)" : "") \(page.title): \(reply.reply)")   // TRIAL
+        trialLog("REPLY \(page.title): \(reply.reply)")   // TRIAL
         guard !reply.reply.isEmpty else { restoreRetracted(); state = .failed; return }   // ran out of room while thinking
         if modelVersion == nil { modelVersion = model.version }   // just downloaded
         conversation.ask(reply.reply, after: retracted, searches: reply.searches, lookups: reply.lookups)

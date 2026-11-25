@@ -138,15 +138,6 @@ final class Library {
         saveSchema()
     }
 
-    /// A page as the companion is shown it: the `open` one by its title (which
-    /// may be empty) and with its fields, the others by their heading.
-    /// - Parameter fields: with its fields though not open (every page in a world conversation).
-    func companionPage(_ page: WriterCore.Document, open: Bool = false, fields: Bool = false) -> CompanionPrompt.Page {
-        CompanionPrompt.Page(name: open ? page.title : page.heading, type: type(of: page)?.name,
-                             fields: open || fields ? fieldText(page) : "",
-                             writing: page.paragraphs.map(\.text).joined(separator: "\n"))
-    }
-
     // MARK: Filing from the companion's conversation (docs/companion.md, Filing)
 
     /// What the model is asked, to read types, fields and pages out of the

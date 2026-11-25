@@ -30,7 +30,19 @@ Exploration sound. Short, specific, and it knows his world.
 
 ## What the model is given
 
-system turn, in this order, then the conversation:
+**Since 2026-11-25: the model stock, with its tools.** Kevin, after trying
+Plain Model on the phone: "I want you to only run models stock from now on and
+only put stock models on my phone, with tools of course." Offered one
+instruction on content of its own, he chose none ("fully stock"). The system
+turn is one line saying which page is open (its title), or which world, about
+the whole world; then the conversation, with `list_pages`, `search_pages` and
+`look_up` declared in the model's own chat format (`CompanionPrompt.plain`,
+built in `Companion.ask`). No instructions, no examples, no pages in the
+prompt: it finds them with its tools. Sampling and the thinking cap are the
+model maker's (`docs/models.md`). In a debug build, Instructions… in the
+companion's menu lets the author add instructions of their own; none by
+
+**Until then** it had the full prompt below, which stays in WriterKit as the
 
 1. **Who it is** (`CompanionPrompt.instructions`, about 240 words). A friend
    the writer talks to about what they're writing, which may be an invented
@@ -305,7 +317,8 @@ Each reply draws a new seed, so Try Again differs (under AnyLanguageModel,
 before the 26B, one seed drawn when the model loaded gave the same words each
 time, though temperature was already Gemma's 1.0).
 
-Plain Model (TRIAL, in the menu; Kevin, 2026-11-24: "remove all your rules
+Plain Model (a TRIAL in the menu from 2026-11-24, the companion itself from 2026-11-25,
+above; Kevin, 2026-11-24: "remove all your rules
 and context and prompts so I can see how this actually works as a model"):
 the model gets only the conversation, no instructions, examples or pages
 (`CompanionPrompt.plain`), and, since 2026-11-25, the tools, described as their
@@ -316,7 +329,7 @@ it can search the pages and look up the real world, but is told nothing else.
 Since it isn't shown their pages, it also has `list_pages` (their pages by name,
 type and opening, or one type's), without which "what can you tell me about my
 world?" gave its search nothing to look for (Kevin: "I don't think the tools are
-working fully with the base model"). In debug builds only.
+working fully with the base model").
 prompt without its example conversations 4.7 (a draw: better openings, worse
 corrections and "stuck"), Plain Model 1.6 (98% poor: it took his world for
 Star Wars or Hollow Knight, invented names, wrote 100-word help-desk replies).

@@ -12,6 +12,9 @@ import WriterCore
 /// 2026-11-23): how it behaves comes from this text alone, so a change here
 /// text is shaped as it is). Model-agnostic: each model puts the prompt into
 /// its own chat format.
+///
+/// Since 2026-11-25 the app sends `plain`: the model stock (Kevin: "only run models stock from
+/// now on"), given only the conversation and which page is open, with its tools declared. The
 public struct CompanionPrompt: Equatable, Sendable {
     public enum Speaker: Sendable { case author, companion }
 
@@ -293,7 +296,7 @@ public struct CompanionPrompt: Equatable, Sendable {
 
     /// The app's instructions for a companion that can, or can't, search the author's pages
     /// and look up the real world (`instructions(lookup:)` with search, or without a lookup):
-    /// what the companion's settings show and restore.
+    /// what the companion's settings showed and restored until 2026-11-25.
     public static func instructions(searching: Bool, lookingUp: Bool = false) -> String {
         adding((lookingUp ? [lookUpInstruction] : []) + (searching ? [searchInstruction] : []))
     }
@@ -305,9 +308,9 @@ public struct CompanionPrompt: Equatable, Sendable {
         return instructions.replacingOccurrences(of: next, with: replies.joined(separator: "\n") + "\n" + next)
     }
 
-    /// The author's own instructions and examples, from the companion's settings (Kevin,
-    /// 2026-11-25: "a settings panel for me to modify instructions myself"), in place of the
-    /// app's: nil keeps the app's; empty examples leave them out.
+    /// The author's own instructions and examples, from the companion's settings until it
+    /// became the plain model (Kevin, 2026-11-25: "a settings panel for me to modify instructions
+    /// myself"), in place of the app's: nil keeps the app's; empty examples leave them out.
     public struct Texts: Equatable, Sendable {
         public var instructions: String?
         public var examples: String?
@@ -336,23 +339,26 @@ public struct CompanionPrompt: Equatable, Sendable {
         recent.first?.speaker == .author ? recent : [Turn(speaker: .author, text: opener)] + recent
     }
 
-    /// The model with nothing of the app's (Kevin's trial, 2026-11-24: "remove all your rules and
-    /// context and prompts so I can see how this actually works as a model"): no instructions,
-    /// examples or pages, only the conversation, and since 2026-11-25 one line on which page is
-    /// open (`page`, its title), or, about the whole world, which world (`world`). The opening
+    /// The model on its own (Kevin's trial, 2026-11-24: "remove all your rules and context and
+    /// prompts so I can see how this actually works as a model"): none of the full prompt's
+    /// instructions, examples or pages, only the conversation, and since 2026-11-25 one line on
+    /// which page is open (`page`, its title), or, about the whole world, which world (`world`),
+    /// then any `instructions` (none from the app; the author's own, in a debug build). The opening
     /// line stays only before its first reply, which has to answer something.
-    public static func plain(_ conversation: Conversation, page: String? = nil, world: String? = nil,
+    public static func plain(_ conversation: Conversation, page: String? = nil, world: String? = nil, instructions: String? = nil,
                              maxTurns: Int = 12, maxTurnCharacters: Int = 6000) -> CompanionPrompt {
         let turns = recent(conversation, maxTurns: maxTurns, maxTurnCharacters: maxTurnCharacters)
-        let system: String
+        let open: String?
         if let page {
-            system = page.isEmpty ? "The writer has an untitled page open."
-                                  : "The writer has their page \u{201C}\(oneLine(page, maxCharacters: 80))\u{201D} open."
+            open = page.isEmpty ? "The writer has an untitled page open."
+                                : "The writer has their page \u{201C}\(oneLine(page, maxCharacters: 80))\u{201D} open."
         } else if let world {
-            system = "The writer is talking about their world \u{201C}\(oneLine(world, maxCharacters: 80))\u{201D} as a whole."
+            open = "The writer is talking about their world \u{201C}\(oneLine(world, maxCharacters: 80))\u{201D} as a whole."
         } else {
-            system = ""
+            open = nil
         }
+        let system = [open, instructions?.trimmingCharacters(in: .whitespacesAndNewlines)]
+            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n")
         return CompanionPrompt(system: system, turns: turns.isEmpty ? [Turn(speaker: .author, text: opened)] : turns)
     }
 

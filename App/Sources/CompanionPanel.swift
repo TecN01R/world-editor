@@ -594,11 +594,6 @@ struct CompanionPanel: View {
         }
         #if DEBUG   // for trying the model out: debug builds only (Kevin, 2026-11-25)
         Button("Instructions…", systemImage: "text.document") { editingInstructions = true }
-        // TRIAL (Kevin, 2026-11-24): the model on its own.
-        Toggle(isOn: Binding { companion.plain } set: { companion.plain = $0 }) {
-            Label("Plain Model", systemImage: "cube")
-            Text("Only the conversation, the page’s name and the tools")
-        }
         #endif
     }
 
@@ -618,7 +613,7 @@ struct CompanionPanel: View {
         } else {
             title = library.document.title.isEmpty ? "Untitled page" : library.document.title
         }
-        let header = "World Editor companion on “\(title)” (\(Companion.modelName)" + (companion.plain ? ", plain model" : "") + ")"
+        let header = "World Editor companion on “\(title)” (\(Companion.modelName))"
         let turns = companion.conversation.turns.flatMap { turn in
             (turn.question.isEmpty ? [] : ["Companion: \(turn.question)"]) + (turn.answer.map { ["Me: \($0)"] } ?? [])
         }

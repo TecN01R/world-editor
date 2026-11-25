@@ -9,10 +9,9 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Rotation crash: check it's gone
 
 ## Check on the phone
+- [ ] The companion is the model stock now, with its tools and no instructions (Kevin, 2026-11-25); Instructions… (debug) adds your own, none by default
 - [ ] More memory for the app (Kevin, 2026-11-25: "Yes" to the patched xtool): installed from d7a1eed on; the companion's next LOAD line should show about 5.8 GB left instead of 3.4
 - [ ] Wikipedia look-ups: ask a real-world question it might not know; "Searched Wikipedia for …" under the reply opens the articles; Look Things Up in the menu turns it off (Kevin, 2026-11-25)
-- [ ] Plain Model (debug builds): the tools, and which page is open (Kevin, 2026-11-25)
-- [ ] Instructions… in the companion's menu (debug builds only): your own instructions and examples, Restore Defaults (Kevin, 2026-11-25)
 - [ ] The new companion model, Nemotron 3.5 Bolt (Kevin, 2026-11-25: "Yes"): downloaded, loads and replies, 26B freed (seen in the log). Left: how the replies feel, a search shown in its thinking
 - [ ] Type and field names in San Francisco everywhere; values stay New York (Kevin, 2026-11-24)
 - [ ] Empty fields hidden; Add Field's menu lists them, and one picked shows ready to fill in (Kevin, 2026-11-24)
@@ -45,12 +44,9 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Amend CLAUDE.md and docs/ai-charter.md to the new rule when it ships
 
 ## Companion
-- [ ] Rewrite the instructions to Kevin's taste (his ChatGPT style notes); remove the sample
-      conversations; current page fields win over older conversations
 - [ ] Search: built on Nemotron (search_pages, thinking capped); check it finds things on the phone
 - [ ] Filing through tools (make page, set field, rename, set page text), each with Undo
 - [ ] Live Activity: does tapping it reach the app? If never, our own Live Activity
-- [ ] Plain Model: in debug builds only now (Kevin, 2026-11-25); remove it altogether once it's no longer used
 
 ## Later
 - [ ] Spotlight finds every world's pages

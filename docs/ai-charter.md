@@ -67,6 +67,12 @@ him unprompted, and won't reply with a stupid repeated question.
 are allowed for now (Kevin, 2026-11-22: open it up, flag it, tighten later if
 they feed the author ideas). Asking which of two readings the author meant is
 
+**Since 2026-11-25 it isn't told any of this (Kevin's ruling):** the companion
+is the model stock, with its tools and no instructions ("only run models stock
+from now on"; offered a single instruction against offering content unasked, he
+chose none). What still holds is what code guarantees: it can't change a page,
+and it runs on the device. What follows describes how it was held until then.
+
 **How it's held to this (Kevin's ruling, 2026-11-23):** by its instructions
 alone. Nothing screens or filters a reply after the model writes it: a filter
 after the fact can only reject, and what's unwanted is to be prevented up
