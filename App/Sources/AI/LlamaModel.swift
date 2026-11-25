@@ -8,30 +8,31 @@ import os
 import UIKit
 
 /// The companion's model: NVIDIA's Nemotron 3.5 Bolt E4B (OpenMDW-1.1, post-trained from
-/// Google's Gemma 4 E4B, Apache-2.0), in NVIDIA's own 4-bit file, on llama.cpp (MIT) with
+/// Google's Gemma 4 E4B, Apache-2.0), in bartowski's 4-bit file, on llama.cpp (MIT) with
 /// thinks before each reply, its thought capped at 128 tokens as llama.cpp's server caps it
 /// (`ThinkingBudget`), and looks things up in the author's pages with `search_pages`, in the
 /// model file's own chat format (`GemmaChat`). Its largest table, the per-layer embeddings
-/// (3 GB), stays in storage and is read a row at a time (llama.cpp's lazy reading), so it
+/// (1.9 GB), stays in storage and is read a row at a time (llama.cpp's lazy reading), so it
 /// runs in about 4 GB. Not on the simulator, which llama.cpp's framework has no build for:
 /// the companion uses Apple's model there.
 final class LlamaModel: CompanionModel, @unchecked Sendable {
     static let name = "Nemotron 3.5 Bolt"
 
-    /// One checked revision of NVIDIA's file on Hugging Face.
+    /// one's 5.57, and wrote 5 of its 184 searches as text (2026-11-25).
     private enum Source {
-        static let url = URL(string: "https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Bolt-E4B-4GB/resolve/"
-                             + "0e5d71fc20036486786f71befa103d23a97b79b1/Nemotron-3.5-Bolt-E4B-Q4_K_M.gguf")!
-        static let bytes: Int64 = 6_180_446_208
-        static let sha256 = "c8af2b8aea10a690a1d9491db744a9446660173cb38fc489612b556615a69612"
+        static let url = URL(string: "https://huggingface.co/bartowski/NVIDIA-Nemotron-3.5-Bolt-E4B-GGUF/resolve/"
+                             + "7a243bc11b80212594a71d2ecddde5798a43e265/NVIDIA-Nemotron-3.5-Bolt-E4B-Q4_K_M.gguf")!
+        static let bytes: Int64 = 5_162_292_576
+        static let sha256 = "5f0f982d11bc1408783d13e4440b06e6c1e989024ac26f9a2999cb4c496bedcc"
     }
 
     /// Application Support (which iOS never clears), out of iCloud backups.
     private static let folder = URL.applicationSupportDirectory.appending(path: "Models", directoryHint: .isDirectory)
-    /// Renamed to this only once whole and checked.
-    fileprivate static let file = folder.appending(path: "nemotron-3.5-bolt-e4b-q4_k_m.gguf")
+    /// Renamed to this only once whole and checked; named by its checksum, so another file
+    /// of the model is never taken for it.
+    fileprivate static let file = folder.appending(path: "nemotron-3.5-bolt-e4b-5f0f982d.gguf")
     /// The download so far, which a later try goes on from.
-    private static let partial = folder.appending(path: "nemotron-3.5-bolt-e4b-q4_k_m.gguf.partial")
+    private static let partial = folder.appending(path: "nemotron-3.5-bolt-e4b-5f0f982d.gguf.partial")
 
     /// 64 cut it off mid-plan, unlimited thought half again as long for no better replies).
     static let thinkingBudget = 128
@@ -179,8 +180,8 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
 
     // MARK: - Installing
 
-    /// Downloads the model from Hugging Face (6.2 GB, one checked revision), then checks it.
-    /// 6.2 GB is for Wi-Fi: on cellular, a hotspot or Wi-Fi in Low Data Mode it waits, saying
+    /// Downloads the model from Hugging Face (5.2 GB, one checked revision), then checks it.
+    /// 5.2 GB is for Wi-Fi: on cellular, a hotspot or Wi-Fi in Low Data Mode it waits, saying
     /// why, and goes on from where it was once it's back on Wi-Fi. It stops only when the
     /// connection keeps failing (Download Paused, to resume from where it got to), or when
     /// there isn't room for it (the download offered again, with how much is needed).
@@ -191,6 +192,11 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
         try folder.setResourceValues(values)
+        // Another file of the model, part or whole (NVIDIA's, briefly downloaded), makes room.
+        for item in (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
+        where item.lastPathComponent.contains(".gguf") && item.lastPathComponent != Self.partial.lastPathComponent {
+            try? FileManager.default.removeItem(at: item)
+        }
         let progress = InstallProgress(report: onProgress, total: Source.bytes)
         progress.waiting("Starting…")
         var failures = 0
@@ -935,7 +941,7 @@ private final class InstallProgress: @unchecked Sendable {
         }
         guard due else { return }
         // A file download, worded the way Apple's apps word one
-        // ("1.5 GB of 6.2 GB (12 MB/sec) — About 8 minutes remaining").
+        // ("1.5 GB of 5.2 GB (12 MB/sec) — About 7 minutes remaining").
         let progress = Progress(totalUnitCount: total)
         progress.kind = .file
         progress.fileOperationKind = .downloading

@@ -9,7 +9,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Rotation crash: check it's gone
 
 ## Check on the phone
-- [ ] The new companion model, Nemotron 3.5 Bolt (Kevin, 2026-11-25: "Yes"): the 6.2 GB download (Wi-Fi), its first reply, how long before the first word, its searches shown in its thinking, and that the 26B's 14 GB is freed once it runs
+- [ ] The new companion model, Nemotron 3.5 Bolt (Kevin, 2026-11-25: "Yes"): the 5.2 GB download (Wi-Fi), its first reply, how long before the first word, its searches shown in its thinking, and that the 26B's 14 GB is freed once it runs
 - [ ] Type and field names in San Francisco everywhere; values stay New York (Kevin, 2026-11-24)
 - [ ] Empty fields hidden; Add Field's menu lists them, and one picked shows ready to fill in (Kevin, 2026-11-24)
 - [ ] Back from the app switcher with the companion open unfolded: the page keeps its normal margins

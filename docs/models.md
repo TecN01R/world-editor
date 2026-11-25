@@ -7,7 +7,7 @@ function uses the best-fitting openly licensed model that runs on an iPhone.
 |---|---|---|---|---|---|
 | Search by meaning | **Qwen3-Embedding-0.6B** (Q8_0 GGUF) | Apache-2.0 | llama.cpp (MIT) | ~640 MB | EmbeddingGemma 300M |
 | Re-ranking (optional) | Qwen3-Reranker-0.6B | Apache-2.0 | llama.cpp | ~640 MB | — |
-| Writing companion | **Nemotron 3.5 Bolt E4B** (NVIDIA's Q4_K_M GGUF) | OpenMDW-1.1 (post-trained from Gemma 4 E4B, Apache-2.0) | llama.cpp (MIT) | 6.2 GB in storage, ~3.5-4 GB in memory | Gemma 4 |
+| Writing companion | **Nemotron 3.5 Bolt E4B** (bartowski's Q4_K_M GGUF) | OpenMDW-1.1 (post-trained from Gemma 4 E4B, Apache-2.0) | llama.cpp (MIT) | 5.2 GB in storage, ~3.5-4 GB in memory | Gemma 4 |
 | Facts & continuity | **Apple Foundation Models** (on-device) | System framework | iOS 26+ | 0 (built in) | same |
 | Illustration | **Stable Diffusion 1.5** + **ControlNet 1.1** (Core ML) | CreativeML OpenRAIL-M | apple/ml-stable-diffusion | ~2.1 GB + ~0.7 GB | same |
 
@@ -59,10 +59,12 @@ scored 5.21. It reads a prompt in seconds and writes well above reading speed,
 so it needs no saved cache, and it fits the 15 Pro's memory.
 
 How it runs (`LlamaModel`): llama.cpp's prebuilt Apple framework, release
-checked), on the GPU through Metal. The model is NVIDIA's own 4-bit file
-(`nvidia/NVIDIA-Nemotron-3.5-Bolt-E4B-4GB`, `Nemotron-3.5-Bolt-E4B-Q4_K_M.gguf`,
-third-party 4-bit file (bartowski's, 5.2 GB) of the same model; NVIDIA's keeps
-Its per-layer embeddings (3 GB) stay in storage and are read a row at a time
+measured (`bartowski/NVIDIA-Nemotron-3.5-Bolt-E4B-GGUF`,
+`NVIDIA-Nemotron-3.5-Bolt-E4B-Q4_K_M.gguf`, 5.2 GB) at one pinned revision with
+its SHA-256. NVIDIA's own 4-bit file (6.2 GB, its embeddings at 8 bits) was
+against 5.57, more poor replies (39% against 25%), and 5 of its 184 searches
+written as text instead of called (none for this file).
+Its per-layer embeddings (1.9 GB) stay in storage and are read a row at a time
 (llama.cpp's lazy reading), so about 3.2 GB of weights are in memory, plus the
 conversation's cache (8,192 tokens, every position kept so a follow-up can go
 back to where the prompt changed).
@@ -75,7 +77,8 @@ reply, then "that's the last search"; three calls at most, after which, or if
 it says nothing, it is asked once more without the tool). What it searched
 for shows in its collapsed thinking. Sampling is NVIDIA's (temperature 1,
 top-p 0.95, top-k 64 as the file says, a new seed each reply); filing is
-measured without thinking).
+(82% with thinking, at three times the wait, so it doesn't think), and nothing
+filed from messages that state nothing.
 
 The download goes over Wi-Fi only, in one file with HTTP range requests, so
 it resumes from where it stopped, even after the app is closed; on cellular,
