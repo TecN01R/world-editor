@@ -71,8 +71,10 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
 
     // MARK: - Replies
 
-    /// temperature 1, top-p 0.95, top-k 64, no repetition penalty, a new seed each reply.
-    private static let replying = Sampling(temperature: 1, topK: 64, topP: 0.95)
+    /// Its sampling, stock (Kevin, 2026-11-25: "only run models stock"): NVIDIA's card,
+    /// temperature 1 and top-p 0.95 in both thinking modes, nothing else (no top-k, which came
+    /// from Gemma's card); a new seed each reply.
+    private static let replying = Sampling(temperature: 1, topP: 0.95)
 
     /// A reply with its tools (`replyWithTools`), each pass of the model on llama.cpp.
     func stream(_ prompt: CompanionPrompt, tools: ReplyTools, thinking: Bool) -> AsyncThrowingStream<ReplySoFar, Error> {
@@ -80,10 +82,12 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
             try await replyWithTools(prompt, tools: tools, thinking: thinking, model: Self.name,
                                      state: Engine.state, to: continuation) { text, inThought, show in
                 let pass = Pass()
+                // No length limit of its own (Kevin, 2026-11-25: he never wanted one): it writes
+                // until it ends its turn or calls a tool, or the context is full.
                 let run = try await Self.again(pass) {
                     try await self.engine.generate(text, written: pass.tokens, sampling: Self.replying,
                                                    budget: thinking ? Self.thinkingBudget : nil, inThought: inThought,
-                                                   room: thinking ? 1000 : 300, maxNew: 1500 - pass.tokens.count) { event in
+                                                   room: thinking ? 1000 : 300, maxNew: .max) { event in
                         switch event {
                         case .reading(let done, let total):
                             show(pass.output(inThought), Double(done) / Double(max(total, 1)))
@@ -303,7 +307,6 @@ private struct LlamaFailed: Error, CustomStringConvertible {
 /// How the model picks each token: nil in `generate` is greedy (its most likely).
 private struct Sampling {
     var temperature: Float
-    var topK: Int32
     var topP: Float
 }
 
@@ -595,11 +598,11 @@ private final class Engine: @unchecked Sendable {
         }
     }
 
-    /// a new seed each time), or greedy.
+    /// The sampler chain llama.cpp's server runs it with (top-p, temperature, a new seed each
+    /// time), or greedy.
     private static func sampler(_ sampling: Sampling?) -> UnsafeMutablePointer<llama_sampler> {
         let chain = llama_sampler_chain_init(llama_sampler_chain_default_params())!
         if let sampling {
-            llama_sampler_chain_add(chain, llama_sampler_init_top_k(sampling.topK))
             llama_sampler_chain_add(chain, llama_sampler_init_top_p(sampling.topP, 1))
             llama_sampler_chain_add(chain, llama_sampler_init_temp(sampling.temperature))
             llama_sampler_chain_add(chain, llama_sampler_init_dist(UInt32.random(in: 0..<UInt32.max)))

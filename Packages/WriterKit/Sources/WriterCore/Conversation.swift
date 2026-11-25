@@ -35,6 +35,9 @@ public struct Conversation: Codable, Hashable, Sendable {
         /// What it looked up in the real world (Wikipedia) while writing each of its replies
         /// here, as `searches` is kept, for the "Searched Wikipedia for …" line and its sources.
         public var lookups: [String: [LookedUp]]?
+        /// The instructions it added to the writer's (Instructions…) while writing each of its
+        /// replies here, as `searches` is kept, for the "Added to Instructions: …" line.
+        public var instructions: [String: [String]]?
 
         public init(id: UUID = UUID(), question: String, answer: String? = nil, asked: Date = Date(),
                     filed: FilingRecord? = nil) {
@@ -158,13 +161,15 @@ public struct Conversation: Codable, Hashable, Sendable {
     /// Everything the author said here, in their words.
     public var authorText: String { turns.compactMap(\.answer).joined(separator: "\n") }
 
-    /// The companion's reply, and what it searched the author's pages for and looked up in
-    /// the real world while writing it.
-    public mutating func ask(_ question: String, searches: [String] = [], lookups: [LookedUp] = [], at date: Date = Date()) {
+    /// The companion's reply, and what it searched the author's pages for, looked up in the
+    /// real world and added to their instructions while writing it.
+    public mutating func ask(_ question: String, searches: [String] = [], lookups: [LookedUp] = [], instructions: [String] = [],
+                             at date: Date = Date()) {
         guard waiting == nil else { return }
         var turn = Turn(question: question, asked: date)
         if !searches.isEmpty { turn.searches = [question: searches] }
         if !lookups.isEmpty { turn.lookups = [question: lookups] }
+        if !instructions.isEmpty { turn.instructions = [question: instructions] }
         turns.append(turn)
     }
 
@@ -175,10 +180,10 @@ public struct Conversation: Codable, Hashable, Sendable {
     }
 
     /// The new reply in place of `retracted` (if Try Again took one back), which is kept with
-    /// its versions and what each searched for and looked up.
+    /// its versions and what each searched for, looked up and added to their instructions.
     public mutating func ask(_ question: String, after retracted: Turn?, searches: [String] = [], lookups: [LookedUp] = [],
-                             at date: Date = Date()) {
-        ask(question, searches: searches, lookups: lookups, at: date)
+                             instructions: [String] = [], at date: Date = Date()) {
+        ask(question, searches: searches, lookups: lookups, instructions: instructions, at: date)
         guard let retracted else { return }
         let earlier = (retracted.versions ?? [retracted.question]).filter { $0 != question }
         guard !earlier.isEmpty, let i = turns.indices.last else { return }
@@ -190,6 +195,7 @@ public struct Conversation: Codable, Hashable, Sendable {
         }
         turns[i].searches = kept(retracted.searches, turns[i].searches)
         turns[i].lookups = kept(retracted.lookups, turns[i].lookups)
+        turns[i].instructions = kept(retracted.instructions, turns[i].instructions)
     }
 
     /// Makes `version` the reply the conversation goes on from, while it waits for an answer
@@ -210,9 +216,11 @@ public struct Conversation: Codable, Hashable, Sendable {
         if !versions.contains(version) {
             turns[i].searches?[version] = nil
             turns[i].lookups?[version] = nil
+            turns[i].instructions?[version] = nil
         }
         if turns[i].searches?.isEmpty == true { turns[i].searches = nil }
         if turns[i].lookups?.isEmpty == true { turns[i].lookups = nil }
+        if turns[i].instructions?.isEmpty == true { turns[i].instructions = nil }
     }
 
     /// The author's words: an answer to the waiting reply, or, if nothing has been said

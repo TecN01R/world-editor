@@ -14,7 +14,7 @@ import WriterCore
 /// its own chat format.
 ///
 /// Since 2026-11-25 the app sends `plain`: the model stock (Kevin: "only run models stock from
-/// now on"), given only the conversation and which page is open, with its tools declared. The
+/// now on"), given only the conversation, which page is open and the writer's own instructions
 public struct CompanionPrompt: Equatable, Sendable {
     public enum Speaker: Sendable { case author, companion }
 
@@ -343,8 +343,8 @@ public struct CompanionPrompt: Equatable, Sendable {
     /// prompts so I can see how this actually works as a model"): none of the full prompt's
     /// instructions, examples or pages, only the conversation, and since 2026-11-25 one line on
     /// which page is open (`page`, its title), or, about the whole world, which world (`world`),
-    /// then any `instructions` (none from the app; the author's own, in a debug build). The opening
-    /// line stays only before its first reply, which has to answer something.
+    /// then the writer's standing `instructions`, if they have any (`Instructions`; none at first).
+    /// The opening line stays only before its first reply, which has to answer something.
     public static func plain(_ conversation: Conversation, page: String? = nil, world: String? = nil, instructions: String? = nil,
                              maxTurns: Int = 12, maxTurnCharacters: Int = 6000) -> CompanionPrompt {
         let turns = recent(conversation, maxTurns: maxTurns, maxTurnCharacters: maxTurnCharacters)
@@ -357,8 +357,7 @@ public struct CompanionPrompt: Equatable, Sendable {
         } else {
             open = nil
         }
-        let system = [open, instructions?.trimmingCharacters(in: .whitespacesAndNewlines)]
-            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n")
+        let system = [open, Instructions.shown(instructions)].compactMap { $0 }.joined(separator: "\n\n")
         return CompanionPrompt(system: system, turns: turns.isEmpty ? [Turn(speaker: .author, text: opened)] : turns)
     }
 

@@ -459,10 +459,10 @@ final class ConversationTests: XCTestCase {
         XCTAssertEqual(CompanionPrompt.plain(talk, page: "").system, "The writer has an untitled page open.")
         XCTAssertEqual(CompanionPrompt.plain(talk, world: "Tidewater").system,
                        "The writer is talking about their world \u{201C}Tidewater\u{201D} as a whole.")
-        // The author's own instructions, if any, after the line on what's open; alone when nothing is.
+        // The writer's instructions, if any, after the line on what's open; alone when nothing is.
         XCTAssertEqual(CompanionPrompt.plain(talk, page: "Ilsa", instructions: "Be brief.").system,
-                       "The writer has their page \u{201C}Ilsa\u{201D} open.\nBe brief.")
-        XCTAssertEqual(CompanionPrompt.plain(talk, instructions: " Be brief.\n").system, "Be brief.")
+                       "The writer has their page \u{201C}Ilsa\u{201D} open.\n\nThe writer's instructions for you:\nBe brief.")
+        XCTAssertEqual(CompanionPrompt.plain(talk, instructions: " Be brief.\n").system, "The writer's instructions for you:\nBe brief.")
         XCTAssertEqual(CompanionPrompt.plain(talk, page: "Ilsa", instructions: " ").system, "The writer has their page \u{201C}Ilsa\u{201D} open.")
     }
 }

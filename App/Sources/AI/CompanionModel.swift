@@ -45,8 +45,9 @@ extension CompanionModel {
 
 extension Reasoned {
     /// The reply as shown: its thoughts with its calls between them (in its collapsed
-    /// thinking), what it said, around its calls and after, and what it looked up.
-    static func shown(_ made: [GemmaChat.Search], _ lookups: [LookedUp], _ now: GemmaChat.Output) -> Reasoned {
+    /// thinking), what it said, around its calls and after, and what its `tools` looked up and
+    /// added to the writer's instructions.
+    static func shown(_ made: [GemmaChat.Search], _ tools: ReplyTools, _ now: GemmaChat.Output) -> Reasoned {
         var thoughts: [String] = [], said: [String] = []
         for call in made {
             thoughts.append(call.thought)
@@ -54,6 +55,7 @@ extension Reasoned {
             switch call.tool {
             case WebLookup.toolName: thoughts.append("Searched Wikipedia for \u{201C}\(query)\u{201D}.")
             case PageLookup.listToolName: thoughts.append(query.isEmpty ? "Listed your pages." : "Listed your pages: \u{201C}\(query)\u{201D}.")
+            case Instructions.toolName: thoughts.append("Added to your instructions: \u{201C}\(query)\u{201D}.")
             default: thoughts.append("Searched your pages for \u{201C}\(query)\u{201D}.")
             }
             said.append(call.said)
@@ -62,7 +64,8 @@ extension Reasoned {
         said.append(now.said)
         func joined(_ parts: [String]) -> String { parts.filter { !$0.isEmpty }.joined(separator: "\n\n") }
         return Reasoned(reasoning: joined(thoughts), reply: joined(said),
-                        searches: made.filter { $0.tool == PageLookup.toolName }.compactMap(\.query), lookups: lookups)
+                        searches: made.filter { $0.tool == PageLookup.toolName }.compactMap(\.query),
+                        lookups: tools.lookups, instructions: tools.instructions)
     }
 }
 
@@ -133,9 +136,9 @@ func replyWithTools(_ prompt: CompanionPrompt, tools: ReplyTools, thinking: Bool
     while true {
         let text = GemmaChat.prompt(system: prompt.system, turns: prompt.turns, searches: made, tools: offered, thinking: thinking)
         let inThought = thinking && !made.isEmpty   // after a call its thought is opened for it
-        let soFar = made, lookups = tools.lookups
+        let soFar = made, toolsSoFar = tools
         let done = try await pass(text, inThought) { output, reading in
-            let reply = Reasoned.shown(soFar, lookups, output)
+            let reply = Reasoned.shown(soFar, toolsSoFar, output)
             if reading == nil, firstWords == nil, !reply.reply.isEmpty { firstWords = ContinuousClock.now - began }
             continuation.yield(ReplySoFar(reply: reply, reading: reading))
         }
@@ -146,12 +149,12 @@ func replyWithTools(_ prompt: CompanionPrompt, tools: ReplyTools, thinking: Bool
             guard made.count < 3 else { (offered, made) = ([], []); continue }   // a fourth: without the tools
             var search = GemmaChat.Search(thought: output.thought, said: output.said, tool: call.name, query: call.query, found: "")
             // Shown as it's made: a look-up is what leaves the phone.
-            continuation.yield(ReplySoFar(reply: Reasoned.shown(made + [search], tools.lookups, GemmaChat.Output())))
+            continuation.yield(ReplySoFar(reply: Reasoned.shown(made + [search], tools, GemmaChat.Output())))
             search.found = await tools.answer(call.name, query: call.query) { try await WebLookup.lookUp($0) }
             made.append(search)
             continue
         }
-        let reply = Reasoned.shown(made, tools.lookups, output)
+        let reply = Reasoned.shown(made, tools, output)
         if !offered.isEmpty, reply.reply.isEmpty { (offered, made) = ([], []); continue }   // nothing said: once without the tools
         continuation.yield(ReplySoFar(reply: reply))
         // TRIAL: speed on the phone, pass by pass, and what's left.

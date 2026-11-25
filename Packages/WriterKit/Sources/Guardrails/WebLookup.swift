@@ -280,8 +280,9 @@ public enum WebLookup {
     }
 }
 
-/// them: `search_pages` (with `pages`) and `look_up` (when looking up is on), each within its
-/// budget for the reply. It never fails: what goes wrong is told to the model in a sentence.
+/// them: `search_pages` (with `pages`), `look_up` (when looking up is on) and `add_instruction`
+/// (when instructing), each within its budget for the reply. It never fails: what goes wrong is
+/// told to the model in a sentence.
 public struct ReplyTools: Sendable {
     /// What the model is offered, in the order the prompt declares them.
     public let offered: [GemmaChat.Tool]
@@ -292,16 +293,19 @@ public struct ReplyTools: Sendable {
     private var lookupsMade = 0
     /// What it looked up, and found, in order: what was sent to Wikipedia.
     public private(set) var lookups: [LookedUp] = []
+    /// The instructions it added to the writer's, in order (`Instructions`).
+    public private(set) var instructions: [String] = []
 
     /// - Parameter listing: `list_pages` is offered too (the plain model, which isn't shown their pages).
+    /// - Parameter instructing: `add_instruction` is offered too.
     /// - Parameter theirNames: what a look-up never sends (`WebLookup.theirNames`; by default
     ///   their pages' names and the names they wrote, none taken as words of the language).
-    public init(pages: PageLookup?, lookingUp: Bool, listing: Bool = false, theirNames: [String]? = nil) {
+    public init(pages: PageLookup?, lookingUp: Bool, listing: Bool = false, instructing: Bool = false, theirNames: [String]? = nil) {
         self.pages = pages
         searches = pages.map(PageLookup.Searches.init)
         names = theirNames ?? WebLookup.theirNames(pages: pages)
         offered = (pages == nil ? [] : (listing ? [GemmaChat.listPages] : []) + [GemmaChat.searchPages])
-            + (lookingUp ? [GemmaChat.lookUp] : [])
+            + (lookingUp ? [GemmaChat.lookUp] : []) + (instructing ? [GemmaChat.addInstruction] : [])
     }
 
     /// What it searched their pages for, in order.
@@ -312,6 +316,7 @@ public struct ReplyTools: Sendable {
                                 lookUp: (String) async throws -> (text: String, found: LookedUp)) async -> String {
         guard offered.contains(where: { $0.name == tool }) else { return "Tool not found: \(tool)" }
         if tool == PageLookup.listToolName { return pages?.list(query) ?? "Tool not found: \(tool)" }
+        if tool == Instructions.toolName { return addInstruction(query) }
         guard tool == WebLookup.toolName else { return searches?.answer(tool, query: query) ?? "Tool not found: \(tool)" }
         let query = (query ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return WebLookup.needsQuery }
@@ -325,5 +330,14 @@ public struct ReplyTools: Sendable {
         } catch {
             return WebLookup.unreachable
         }
+    }
+
+    /// Keeps `text` as an instruction to add, up to `Instructions.perReply` a reply.
+    private mutating func addInstruction(_ text: String?) -> String {
+        let text = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return Instructions.needsInstruction }
+        guard instructions.count < Instructions.perReply else { return Instructions.lastOne }
+        instructions.append(text)
+        return Instructions.added
     }
 }

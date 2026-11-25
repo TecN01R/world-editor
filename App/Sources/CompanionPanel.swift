@@ -128,9 +128,7 @@ struct CompanionPanel: View {
             if phase == .active, companion.state == .downloadPaused { resume() }
         }
         .sheet(isPresented: $showingChanges) { ChangesView().environment(library).environment(companion) }
-        #if DEBUG
         .sheet(isPresented: $editingInstructions) { CompanionInstructions().environment(companion) }
-        #endif
         .confirmationDialog("Start a new conversation about this page?", isPresented: $confirmingNew,
                             titleVisibility: .visible) {
             Button("New Conversation", role: .destructive) {
@@ -206,9 +204,18 @@ struct CompanionPanel: View {
                     guard versions.count > 1, abs(x) > 2 * abs(y) else { return }
                     show(x < 0 ? at + 1 : at - 1)
                 })
-            // What it looked up for this reply, under it.
+            // What it looked up for this reply, under it, and the instructions it added (opening them).
             ForEach(Array((turn.lookups?[turn.question] ?? []).enumerated()), id: \.offset) { _, lookup in
                 lookedUp(lookup)
+            }
+            ForEach(Array((turn.instructions?[turn.question] ?? []).enumerated()), id: \.offset) { _, instruction in
+                Button { editingInstructions = true } label: {
+                    Label("Added to Instructions: \u{201C}\(instruction)\u{201D}", systemImage: "text.badge.plus")
+                }
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .tint(.secondary)
+                .accessibilityHint("Opens your instructions for the companion")
             }
             if versions.count > 1 {
                 HStack(spacing: 0) {
@@ -592,9 +599,7 @@ struct CompanionPanel: View {
             Label("Look Things Up", systemImage: "globe")
             Text("On Wikipedia, for questions about the real world")
         }
-        #if DEBUG   // for trying the model out: debug builds only (Kevin, 2026-11-25)
         Button("Instructions…", systemImage: "text.document") { editingInstructions = true }
-        #endif
     }
 
     /// "World Editor 0.1.0 (1)".

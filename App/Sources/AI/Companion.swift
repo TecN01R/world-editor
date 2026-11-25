@@ -65,17 +65,15 @@ final class Companion {
 
     /// The companion is the model stock, with its tools (Kevin, 2026-11-25: "I want you to only
     /// run models stock from now on and only put stock models on my phone, with tools of
-    /// course"; no instruction at all, his choice over one on content of its own):
-    /// `CompanionPrompt.plain`, only the conversation and which page is open. In a debug build
-    /// the author can add instructions of their own (`CompanionInstructions`), kept on the
-    /// phone; nil for none. A release build never has any.
-    #if DEBUG
-    var instruction = UserDefaults.standard.string(forKey: "companionInstruction") {
-        didSet { UserDefaults.standard.set(instruction, forKey: "companionInstruction") }
+    /// course"): `CompanionPrompt.plain`, only the conversation and which page is open, and the
+    /// author's standing instructions (`Instructions`; Kevin: "keep the prompting but keep it
+    /// blank and the user can fill in instructions over time and the model can write its own
+    /// instructions based on what the user tells it to do"). Blank at first; the author edits
+    /// them (`CompanionInstructions`) and the model adds to them (`add_instruction`). One set for
+    /// every world, kept on the phone: they're about how it talks with the author.
+    var instructions = UserDefaults.standard.string(forKey: "companionInstruction") {
+        didSet { UserDefaults.standard.set(instructions, forKey: "companionInstruction") }
     }
-    #else
-    let instruction: String? = nil
-    #endif
 
     /// The reply Try Again took back, kept as a version of the next one, or put back if that fails.
     private var retracted: Conversation.Turn?
@@ -325,6 +323,7 @@ final class Companion {
         // A look-up never sends their names: their pages', and those they wrote, unless the
         // phone's dictionary knows the word (a real place's name).
         let tools = ReplyTools(pages: pageLookup, lookingUp: looksUp && pageLookup != nil, listing: true,
+                               instructing: model.canSearch,
                                theirNames: WebLookup.theirNames(pages: pageLookup, said: conversation.turns.compactMap(\.answer),
                                                                 known: Self.dictionary()))
         var reply = Reasoned(reply: "")
@@ -334,7 +333,7 @@ final class Companion {
             for room in [1, 2, 4] {
                 let prompt = CompanionPrompt.plain(conversation, page: isWorld ? nil : page.title,
                                                    world: isWorld ? library.world.name : nil,
-                                                   instructions: instruction,
+                                                   instructions: instructions,
                                                    maxTurnCharacters: 6000 / room)
                 do {
                     for try await partial in model.stream(prompt, tools: tools, thinking: thinks) {
@@ -362,7 +361,9 @@ final class Companion {
         trialLog("REPLY \(page.title): \(reply.reply)")   // TRIAL
         guard !reply.reply.isEmpty else { restoreRetracted(); state = .failed; return }   // ran out of room while thinking
         if modelVersion == nil { modelVersion = model.version }   // just downloaded
-        conversation.ask(reply.reply, after: retracted, searches: reply.searches, lookups: reply.lookups)
+        conversation.ask(reply.reply, after: retracted, searches: reply.searches, lookups: reply.lookups,
+                         instructions: reply.instructions)
+        if !reply.instructions.isEmpty { instructions = Instructions.adding(reply.instructions, to: instructions) }
         retracted = nil
         if !reply.reasoning.isEmpty { thoughts[reply.reply] = reply.reasoning }
         save()

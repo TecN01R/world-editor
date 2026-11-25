@@ -39,8 +39,16 @@ the whole world; then the conversation, with `list_pages`, `search_pages` and
 `look_up` declared in the model's own chat format (`CompanionPrompt.plain`,
 built in `Companion.ask`). No instructions, no examples, no pages in the
 prompt: it finds them with its tools. Sampling and the thinking cap are the
-model maker's (`docs/models.md`). In a debug build, Instructions… in the
-companion's menu lets the author add instructions of their own; none by
+
+**Instructions grow from the author** (Kevin, 2026-11-25: "keep the prompting
+but keep it blank and the user can fill in instructions over time and the model
+can write its own instructions based on what the user tells it to do"). The
+author's standing instructions (`Instructions`) are blank at first. They edit
+them in Instructions… in the companion's menu, and the companion adds one with
+a fourth tool, `add_instruction` (at most two a reply), when they tell it how
+to reply from now on. Shown in the prompt under "The writer's instructions for
+you:", after the line on what's open; "Added to Instructions: …" under the
+reply opens them. One set for every world, kept on the phone.
 
 **Until then** it had the full prompt below, which stays in WriterKit as the
 
@@ -483,6 +491,12 @@ to Calloway") leaves the old value, and the
 page's own writing isn't read.
 
 ## Changing it
+
+Kevin's method (2026-11-25): "Once we know how models react to our content
+stock we can use that as a baseline to see whether our instructions improve or
+harm it, tailored to each model." Each model is measured stock first
+instruction is then measured against that model's stock result, and kept only
+for the model it helps.
 
    `variants.py` that swaps it in for the app's.
    (`make_scenarios.py`; Kevin's own world adds more from the git-ignored

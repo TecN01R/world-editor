@@ -13,12 +13,17 @@ public struct Reasoned: Equatable, Sendable {
     /// What it looked up in the real world while replying, and found (`WebLookup`): shown as
     /// "Searched Wikipedia for …" under the reply, with its sources.
     public var lookups: [LookedUp]
+    /// The instructions it added to the writer's while replying (`Instructions`): shown as
+    /// "Added to Instructions: …" under the reply.
+    public var instructions: [String]
 
-    public init(reasoning: String = "", reply: String = "", searches: [String] = [], lookups: [LookedUp] = []) {
+    public init(reasoning: String = "", reply: String = "", searches: [String] = [], lookups: [LookedUp] = [],
+                instructions: [String] = []) {
         self.reasoning = reasoning
         self.reply = reply
         self.searches = searches
         self.lookups = lookups
+        self.instructions = instructions
     }
 
     /// Gemma 4's output, whole or so far: `<|channel>thought\n…<channel|>reply`

@@ -108,6 +108,18 @@ final class ConversationVersionsTests: XCTestCase {
         let old = Data(#"{"page":"\#(UUID())","turns":[{"id":"\#(UUID())","question":"Hi","asked":0}]}"#.utf8)
         XCTAssertNil(try JSONDecoder().decode(Conversation.self, from: old).turns[0].lookups)
     }
+
+    /// The instructions a reply added to the writer's stay with that reply, as its look-ups do.
+    func testEachReplyKeepsTheInstructionsItAdded() throws {
+        var talk = Conversation(page: UUID())
+        talk.ask("A", instructions: ["Keep it short."])
+        talk.ask("B", after: try XCTUnwrap(talk.retract()))
+        XCTAssertEqual(talk.turns[0].instructions, ["A": ["Keep it short."]])
+        let saved = try JSONDecoder().decode(Conversation.self, from: JSONEncoder().encode(talk))
+        XCTAssertEqual(saved.turns[0].instructions, talk.turns[0].instructions)
+        talk.delete("A", in: talk.turns[0].id)
+        XCTAssertNil(talk.turns[0].instructions)
+    }
 }
 
 /// The world's conversations: marked, titled by the author's first words, dated by the last turn.

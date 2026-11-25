@@ -10,22 +10,25 @@ import Foundation
 /// Everything put in is plain already: the app's texts through `Reasoned.gemmaPlain`, and
 /// `PageLookup.results`, so typed control tokens stay words.
 public enum GemmaChat {
-    /// A tool the model is offered, with one argument, `query`, which isn't required (as the
+    /// A tool the model is offered, with one argument (`query`, unless it says otherwise), which
     public struct Tool: Equatable, Sendable {
         public var name: String
         public var description: String
         /// The guide of its argument.
         public var queryGuide: String
+        /// Its argument's name.
+        public var argument: String
 
-        public init(name: String, description: String, queryGuide: String) {
+        public init(name: String, description: String, queryGuide: String, argument: String = "query") {
             self.name = name
             self.description = description
             self.queryGuide = queryGuide
+            self.argument = argument
         }
 
         /// It as the template declares it.
         var declaration: String {
-            "declaration:\(name){description:" + quoted(description) + ",parameters:{properties:{query:{description:"
+            "declaration:\(name){description:" + quoted(description) + ",parameters:{properties:{\(argument):{description:"
                 + quoted(queryGuide) + ",type:" + quoted("STRING") + "}},type:" + quoted("OBJECT") + "}}"
         }
     }
@@ -39,6 +42,9 @@ public enum GemmaChat {
     /// Looks up the real world (`WebLookup`).
     public static let lookUp = Tool(name: WebLookup.toolName, description: WebLookup.toolDescription,
                                     queryGuide: WebLookup.queryGuide)
+    /// Adds to the writer's standing instructions (`Instructions`).
+    public static let addInstruction = Tool(name: Instructions.toolName, description: Instructions.toolDescription,
+                                            queryGuide: Instructions.argumentGuide, argument: Instructions.argument)
 
     /// A call the model made while writing the reply: what it thought and said before it,
     /// which tool it called and with what, and what came back. Replayed in the prompt for the
@@ -83,7 +89,8 @@ public enum GemmaChat {
         guard let last = searches.last else { return text }
         for search in searches {
             if !search.thought.isEmpty { text += "<|channel>thought\n" + search.thought + "\n<channel|>" }
-            text += withoutThoughts(search.said) + call(search.tool, search.query)
+            let argument = tools.first { $0.name == search.tool }?.argument ?? "query"
+            text += withoutThoughts(search.said) + call(search.tool, argument, search.query)
                 + "<|tool_response>response:\(search.tool){value:" + quoted(search.found) + "}<tool_response|>"
         }
         // The template ends the model's turn after a call only when it said something before
@@ -95,8 +102,8 @@ public enum GemmaChat {
     /// The model's thought channel opened: the end of a prompt where it goes on thinking.
     public static let thoughtOpened = "<|channel>thought\n"
 
-    private static func call(_ tool: String, _ query: String?) -> String {
-        "<|tool_call>call:\(tool){" + (query.map { "query:" + quoted($0) } ?? "") + "}<tool_call|>"
+    private static func call(_ tool: String, _ argument: String, _ query: String?) -> String {
+        "<|tool_call>call:\(tool){" + (query.map { argument + ":" + quoted($0) } ?? "") + "}<tool_call|>"
     }
 
     /// The chat format's quotation mark, around every string it holds.
@@ -170,8 +177,8 @@ public enum GemmaChat {
         return output
     }
 
-    /// `call:name{query:<|"|>…<|"|>}`: the name, and the query (quoted, or bare up to a
-    /// comma or the closing brace).
+    /// `call:name{query:<|"|>…<|"|>}`: the name, and its argument, whatever it's called (quoted,
+    /// or bare up to a comma or the closing brace).
     private static func parseCall(_ text: Substring) -> (name: String, query: String?) {
         var text = text
         if text.hasPrefix("call:") { text = text.dropFirst("call:".count) }
@@ -179,8 +186,8 @@ public enum GemmaChat {
         let name = trimmed(text[..<brace])
         var arguments = text[brace...].dropFirst()
         if arguments.hasSuffix("}") { arguments = arguments.dropLast() }
-        guard let key = arguments.range(of: "query:") else { return (name, nil) }
-        var value = arguments[key.upperBound...]
+        guard let colon = arguments.firstIndex(of: ":") else { return (name, nil) }
+        var value = arguments[arguments.index(after: colon)...]
         if value.hasPrefix(quote) {
             value = value.dropFirst(quote.count)
             return (name, String(value.range(of: quote).map { value[..<$0.lowerBound] } ?? value))

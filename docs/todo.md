@@ -9,7 +9,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Rotation crash: check it's gone
 
 ## Check on the phone
-- [ ] The companion is the model stock now, with its tools and no instructions (Kevin, 2026-11-25); Instructions… (debug) adds your own, none by default
+- [ ] The companion is the model stock now, with its tools (Kevin, 2026-11-25). Instructions… in its menu, blank at first: write your own, or tell it how to reply from now on and it adds one ("Added to Instructions: …" under the reply opens them)
 - [ ] More memory for the app (Kevin, 2026-11-25: "Yes" to the patched xtool): installed from d7a1eed on; the companion's next LOAD line should show about 5.8 GB left instead of 3.4
 - [ ] Wikipedia look-ups: ask a real-world question it might not know; "Searched Wikipedia for …" under the reply opens the articles; Look Things Up in the menu turns it off (Kevin, 2026-11-25)
 - [ ] The new companion model, Nemotron 3.5 Bolt (Kevin, 2026-11-25: "Yes"): downloaded, loads and replies, 26B freed (seen in the log). Left: how the replies feel, a search shown in its thinking

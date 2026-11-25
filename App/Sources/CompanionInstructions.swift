@@ -1,32 +1,32 @@
-#if DEBUG
 import SwiftUI
 
-/// Instructions of the author's own for the companion (Kevin, 2026-11-25: "a settings panel for
-/// me to modify instructions myself"; debug builds only), from the companion's menu: iOS's own
-/// form and text editor. None by default: the companion is the model stock (Kevin, 2026-11-25).
-/// What's shown at first is what the companion reads now; Done keeps it, from the next reply on;
-/// Clear goes back to none.
+/// The author's standing instructions for the companion (`Instructions`; Kevin, 2026-11-25:
+/// "keep the prompting but keep it blank and the user can fill in instructions over time"), from
+/// the companion's menu or the note under a reply that added one: iOS's own form and text
+/// editor. Blank at first, so the model runs stock; the companion adds to them when the author
+/// tells it how to reply. What's shown is what it reads now; Done keeps it, from the next reply
+/// on; Clear empties it.
 struct CompanionInstructions: View {
     @Environment(Companion.self) private var companion
     @Environment(\.dismiss) private var dismiss
-    @State private var instruction = ""
+    @State private var instructions = ""
     @State private var loaded = false
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    TextEditor(text: $instruction)
+                    TextEditor(text: $instructions)
                         .frame(minHeight: 240)
                         .accessibilityLabel("Instructions")
                 } header: {
                     Text("Instructions")
                 } footer: {
-                    Text("None by default: the companion is the model as its maker ships it. Anything here is read before every reply. Whatever it says, it can’t write into your pages.")
+                    Text("The companion reads these before every reply, and adds to them when you tell it how to reply from now on. Blank, it’s the model as its maker ships it.")
                 }
                 Section {
-                    Button("Clear", role: .destructive) { instruction = "" }
-                        .disabled(instruction.isEmpty)
+                    Button("Clear", role: .destructive) { instructions = "" }
+                        .disabled(instructions.isEmpty)
                 }
             }
             .navigationTitle("Companion Instructions")
@@ -36,18 +36,17 @@ struct CompanionInstructions: View {
                 ToolbarItem(placement: .confirmationAction) { Button("Done", systemImage: "checkmark", action: save) }
             }
         }
-        .interactiveDismissDisabled(loaded && instruction != (companion.instruction ?? ""))   // a swipe doesn't throw away what's typed
+        .interactiveDismissDisabled(loaded && instructions != (companion.instructions ?? ""))   // a swipe doesn't throw away what's typed
         .onAppear {
             guard !loaded else { return }
             loaded = true
-            instruction = companion.instruction ?? ""
+            instructions = companion.instructions ?? ""
         }
     }
 
     private func save() {
-        let text = instruction.trimmingCharacters(in: .whitespacesAndNewlines)
-        companion.instruction = text.isEmpty ? nil : text
+        let text = instructions.trimmingCharacters(in: .whitespacesAndNewlines)
+        companion.instructions = text.isEmpty ? nil : text
         dismiss()
     }
 }
-#endif
