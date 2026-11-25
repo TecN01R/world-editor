@@ -32,7 +32,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - One model, for every iPhone from the 15 Pro on (≈6 GB app budget, whatever the RAM) and Android phones with 12 GB+; 8 GB Androids get no companion (Kevin, 2026-11-24). Budget: ≤4–4.5 GB of the app's own memory, ≤5–5.5 GB resident with the weights
 - [ ] 3 Benchmark mode on the Duo, held to an 8 GB phone's memory
 - [ ] 4 iOS: the one model, offered where the phone's memory allows it
-- [ ] Speed floor for the weakest phone: Kevin to set, from the report's numbers
+- [ ] Speed floor (Kevin, 2026-11-24): about reading speed once it starts writing, ~6 tokens/s, on the weakest phone (the iPhone 15 Pro). The 26B writes ~7 on the Duo; the 15 Pro is unmeasured
 - [ ] Requirement (Kevin, 2026-11-24): each conversation's model cache saved to storage and restored, so coming back (even after the model was unloaded) doesn't read the whole prompt again; the chosen engine must support it (llama.cpp and MLX do; the 26B's TurboFieldfare doesn't)
 - [ ] Android app: later, its own native project
 
