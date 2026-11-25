@@ -9,6 +9,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Rotation crash: check it's gone
 
 ## Check on the phone
+- [ ] More memory for the app (Kevin, 2026-11-25: "Yes" to the patched xtool): installed from d7a1eed on; the companion's next LOAD line should show about 5.8 GB left instead of 3.4
 - [ ] Wikipedia look-ups: ask a real-world question it might not know; "Searched Wikipedia for …" under the reply opens the articles; Look Things Up in the menu turns it off (Kevin, 2026-11-25)
 - [ ] Plain Model (debug builds): the tools, and which page is open (Kevin, 2026-11-25)
 - [ ] Instructions… in the companion's menu (debug builds only): your own instructions and examples, Restore Defaults (Kevin, 2026-11-25)
