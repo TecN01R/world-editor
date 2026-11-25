@@ -11,6 +11,8 @@ it's on the phone and checked, or answered; git history keeps what's done.
 ## Check on the phone
 - [ ] Type and field names in San Francisco everywhere; values stay New York (Kevin, 2026-11-24)
 - [ ] Empty fields hidden; Add Field's menu lists them, and one picked shows ready to fill in (Kevin, 2026-11-24)
+- [ ] Back from the app switcher with the companion open unfolded: the page keeps its normal margins
+- [ ] The companion's button after unfolding (asked for again once the fold settles)
 
 ## Stock-first audit (plan approved 2026-11-24): batches
 - [ ] 1 Data safety and filing accuracy (pushed 5931105; waiting for the phone)
