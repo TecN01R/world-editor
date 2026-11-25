@@ -77,7 +77,7 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
     /// A reply with its tools (`replyWithTools`), each pass of the model on llama.cpp.
     func stream(_ prompt: CompanionPrompt, tools: ReplyTools, thinking: Bool) -> AsyncThrowingStream<ReplySoFar, Error> {
         streaming { continuation in
-            try await replyWithTools(prompt, tools: tools, thinking: thinking, template: .nemotron, model: Self.name,
+            try await replyWithTools(prompt, tools: tools, thinking: thinking, model: Self.name,
                                      state: Engine.state, to: continuation) { text, inThought, show in
                 let pass = Pass()
                 let run = try await Self.again(pass) {

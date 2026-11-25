@@ -108,22 +108,11 @@ final class Companion {
 
     // The one model the companion uses (Kevin: one model, no choosing, as when it
     // ships): Nemotron 3.5 Bolt, set in `init`, wherever llama.cpp is; Apple's
-    // model elsewhere. A debug build can try the 26B in its place (`tries26B`).
+    // model elsewhere.
     #if canImport(llama)
-    private(set) var modelName = LlamaModel.name
+    static let modelName = LlamaModel.name
     #else
-    let modelName = "Apple's on-device model"   // the simulator: llama.cpp's framework has no build for it
-    #endif
-    #if DEBUG && canImport(TurboFieldfare)
-    /// TRIAL (Kevin, 2026-11-25: "didn't we want to test the 26B with the newer much higher
-    /// memory limit?"): Gemma 4 26B in place of Nemotron, to compare the two on the phone. Debug
-    /// builds only. Each model keeps its own download, so switching back costs nothing.
-    var tries26B = UserDefaults.standard.bool(forKey: "companionTries26B") {
-        didSet {
-            UserDefaults.standard.set(tries26B, forKey: "companionTries26B")
-            useChosenModel()
-        }
-    }
+    static let modelName = "Apple's on-device model"   // the simulator: llama.cpp's framework has no build for it
     #endif
     /// The model isn't on the phone, and the author hasn't asked for it yet:
     /// the companion offers the download and does nothing else until then.
@@ -131,8 +120,6 @@ final class Companion {
     /// The size of that download, once known.
     private(set) var downloadSize: Int64?
     private var model: any CompanionModel = AppleModel()
-    /// Where the model reports its download's progress (`init`).
-    private var report: AsyncStream<Download?>.Continuation?
     private var store: ConversationStore?
     private var preparing: Task<Void, Never>?
     /// Counts asks, so one dropped for a newer one knows it.
@@ -165,8 +152,7 @@ final class Companion {
         // each in a task of its own could come out of order, and a late one after the end
         // started the Live Activity again.
         let (progress, report) = AsyncStream<Download?>.makeStream(bufferingPolicy: .bufferingNewest(1))
-        self.report = report
-        (model, modelName) = chosenModel()
+        model = LlamaModel { report.yield($0) }
         Task { [weak self] in
             for await download in progress {
                 self?.download = download
@@ -183,33 +169,6 @@ final class Companion {
             offerDownload()
         }
     }
-
-    #if canImport(llama)
-    /// The model the companion uses, and its name: Nemotron, or the 26B on trial.
-    private func chosenModel() -> (any CompanionModel, String) {
-        let report = report
-        let onProgress: @Sendable (Download?) -> Void = { report?.yield($0) }
-        #if DEBUG && canImport(TurboFieldfare)
-        if tries26B { return (TurboModel(onProgress: onProgress), TurboModel.name) }
-        #endif
-        return (LlamaModel(onProgress: onProgress), LlamaModel.name)
-    }
-    #endif
-
-    #if DEBUG && canImport(TurboFieldfare)
-    /// Puts the model just chosen in place of the last: what the last was doing stops (a reply
-    /// on the way, filing), and the next reply reads its whole prompt afresh. Its download is
-    /// offered if it isn't on the phone. (Not while a download runs: the menu doesn't offer it.)
-    private func useChosenModel() {
-        preparing?.cancel()
-        stopFiling()
-        background = nil
-        state = .idle
-        (model, modelName) = chosenModel()
-        modelVersion = model.version
-        if model.isInstalled { needsDownload = false } else { offerDownload() }
-    }
-    #endif
 
     /// The author asked for the model: download it, then reply about the page open
     /// by then. Also resumes a download that lost its connection. The download is a

@@ -118,7 +118,7 @@ struct PassDone {
 /// thought), showing what it has written so far and, while it reads, how much of the prompt
 /// it has read (0 to 1). `model` and `state`: its name, and the memory and heat, for the
 /// TRIAL log.
-func replyWithTools(_ prompt: CompanionPrompt, tools: ReplyTools, thinking: Bool, template: GemmaChat.Template,
+func replyWithTools(_ prompt: CompanionPrompt, tools: ReplyTools, thinking: Bool,
                     model name: String, state: @autoclosure () -> String,
                     to continuation: AsyncThrowingStream<ReplySoFar, Error>.Continuation,
                     pass: (_ text: String, _ inThought: Bool,
@@ -131,10 +131,8 @@ func replyWithTools(_ prompt: CompanionPrompt, tools: ReplyTools, thinking: Bool
     var firstWords: Duration?
     var resumed = 0
     while true {
-        let text = GemmaChat.prompt(system: prompt.system, turns: prompt.turns, searches: made, tools: offered,
-                                    thinking: thinking, template: template)
-        // After a call Nemotron's template opens its thought for it; Google's leaves that to the model.
-        let inThought = template == .nemotron && thinking && !made.isEmpty
+        let text = GemmaChat.prompt(system: prompt.system, turns: prompt.turns, searches: made, tools: offered, thinking: thinking)
+        let inThought = thinking && !made.isEmpty   // after a call its thought is opened for it
         let soFar = made, lookups = tools.lookups
         let done = try await pass(text, inThought) { output, reading in
             let reply = Reasoned.shown(soFar, lookups, output)

@@ -46,7 +46,7 @@ final class GemmaChatTests: XCTestCase {
 
     /// The fixture's messages as the app holds them: the conversation's turns, then the searches
     /// the reply being written has made (an assistant message with a call, and the tool's answer).
-    private func render(_ c: Fixture.Case, template: GemmaChat.Template = .nemotron) throws -> String {
+    private func render(_ c: Fixture.Case) throws -> String {
         var turns: [CompanionPrompt.Turn] = [], searches: [GemmaChat.Search] = []
         for (i, message) in c.messages.enumerated() {
             switch message.role {
@@ -61,8 +61,7 @@ final class GemmaChatTests: XCTestCase {
             }
         }
         let tools = try c.tools.map { name in try XCTUnwrap(appTools.first { $0.name == name }) }
-        return GemmaChat.prompt(system: c.system, turns: turns, searches: searches, tools: tools, thinking: c.thinking,
-                                template: template)
+        return GemmaChat.prompt(system: c.system, turns: turns, searches: searches, tools: tools, thinking: c.thinking)
     }
 
     func testEveryCaseRendersAsTheModelsTemplateDoes() throws {
@@ -71,26 +70,6 @@ final class GemmaChatTests: XCTestCase {
         for c in fixture.cases {
             XCTAssertEqual(try render(c), c.prompt, c.name)
         }
-    }
-
-    /// The 26B's prompt (TRIAL), as Google's own Gemma 4 template renders it: the same cases
-    /// through its file's chat_template.jinja (Jinja, 2026-11-25) came out as Nemotron's but for
-    /// where the model's turn is left. Without thinking an empty thought is opened; after a call
-    /// it stops at the call's answer. Words said before a call stay before it, as written.
-    func testGooglesTemplateForThe26BLeavesTheTurnWhereGooglesDoes() throws {
-        let fixture = try fixture()
-        for c in fixture.cases where c.name != "said-then-search" {
-            var expected = c.prompt
-            if expected.hasSuffix("<tool_response|>" + GemmaChat.thoughtOpened) {
-                expected.removeLast(GemmaChat.thoughtOpened.count)
-            } else if !c.thinking {
-                expected += GemmaChat.thoughtOpened + "<channel|>"
-            }
-            XCTAssertEqual(try render(c, template: .gemma4), expected, c.name)
-        }
-        let said = try render(XCTUnwrap(fixture.cases.first { $0.name == "said-then-search" }), template: .gemma4)
-        XCTAssertTrue(said.contains("<channel|>Let me look.<|tool_call>call:search_pages"))
-        XCTAssertTrue(said.hasSuffix("mentions “Regent”.<|\"|>}<tool_response|>"))
     }
 
     /// The fixture was rendered with the tools' texts as they are: changing them means

@@ -83,7 +83,6 @@ jobs:
         # for a device, as xtool does (llama.cpp's framework has no simulator build).
         run: |
           scripts/fetch-llama.sh
-          scripts/fetch-turbo-fieldfare.sh
           rm -rf WorldEditor.xcodeproj
           xcodebuild build -scheme WorldEditor -destination 'generic/platform=iOS' \
             -derivedDataPath build-spm -skipPackagePluginValidation -skipMacroValidation \

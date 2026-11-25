@@ -34,7 +34,7 @@ while true; do
           log "Installing ${head:0:7}: $(git log -1 --format=%s "$head")"
           if ! git merge --ff-only --quiet origin/main; then
             log "Can't fast-forward (local changes or commits here?); not installing."
-          elif scripts/fetch-llama.sh && scripts/fetch-turbo-fieldfare.sh && timeout 900 xtool dev; then deployed="$head"; log "Installed."
+          elif scripts/fetch-llama.sh && timeout 900 xtool dev; then deployed="$head"; log "Installed."
           else log "Install failed (is the phone awake and on the same Wi-Fi?); retrying next round."; fi ;;
         failure) log "Skipping ${head:0:7}: CI failed."; deployed="$head" ;;
         pending) ;;   # wait for CI
