@@ -57,6 +57,23 @@ for an even faster more powerful model". Its download, TurboFieldfare's
 installer, had also refused it at first: that installer counted only empty
 space, not what iOS clears for a download (6.8 GB of 70).
 
+each model stock with its maker's sampling and the app's four tools; speeds on this PC's GPU):
+
+| | Score | Poor | Invented | Pointless question | Reply words | Time a reply | Writes |
+|---|---|---|---|---|---|---|---|
+| Nemotron, the old instructions and page background (thinking cap 128) | 6.19 | 18% | 1% | 5% | 16 | 4.6 s | 37 tok/s |
+| Nemotron stock, thinking cap 128 | 4.26 | 58% | 5% | 35% | 46 | 10.1 s | 30 tok/s |
+| Nemotron stock, cap 256 | 4.30 | 57% | 9% | 31% | 47 | 13.8 s | 31 tok/s |
+| Nemotron stock, uncapped | 4.28 | 61% | 7% | 39% | 42 | 14.6 s | 30 tok/s |
+| Ling-3.0-tiny stock (inclusionAI, uncapped, its default) | 2.96 | 77% | 30% | 30% | 78 | 8.2 s | 58 tok/s |
+
+Ling writes twice as fast but scores far lower (it invents in 30% of replies, writes
+unasked in 14%, mixes up who's who in 19%): faster, not smarter, so not a win. Nemotron's
+thinking cap changes nothing measurable, so 128 stays: NVIDIA's own setting, the fastest at
+the same quality. Stock is Nemotron's baseline (Kevin's method, docs/companion.md); the old
+prompt scored higher against it, but it differs in more than its instructions (the pages in
+the prompt, Gemma's top-k), so its parts are to be measured one at a time.
+
 **Nemotron 3.5 Bolt E4B is the companion's model** (Kevin, 2026-11-25: "Yes",
 after the shortlist for 8 GB+ iPhones). NVIDIA post-trained it from Gemma 4
 conversations, today's instructions and search_pages) it scored 5.57 out of

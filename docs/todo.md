@@ -34,6 +34,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 
 ## A companion for 8 GB+ phones, not just the Duo (Kevin, 2026-11-24; plan approved)
 - One model, for every iPhone from the 15 Pro on (≈6 GB app budget, whatever the RAM) and Android phones with 12 GB+; 8 GB Androids get no companion (Kevin, 2026-11-24). Budget: ≤4–4.5 GB of the app's own memory, ≤5–5.5 GB resident with the weights
+- [ ] Search again for a faster, stronger model than Nemotron (Kevin, 2026-11-25, after dropping the 26B again): the search found nothing faster AND stronger; Ling-3.0-tiny tried stock (2026-11-25): twice as fast, far weaker (2.96 vs Nemotron's 4.3 stock), so not a win (docs/models.md). The bar (Kevin): faster AND stronger; slower or smaller isn't a win; models run stock, community builds are fine
 - [ ] 3 Benchmark mode on the Duo, held to an 8 GB phone's memory
 - [ ] 4 iOS: the one model, offered where the phone's memory allows it
 - [ ] Speed floor (Kevin, 2026-11-24): about reading speed once it starts writing, ~6 tokens/s, on the weakest phone (the iPhone 15 Pro); no saved cache ("I'm not taking more space"), so reading the prompt has to be fast too. Nemotron on the Duo, first reply (2026-11-25): writes 23 tokens/s, reads 1,400 tokens/s, first words 7.4 s with the load (3.3 s); memory 3.1 GB left to the app. The 15 Pro is still to measure
@@ -49,6 +50,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Live Activity: does tapping it reach the app? If never, our own Live Activity
 
 ## Later
+- [ ] Image generation on the phone (Kevin, 2026-11-25): one model that does tools and images, or a separate image model to download; research running
 - [ ] Spotlight finds every world's pages
 - [ ] Swift 6 language mode
 - [ ] Replies keep running in the background (continued processing with the GPU)
