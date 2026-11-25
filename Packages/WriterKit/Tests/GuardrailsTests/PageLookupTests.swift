@@ -467,4 +467,16 @@ final class PageLookupTests: XCTestCase {
         XCTAssertEqual(searches.answer("look_up", query: "Ilsa"), "Tool not found: look_up")
         XCTAssertEqual(searches.queries, ["Kestrel", "Port Vell", "Ilsa"])
     }
+
+    /// A type asked for by its plural, or by itself, lists its pages (types weren't searched).
+    func testATypeAskedForListsItsPages() {
+        let lookup = world().lookup
+        let characters = lookup.results(for: "who are my characters")
+        XCTAssertTrue(characters.hasPrefix("Their Character pages (4):\n- Draven (Character): Captain of the Kestrel."), characters)
+        XCTAssertTrue(characters.contains("- Ilsa (Character)") && characters.contains("- Kai (Character)"))
+        XCTAssertTrue(lookup.results(for: "Character").hasPrefix("Their Character pages (4):"))
+        XCTAssertTrue(lookup.results(for: "places").hasPrefix("Their Place pages (1):\n- Port Vell (Place)"))
+        XCTAssertFalse(lookup.results(for: "what place is she from").contains("Their Place pages"))
+        XCTAssertFalse(lookup.results(for: "Ilsa").contains("Their Character pages"))   // a page named comes first
+    }
 }

@@ -136,6 +136,12 @@ public struct PageLookup: Sendable {
             return Self.assemble(head: describe(first, answering: terms, maxCharacters: 900), pages: lines,
                                  heading: "Also on their pages:", said: said, maxCharacters: Self.maxCharacters)
         }
+        // A type asked for ("characters", or "Character" alone): its pages, then what else matched.
+        if let (type, ofType) = typed(query) {
+            let others = lines.enumerated().filter { !ofType.contains(hits[$0.offset].page) }.map(\.element)
+            return Self.assemble(head: ["Their \(type) pages (\(ofType.count)):"] + ofType.map(listLine),
+                                 pages: others, heading: "Also on their pages:", said: said, maxCharacters: Self.maxCharacters)
+        }
         guard !hits.isEmpty || !said.isEmpty else { return Reasoned.gemmaPlain(Self.nothingFound(query)) }
         return Self.assemble(head: [], pages: lines,
                              heading: "Their pages, for \u{201C}\(CompanionPrompt.oneLine(query, maxCharacters: 80))\u{201D}:",
@@ -232,6 +238,33 @@ public struct PageLookup: Sendable {
             }
         }
         return named
+    }
+
+    /// The pages of a type `query` asks for, newest first: by the type's plural anywhere in it
+    /// ("who are my characters"), or by its name alone ("Character"); a type's name inside a
+    /// sentence ("what place is she from") isn't asking for the list (Kevin, 2026-11-25: a
+    /// search for "characters" found nothing, as types weren't searched).
+    private func typed(_ query: String) -> (type: String, pages: [Int])? {
+        let words = Self.words(query).map(\.word)
+        for type in Set(pages.compactMap(\.type)).sorted() {
+            let name = Self.words(type).map(\.word)
+            guard let last = name.last else { continue }
+            let plurals = Self.numberForms(last).filter { $0.count > last.count }.map { Array(name.dropLast()) + [$0] }
+            let asked = words == name || plurals.contains { plural in
+                words.count >= plural.count && (0...(words.count - plural.count)).contains { Array(words[$0..<$0 + plural.count]) == plural }
+            }
+            guard asked else { continue }
+            let ofType = pages.indices.filter { pages[$0].type == type }.sorted { pages[$0].modified > pages[$1].modified }
+            return ofType.isEmpty ? nil : (type, ofType)
+        }
+        return nil
+    }
+
+    /// A page as a list shows it: "- Name (Type): how it opens".
+    private func listLine(_ p: Int) -> String {
+        let page = pages[p]
+        let opening = page.paragraphs.first.map { ": " + CompanionPrompt.oneLine($0.text, maxCharacters: 100) } ?? ""
+        return "- " + (page.heading.isEmpty ? "Untitled" : page.heading) + (page.type.map { " (\($0))" } ?? "") + opening
     }
 
     /// `named`, those whose passages rank highest in `match` first, then as they were.
@@ -565,8 +598,7 @@ extension PageLookup {
         }
         var text = heading
         for (n, page) in shown.enumerated() {
-            let opening = page.paragraphs.first.map { ": " + CompanionPrompt.oneLine($0.text, maxCharacters: 100) } ?? ""
-            let line = "\n- " + (page.heading.isEmpty ? "Untitled" : page.heading) + (page.type.map { " (\($0))" } ?? "") + opening
+            let line = "\n" + listLine(pages.firstIndex { $0.id == page.id }!)
             guard text.count + line.count <= Self.maxCharacters - 60 else {
                 text += "\n…and \(shown.count - n) more (search_pages finds what's on them)."
                 break
