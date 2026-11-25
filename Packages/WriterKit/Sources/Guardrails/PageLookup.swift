@@ -533,6 +533,50 @@ public struct PageLookup: Sendable {
     }
 }
 
+// MARK: - Listing their pages
+
+extension PageLookup {
+    /// `list_pages`, for the plain model (Kevin, 2026-11-25: with no pages in its prompt, a
+    /// question like "what can you tell me about my world?" gave search_pages nothing to look
+    /// for): their pages by name, with each one's type and how it opens.
+    public static let listToolName = "list_pages"
+    public static let listToolDescription = "Lists the writer's pages by name, with each one's type and how it opens. "
+        + "Give a type (such as Character or Place) to list only those, or nothing to list them all."
+    public static let listQueryGuide = "A type of page to list, or nothing for all of them"
+
+    /// Their pages, newest first, a line each, at most `maxCharacters`: those of the type
+    /// `query` names (or whose names have its words), or all of them when it names none.
+    public func list(_ query: String?) -> String {
+        let live = pages.sorted { $0.modified > $1.modified }
+        guard !live.isEmpty else { return "They have no pages yet." }
+        let wanted = Self.terms(query ?? "", leavingOut: Self.stopwords).flatMap { $0 }
+            .flatMap { [$0] + Self.numberForms($0) }
+        let ofType = live.filter { page in Self.words(page.type ?? "").contains { wanted.contains($0.word) } }
+        let named = live.filter { page in   // a name's words as they begin: "salt" finds Saltmarsh
+            Self.words(page.heading).contains { word in wanted.contains { $0.count >= 3 && word.word.hasPrefix($0) } }
+        }
+        let (shown, heading): ([Page], String)
+        if !wanted.isEmpty, !ofType.isEmpty {
+            (shown, heading) = (ofType, "Their pages of that type (\(ofType.count)):")
+        } else if !wanted.isEmpty, !named.isEmpty {
+            (shown, heading) = (named, "Their pages with that in the name (\(named.count)):")
+        } else {
+            (shown, heading) = (live, "Their pages (\(live.count)):")
+        }
+        var text = heading
+        for (n, page) in shown.enumerated() {
+            let opening = page.paragraphs.first.map { ": " + CompanionPrompt.oneLine($0.text, maxCharacters: 100) } ?? ""
+            let line = "\n- " + (page.heading.isEmpty ? "Untitled" : page.heading) + (page.type.map { " (\($0))" } ?? "") + opening
+            guard text.count + line.count <= Self.maxCharacters - 60 else {
+                text += "\n…and \(shown.count - n) more (search_pages finds what's on them)."
+                break
+            }
+            text += line
+        }
+        return Reasoned.gemmaPlain(text)
+    }
+}
+
 // MARK: - Searching within a reply
 
 extension PageLookup {

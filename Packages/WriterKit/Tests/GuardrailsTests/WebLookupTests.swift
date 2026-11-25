@@ -143,6 +143,23 @@ final class WebLookupTests: XCTestCase {
         XCTAssertEqual(tools.queries, ["Ilsa"])
     }
 
+    /// The plain model can list their pages: all of them, or one type's.
+    func testThePlainModelCanListTheirPages() async {
+        let pages = PageLookup(pages: [
+            .init(heading: "Wren Hollis", type: "Character", paragraphs: [(UUID(), "A courier, seventeen.")], modified: Date(timeIntervalSince1970: 2)),
+            .init(heading: "Saltmarsh", type: "Place", paragraphs: [(UUID(), "Flat, grey, wet.")], modified: Date(timeIntervalSince1970: 1)),
+        ])
+        var tools = ReplyTools(pages: pages, lookingUp: true, listing: true)
+        XCTAssertEqual(tools.offered.map(\.name), ["list_pages", "search_pages", "look_up"])
+        XCTAssertEqual(ReplyTools(pages: pages, lookingUp: false).offered.map(\.name), ["search_pages"])
+        let all = await tools.answer("list_pages", query: nil) { _ in XCTFail("sent"); throw URLError(.badURL) }
+        XCTAssertEqual(all, "Their pages (2):\n- Wren Hollis (Character): A courier, seventeen.\n- Saltmarsh (Place): Flat, grey, wet.")
+        XCTAssertEqual(pages.list("characters"), "Their pages of that type (1):\n- Wren Hollis (Character): A courier, seventeen.")
+        XCTAssertEqual(pages.list("salt"), "Their pages with that in the name (1):\n- Saltmarsh (Place): Flat, grey, wet.")
+        XCTAssertTrue(pages.list("dragons").hasPrefix("Their pages (2):"))
+        XCTAssertEqual(PageLookup(pages: []).list(nil), "They have no pages yet.")
+    }
+
     func testWithLookingUpOffItIsNoToolOfItsAndAFailureIsSaid() async {
         var off = ReplyTools(pages: pages(), lookingUp: false)
         XCTAssertEqual(off.offered.map(\.name), ["search_pages"])

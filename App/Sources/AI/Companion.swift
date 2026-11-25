@@ -358,7 +358,7 @@ final class Companion {
                                                              searching: true, lookingUp: looksUp) }
         // A look-up never sends their names: their pages', and those they wrote, unless the
         // phone's dictionary knows the word (a real place's name).
-        let tools = ReplyTools(pages: pageLookup, lookingUp: looksUp && pageLookup != nil,
+        let tools = ReplyTools(pages: pageLookup, lookingUp: looksUp && pageLookup != nil, listing: plain,
                                theirNames: WebLookup.theirNames(pages: pageLookup, said: conversation.turns.compactMap(\.answer),
                                                                 known: Self.dictionary()))
         var reply = Reasoned(reply: "")

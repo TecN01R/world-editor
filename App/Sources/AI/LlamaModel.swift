@@ -126,7 +126,8 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
                 func count(_ text: String) -> Int { text.split(whereSeparator: \.isWhitespace).count }
                 trialLog("SPEED \(Self.name)\(thinking ? ", thinking" : ""): \(runs.map(\.summary).joined(separator: "; ")); "
                     + "first words after \(firstWords ?? .zero) (\(count(reply.reasoning)) words of thinking, "
-                    + "\(reply.searches.count) searches, \(reply.lookups.count) look-ups), whole reply (\(count(reply.reply)) words) "
+                    + "calls: \(made.map { "\($0.tool) \u{201C}\($0.query ?? "")\u{201D}" }.joined(separator: ", ")), "
+                    + "\(reply.lookups.count) look-ups), whole reply (\(count(reply.reply)) words) "
                     + "in \(ContinuousClock.now - began); "
                     + (resumed > 0 ? "went on after the author came back \(resumed) times; " : "") + Engine.state)
                 return
@@ -141,8 +142,11 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
         for call in made {
             thoughts.append(call.thought)
             let query = call.query ?? ""
-            thoughts.append(call.tool == WebLookup.toolName ? "Searched Wikipedia for \u{201C}\(query)\u{201D}."
-                                                             : "Searched your pages for \u{201C}\(query)\u{201D}.")
+            switch call.tool {
+            case WebLookup.toolName: thoughts.append("Searched Wikipedia for \u{201C}\(query)\u{201D}.")
+            case PageLookup.listToolName: thoughts.append(query.isEmpty ? "Listed your pages." : "Listed your pages: \u{201C}\(query)\u{201D}.")
+            default: thoughts.append("Searched your pages for \u{201C}\(query)\u{201D}.")
+            }
             said.append(call.said)
         }
         thoughts.append(now.thought)

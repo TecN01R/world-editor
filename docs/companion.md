@@ -313,7 +313,10 @@ declarations describe them (Kevin: "Can the plain model at least have access to
 the tools and how those work? Otherwise it's kind of useless"), and one line
 saying which page is open (its title), or which world, about the whole world:
 it can search the pages and look up the real world, but is told nothing else.
-In debug builds only.
+Since it isn't shown their pages, it also has `list_pages` (their pages by name,
+type and opening, or one type's), without which "what can you tell me about my
+world?" gave its search nothing to look for (Kevin: "I don't think the tools are
+working fully with the base model"). In debug builds only.
 prompt without its example conversations 4.7 (a draw: better openings, worse
 corrections and "stuck"), Plain Model 1.6 (98% poor: it took his world for
 Star Wars or Hollow Knight, invented names, wrote 100-word help-desk replies).

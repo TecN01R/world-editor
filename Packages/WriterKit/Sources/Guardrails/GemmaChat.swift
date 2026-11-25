@@ -33,6 +33,9 @@ public enum GemmaChat {
     /// Searches the author's pages (`PageLookup`).
     public static let searchPages = Tool(name: PageLookup.toolName, description: PageLookup.toolDescription,
                                          queryGuide: PageLookup.queryGuide)
+    /// Lists the author's pages (`PageLookup.list`; the plain model's).
+    public static let listPages = Tool(name: PageLookup.listToolName, description: PageLookup.listToolDescription,
+                                       queryGuide: PageLookup.listQueryGuide)
     /// Looks up the real world (`WebLookup`).
     public static let lookUp = Tool(name: WebLookup.toolName, description: WebLookup.toolDescription,
                                     queryGuide: WebLookup.queryGuide)

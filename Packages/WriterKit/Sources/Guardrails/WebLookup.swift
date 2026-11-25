@@ -283,18 +283,22 @@ public struct ReplyTools: Sendable {
     /// What the model is offered, in the order the prompt declares them.
     public let offered: [GemmaChat.Tool]
     private var searches: PageLookup.Searches?
+    private let pages: PageLookup?
     /// Their names, which a look-up never sends.
     private let names: [String]
     private var lookupsMade = 0
     /// What it looked up, and found, in order: what was sent to Wikipedia.
     public private(set) var lookups: [LookedUp] = []
 
+    /// - Parameter listing: `list_pages` is offered too (the plain model, which isn't shown their pages).
     /// - Parameter theirNames: what a look-up never sends (`WebLookup.theirNames`; by default
     ///   their pages' names and the names they wrote, none taken as words of the language).
-    public init(pages: PageLookup?, lookingUp: Bool, theirNames: [String]? = nil) {
+    public init(pages: PageLookup?, lookingUp: Bool, listing: Bool = false, theirNames: [String]? = nil) {
+        self.pages = pages
         searches = pages.map(PageLookup.Searches.init)
         names = theirNames ?? WebLookup.theirNames(pages: pages)
-        offered = (pages == nil ? [] : [GemmaChat.searchPages]) + (lookingUp ? [GemmaChat.lookUp] : [])
+        offered = (pages == nil ? [] : (listing ? [GemmaChat.listPages] : []) + [GemmaChat.searchPages])
+            + (lookingUp ? [GemmaChat.lookUp] : [])
     }
 
     /// What it searched their pages for, in order.
@@ -304,6 +308,7 @@ public struct ReplyTools: Sendable {
     public mutating func answer(_ tool: String, query: String?,
                                 lookUp: (String) async throws -> (text: String, found: LookedUp)) async -> String {
         guard offered.contains(where: { $0.name == tool }) else { return "Tool not found: \(tool)" }
+        if tool == PageLookup.listToolName { return pages?.list(query) ?? "Tool not found: \(tool)" }
         guard tool == WebLookup.toolName else { return searches?.answer(tool, query: query) ?? "Tool not found: \(tool)" }
         let query = (query ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return WebLookup.needsQuery }
