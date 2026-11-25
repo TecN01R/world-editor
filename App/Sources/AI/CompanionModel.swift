@@ -39,7 +39,7 @@ extension CompanionModel {
     func prepare() async throws {}
     /// When the model on the phone was downloaded, in words; nil if it hasn't been, or it's part of iOS.
     var version: String? { nil }
-    /// Files nothing: only the companion's own model has been measured at it (Apple's runs only on the simulator).
+    /// Files nothing: filing is built for the companion's own model (Apple's runs only on the simulator).
     func file(_ prompt: FilingPrompt) async throws -> Filings { Filings() }
 }
 
@@ -118,6 +118,7 @@ struct PassDone {
     var resumed: Int
 }
 
+/// A reply with tools, as the companion's model writes one, in its own chat template:
 /// each pass of the model reads the prompt with the calls made so far and writes until it ends
 /// its turn or calls a tool (list_pages, search_pages, look_up, add_instruction), whose answer goes
 /// in the next pass's prompt, as many as it calls (Kevin, 2026-11-25: "you WILL lift the limits"):

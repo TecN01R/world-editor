@@ -86,6 +86,7 @@ private struct Lenient<T: Decodable>: Decodable {
 
 /// What the model is asked, to read structure out of the author's message.
 /// It runs after the companion has replied, on the same model, which writes
+/// `Filings` as JSON.
 public struct FilingPrompt: Equatable, Sendable {
     public var system: String
     public var message: String
@@ -165,6 +166,7 @@ public struct FilingPrompt: Equatable, Sendable {
 }
 
 extension FilingPrompt {
+    /// A prompt as built elsewhere.
     public init(system: String, message: String) {
         self.system = system
         self.message = message

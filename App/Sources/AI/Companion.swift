@@ -54,6 +54,7 @@ final class Companion {
 
     /// Replies think first, briefly, and there's no switch for it (Kevin, 2026-11-24:
     /// "remove the thinking switch"): the companion's model is made to think (NVIDIA runs
+    /// it so). Its thought is capped at NVIDIA's setting (`LlamaModel.thinkingBudget`).
     private let thinks = true
 
     /// It may look up the real world on Wikipedia when it isn't sure (`WebLookup`; Kevin,
@@ -135,11 +136,7 @@ final class Companion {
         // Cancelled from the download's Live Activity (or iOS ended it) while away: it stops
         // where it got to, and Download goes on from there.
         BackgroundDownload.onCancel = { [weak self] in self?.downloading?.cancel() }
-        if model.isInstalled {
-            Task { [model] in await FilingLab.runIfAsked(with: model) }   // TRIAL
-        } else {
-            offerDownload()
-        }
+        if !model.isInstalled { offerDownload() }
     }
 
     /// The author asked for the model: download it, then reply about the page open

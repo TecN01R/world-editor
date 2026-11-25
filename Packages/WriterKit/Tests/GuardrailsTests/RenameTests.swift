@@ -50,6 +50,7 @@ final class RenameTests: XCTestCase {
                  "Her name is Mara", open: untitled, pages: &pages, schema: &schema)
         XCTAssertEqual(pages[0].title, "Mara")
 
+        // As the model has written it: the page called by its new name, and listed as a page.
         var again = [untitled], schema2 = Schema()
         _ = file(Filings(facts: [.init(page: "Mara", field: "Name", value: "Mara")],
                          pages: [.init(title: "Mara", type: "Character")]),

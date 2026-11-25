@@ -26,21 +26,16 @@ whole for the paragraphs that answer, "Searched Wikipedia for …" under the rep
 its sources, Look Things Up in the companion's menu (on by default). Never sent: their
 pages' names and every name they wrote, unless the phone's dictionary knows it. Requests
 name the app by its public repository (Kevin's choice), which Wikimedia's policy asks for
-17 of 18 real-world questions and 5 of 166 others (3 of those real-world too); judged
-blind on the 23 where it looked up, 5.74 against 4.83 without, wrong facts 0 against 6.
-Left: it once wrote a look-up as text, and once suggested Wikipedia for their own world.
-What follows is the design as planned.
+(200 requests a minute, not 10). What follows is the design as planned.
 
 The companion gets one tool, `look_up(query)`. It decides when to use it: a
 question about the real world it isn't sure of. The app runs the search and
 hands back a few numbered passages; the companion answers from them and the app
 shows where they came from.
 
-- **Why it comes first:** real-world facts are what the companion gets wrong
-  most. On questions like "were trireme rowers slaves or free?" it answers
-  confidently and falsely, and telling it to be honest about what it doesn't
-  know only made it vaguer (measured; `docs/companion.md`). It has to look
-  things up.
+- **Why it comes first:** a small model's real-world facts are unreliable. On
+  questions like "were trireme rowers slaves or free?" it can answer
+  confidently and falsely. It has to look things up.
 - **Why Wikipedia first:** no account, no key, no cost, and it covers most of
   what a worldbuilder asks (history, ships, climate, how things work). Kevin
   agreed to start here.
@@ -50,26 +45,18 @@ shows where they came from.
   meanwhile, and goes on with its output in the model's turn. One search per
   reply to begin with, results trimmed to about 1,500 tokens, and the tool's
   output cleaned the same way the writer's text is (`Reasoned.gemmaPlain`),
-  since it comes from outside. Replies think first (capped), which searching
+  since it comes from outside. Replies think first (capped), as the model is
+  made to.
 - **What the writer sees:** under the reply, a chip: *Searched Wikipedia for
   "trireme crew size"*, opening the sources. The exact words sent are always
   visible. The first time, one sheet says what looking up means and offers to
   turn it off.
 - **Their world stays private:** the instructions tell it to search real-world
   terms only, never the names on their pages; the chip makes any slip visible.
-  questions it can't answer for sure, and on fewer than 1 in 20 other turns;
-  judged answers contain no made-up specifics. If a model misses the gate, the
-  fallback is a **Look It Up** action on a reply, which runs the same search
-  with no decision left to the model.
-  tool and one line about when to use it, it searched on all 14 real-world
-  questions and on none of the other 99 turns, and no name from the writer's
-  pages appeared in a search. So the deciding can be left to the model. The
-  answers are the open part: a first try that handed it the opening of the
-  top articles got the fact right only when that opening contained it (it
-  usually doesn't; who rowed a trireme is far down the article), and otherwise
-  it fell back on its own wrong belief or said it couldn't tell. The work is
-  in choosing passages: rank the paragraphs of the whole article against the
-  question. Step 3 needs the same routine for documents, so build it once.
+- **Choosing passages:** an article's opening often lacks the answer (who
+  rowed a trireme is far down the article), so the paragraphs of the whole
+  article are ranked against the question. Step 3 needs the same routine for
+  documents, so build it once.
 
 ## 2. The whole web, and research
 
@@ -85,8 +72,6 @@ shows where they came from.
   wait, so it's shown as it goes: each search appears as it's made.
 - **Reading a page:** when the writer pastes a link, fetch it and reduce it to
   its text (a reader pass on the device).
-- **Gate:** as step 1, plus the answer's claims are found in the passages it
-  cites (judged), and the companion says so when the search found nothing.
 
 ## 3. Text the writer hands it
 
@@ -108,8 +93,6 @@ overlapping pieces (`Documents`). Not yet: Paste as a document, .docx, scanned P
   no question is asked about it. If it's the writer's own notes, they can say
   so in the conversation. Turning old notes into pages of the world is a
   different feature (import, where the writer approves each proposed page).
-- **Gate:** questions about a document are answered from it, with the passage
-  shown; it says when the document doesn't say.
 
 ## 4. Images
 
@@ -125,7 +108,6 @@ overlapping pieces (`Documents`). Not yet: Paste as a document, .docx, scanned P
   in the writer's world is theirs to say.
 - **Unknown until measured:** whether the image pack runs on the Duo at all,
   and its memory and speed there.
-- **Gate:** descriptions judged against the image for made-up detail.
 
 ## 5. Its own tools for the writer's pages
 
@@ -133,11 +115,11 @@ Today the companion is shown the opening of the related pages and what bears
 on this one from earlier conversations, chosen by shared words. That stops
 scaling as a world grows. Next: `find_pages(query)` and `read_page(name)` over
 the Spotlight index the app already keeps, and a running summary of a long
-conversation in place of dropping its oldest turns. Same gates.
+conversation in place of dropping its oldest turns.
 
 ## Order, and what each step needs first
 
-   first-time sheet).
+1. Wikipedia look-up (needs: the chip and the first-time sheet).
 2. Text files and long pastes (needs: the **+** button; no new model files).
 3. The whole web (needs: a Brave key; the relay question can wait).
 4. Images (needs: the image pack's download; whether it runs on the Duo, and

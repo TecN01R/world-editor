@@ -609,7 +609,7 @@ extension PageLookup {
 // MARK: - Searching within a reply
 
 extension PageLookup {
-    /// ReplyTools): it never fails. A call without a query gets `needsQuery`, and a tool it
+    /// `search_pages` for one reply: it never fails. A call without a query gets `needsQuery`, and a tool it
     /// doesn't have, that it isn't there. No budget: every search is answered.
     public struct Searches: Sendable {
         private let lookup: PageLookup

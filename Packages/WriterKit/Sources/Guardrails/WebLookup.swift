@@ -9,7 +9,7 @@ import WriterCore
 /// with no account or key. For a query it returns the articles that best match, numbered, for
 /// the model to answer from: the two best read whole, each as it opens and the paragraphs that
 /// best answer the query, and the third's passage that matched; and the articles as sources
-/// for the line under its reply. The same code runs in the app and the
+/// for the line under its reply.
 ///
 /// Only the query leaves the phone, and never a name from the writer's pages: a query that
 /// names one is answered from here, without asking Wikipedia (`theirs`).
@@ -42,7 +42,8 @@ public enum WebLookup {
     /// they wrote with a capital inside a sentence, on their pages, in what they told the
     /// companion before (`pages`) and in `said` (this conversation), unless `known` says it's a
     /// word of the language (a real place's name, say; the phone's dictionary). The model is
-    /// places now and then (2026-11-25): this makes sure they stay on the phone.
+    /// told to look up only the real world, but it may still try their invented places: this
+    /// makes sure they stay on the phone.
     public static func theirNames(pages: PageLookup?, said: [String] = [], known: (String) -> Bool = { _ in false }) -> [String] {
         let all: [PageLookup.Page] = pages?.pages ?? []
         let headings: [String] = all.map(\.heading).filter { !$0.isEmpty }
@@ -153,7 +154,8 @@ public enum WebLookup {
     /// The tool's text for `query`, numbered by article: for each article read (`articles`, by
     /// title), how it opens and the paragraphs that best answer the query (`passages`; the
     /// search's passage where none does); for the others, the search's passage. Plain for
-    /// alone too often lacked the answer (2026-11-25).
+    /// Gemma and at most `maxCharacters`; the articles as sources. An article's opening alone
+    /// often lacks the answer.
     static func answer(_ query: String, hits: [Hit], articles: [String: Article]) -> (text: String, found: LookedUp) {
         var parts: [String] = [], sources: [LookedUp.Source] = []
         for hit in hits {
@@ -277,7 +279,7 @@ public enum WebLookup {
     }
 }
 
-/// them: `search_pages` (with `pages`), `look_up` (when looking up is on) and `add_instruction`
+/// The tools the companion has while writing one reply, and their answers: `search_pages` (with `pages`), `look_up` (when looking up is on) and `add_instruction`
 /// (when instructing), as many as the model calls (`replyWithTools` stops a runaway loop). It never
 /// fails: what goes wrong is told to the model in a sentence.
 public struct ReplyTools: Sendable {
@@ -314,6 +316,7 @@ public struct ReplyTools: Sendable {
     public var queries: [String] { searches?.queries ?? [] }
 
     /// The answer to the model's call of `tool` with `query`. `lookUp` asks Wikipedia
+    /// (`WebLookup.lookUp`).
     public mutating func answer(_ tool: String, query: String?,
                                 lookUp: (String) async throws -> (text: String, found: LookedUp)) async -> String {
         guard offered.contains(where: { $0.name == tool }) else { return "Tool not found: \(tool)" }

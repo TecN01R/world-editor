@@ -353,7 +353,8 @@ final class PageLookupTests: XCTestCase {
         XCTAssertLessThanOrEqual(lookup.related(to: "Draven, Ilsa, Kai and the Kestrel in Port Vell", maxCharacters: 300).count, 300)
     }
 
-    /// Pages for what the prompt is shown of a page the author names, invented after the
+    /// Pages for what the prompt is shown of a page the author names: answers past a page's
+    /// opening, and a leader only in a field.
     private func shore() -> (lookup: PageLookup, oren: UUID) {
         func page(_ heading: String, _ type: String?, fields: [String] = [], _ paragraphs: String...) -> PageLookup.Page {
             PageLookup.Page(heading: heading, type: type, fields: fields, paragraphs: paragraphs.map { (id: UUID(), text: $0) })

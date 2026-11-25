@@ -35,9 +35,6 @@ names, places, world details or "ideas" the author didn't ask for. Asked
 outright for one (a name, a line, why someone might do something), it gives
 it briefly, as the author's to take or leave (Kevin's ruling, 2026-11-23:
 "won't write for me unprompted"; before that this said "even when asked").
-Handing such requests back was built and measured too
-the model held to it for a request or two and then gave in, and it scored
-lower.
 
 **Who it is (Kevin, 2026-11-22):** someone to talk to and bounce ideas off,
 who doesn't think they're the smartest person in the room and won't write
@@ -66,6 +63,7 @@ him unprompted, and won't reply with a stupid repeated question.
 **Either-or questions** ("does she have a captain, or row for someone else?")
 are allowed for now (Kevin, 2026-11-22: open it up, flag it, tighten later if
 they feed the author ideas). Asking which of two readings the author meant is
+fine; a menu of made-up options is a suggestion.
 
 **Since 2026-11-25 it isn't told any of this (Kevin's ruling):** the companion
 is the model stock, with its tools and no instructions ("only run models stock
@@ -78,9 +76,8 @@ alone. Nothing screens or filters a reply after the model writes it: a filter
 after the fact can only reject, and what's unwanted is to be prevented up
 front, in the prompt. So this section, unlike the rest of the charter, is not
 guaranteed by code. What code does guarantee: the companion is handed copies
-of pages and has no way to change one, and it runs on the device. How well
-the instructions hold is measured before any change to them ships
-numbers and what it still gets wrong).
+of pages and has no way to change one, and it runs on the device. The
+instructions were in `CompanionPrompt`.
 
 ## Knowledge and continuity
 

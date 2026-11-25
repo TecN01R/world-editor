@@ -16,6 +16,7 @@ final class CompanionPromptTests: XCTestCase {
     }
 
     /// The system turn: who it is, the examples, the background, and (as the
+    /// page opens) what to do first, word for word.
     func testASystemTurnWithEverythingInOrder() {
         let prompt = CompanionPrompt(page: ilsa, others: [verran], conversation: Conversation(page: UUID()))
         XCTAssertEqual(prompt.system, [

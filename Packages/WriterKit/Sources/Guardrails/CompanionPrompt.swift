@@ -9,12 +9,14 @@ import WriterCore
 /// author (docs/ai-charter.md).
 ///
 /// Its replies aren't checked or filtered afterwards (Kevin's ruling,
-/// 2026-11-23): how it behaves comes from this text alone, so a change here
-/// text is shaped as it is). Model-agnostic: each model puts the prompt into
+/// 2026-11-23): how it behaves comes from this text alone (docs/companion.md
+/// says why the text is shaped as it is). Model-agnostic: each model puts the prompt into
 /// its own chat format.
 ///
 /// Since 2026-11-25 the app sends `plain`: the model stock (Kevin: "only run models stock from
 /// now on"), given only the conversation, which page is open and the writer's own instructions
+/// (none at first), with its tools declared. The full prompt is unused by the app and kept
+/// until it's removed.
 public struct CompanionPrompt: Equatable, Sendable {
     public enum Speaker: Sendable { case author, companion }
 
@@ -187,10 +189,11 @@ public struct CompanionPrompt: Equatable, Sendable {
                 conversation: Conversation, maxCharacters: Int = 6000, maxTurns: Int = 12,
                 maxTurnCharacters: Int = 6000, lookup: Lookup? = nil, texts: Texts = Texts()) {
         let focus = conversation.authorText
-        // Much more of each page than beside an open one: here the pages are all it has
+        // Much more of each page than beside an open one: here the pages are all it has.
         let room = maxCharacters * 2 / 3, perPage = 800
         var summary = Self.summarized(pages, focus: focus, maxCharacters: room, perPage: perPage)
-        // In a small world, page names and a few passages showed less than every page whole
+        // In a small world, page names and a few passages show less than every page whole:
+        // a lookup changes only a world that doesn't fit whole.
         let partial = lookup != nil && !summary.whole
         var names = "", related = ""
         if let lookup, partial {
@@ -267,9 +270,8 @@ public struct CompanionPrompt: Equatable, Sendable {
 
     /// The reply case added when the model can look up the author's pages but not search them
     /// (retrieval alone): the search case's last sentence, worded for what it's been shown,
-    /// invented on 13% of the questions about something on no page (the hybrid, which had the
-    /// sentence, on 2%); "R+" measured it. R+'s wording also fired on answers it had to put
-    /// together from two passages, and on a real-world question asked about their world; "R2"
+    /// since it can't know what isn't on their pages. It covers answers put together from
+    /// several passages, and real-world questions asked about their world.
     public static let notShownInstruction = """
         - If they ask about something of theirs that isn't anywhere in what you're shown of their \
         pages here, even with what several of them say put together, say plainly that you don't see \

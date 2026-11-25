@@ -36,7 +36,8 @@ it's on the phone and checked, or answered; git history keeps what's done.
 
 ## A companion for 8 GB+ phones, not just the Duo (Kevin, 2026-11-24; plan approved)
 - One model, for every iPhone from the 15 Pro on (≈6 GB app budget, whatever the RAM) and Android phones with 12 GB+; 8 GB Androids get no companion (Kevin, 2026-11-24). Budget: ≤4–4.5 GB of the app's own memory, ≤5–5.5 GB resident with the weights
-- [ ] Search again for a faster, stronger model than Nemotron (Kevin, 2026-11-25, after dropping the 26B again): the search found nothing faster AND stronger; Ling-3.0-tiny tried stock (2026-11-25): twice as fast, far weaker (2.96 vs Nemotron's 4.3 stock), so not a win (docs/models.md). The bar (Kevin): faster AND stronger; slower or smaller isn't a win; models run stock, community builds are fine
+- [ ] Search again for a faster, stronger model than Nemotron (Kevin, 2026-11-25, after dropping the 26B again): the search found nothing faster AND stronger; Ling-3.0-tiny was tried stock (2026-11-25) and not taken (docs/models.md). The bar (Kevin): faster AND stronger; slower or smaller isn't a win; models run stock, community builds are fine
+- [ ] 2 The model: Nemotron 3.5 Bolt E4B chosen (Kevin, 2026-11-25), thinking capped at NVIDIA's 128 tokens, with search_pages. Built in (llama.cpp), bartowski's Q4_K_M file; filing without thinking, which is faster
 - [ ] 3 Benchmark mode on the Duo, held to an 8 GB phone's memory
 - [ ] 4 iOS: the one model, offered where the phone's memory allows it
 - [ ] Speed floor (Kevin, 2026-11-24): about reading speed once it starts writing, ~6 tokens/s, on the weakest phone (the iPhone 15 Pro); no saved cache ("I'm not taking more space"), so reading the prompt has to be fast too. Nemotron on the Duo, first reply (2026-11-25): writes 23 tokens/s, reads 1,400 tokens/s, first words 7.4 s with the load (3.3 s); memory 3.1 GB left to the app. The 15 Pro is still to measure
@@ -47,16 +48,19 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Amend CLAUDE.md and docs/ai-charter.md to the new rule when it ships
 
 ## Companion
+  - [ ] Blind taste test for Kevin (Kevin, 2026-11-25: "I'm also ok with blind taste test for me"): pairs of anonymous replies to his own messages, fresh from each candidate; he picks or ties; ranked as Chatbot Arena does (Bradley–Terry); he is the only judge
 - [ ] Search: built on Nemotron (search_pages, thinking capped); check it finds things on the phone
 - [ ] Filing through tools (make page, set field, rename, set page text), each with Undo
 - [ ] Live Activity: does tapping it reach the app? If never, our own Live Activity
 
 ## Later
 - [ ] Image generation on the phone (Kevin, 2026-11-25): one model that does tools and images, or a separate image model to download; research running
+- [ ] Remove the old full prompt (CompanionPrompt's instructions, examples, background) once the stock one has settled; unused by the app until then
 - [ ] Spotlight finds every world's pages
 - [ ] Swift 6 language mode
 - [ ] Replies keep running in the background (continued processing with the GPU)
 - [ ] Download keeps its speed when the app isn't in front
+- [ ] Images in the companion (documents are built). The whole web needs a search provider and key
 - [ ] VoiceOver pass over the page title and fields
 - [ ] Paragraph IDs drifting when paragraphs are edited (`reconcile`)
 - [ ] World calendar date picker

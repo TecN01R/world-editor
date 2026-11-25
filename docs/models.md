@@ -22,31 +22,23 @@ and §3.2 lets Google "restrict (remotely or otherwise)" use. The cost is size
 (~640 MB vs ~300 MB). EmbeddingGemma remains a drop-in alternative if space matters
 more than quality.
 
-**Gemma 4 E2B for the companion** (chosen 2026-11-23 by test, replacing
-Qwen3.5-4B). A first test put 14 models through 91 moments of conversation,
-pointless questions). Of the models that fit the phone with vision, Gemma 4
-E2B scored best; Qwen3.5-4B invented something in half its replies. Gemma 4
-26B (MoE, ~14 GB) scored best overall. It doesn't fit in the phone's memory
-whole, but it needn't: only ~4B of its parameters work per token, and
-TurboFieldfare (Swift + Metal, Apache 2.0) keeps ~2 GB in memory and streams
-the experts each token needs from storage. Another app (Vehla) reports 6 to 10
-tokens a second with it on an iPhone. It became the companion's model on
-2026-11-24 (below). On the Duo, E2B writes about 50 tokens a second after a
-~12 s first load. It ran through Hugging Face's AnyLanguageModel (Foundation
-Models' session API over llama.cpp), with Gemma's recommended sampling
-(temperature 1, top-p 0.95, top-k 64, no repetition penalty).
+**Gemma 4 E2B for the companion** (chosen 2026-11-23, replacing Qwen3.5-4B).
+On the Duo, E2B writes about 50 tokens a second after a ~12 s first load. It ran
+through Hugging Face's AnyLanguageModel (Foundation Models' session API over
+llama.cpp), with Gemma's recommended sampling (temperature 1, top-p 0.95, top-k
+64, no repetition penalty).
 
-**Gemma 4 E4B was the companion's model** (a trial from 2026-11-23; standard on 2026-11-24, Kevin: "E4B shouldn't be trial now"). With the current prompt
-(`docs/companion.md`) the 4.2 GB build (`unsloth/gemma-4-E4B-it-qat-GGUF`,
-UD-Q4_K_XL) scores 5.2 out of 10 where E2B scores 4.5, and breaks one of
-Kevin's rules in 9% of replies where E2B does in 24%. What wasn't known yet
-was whether the Duo holds it in memory and how fast it runs there: it does,
-replying in a few seconds. The 3.2 GB "mobile" 2-bit build of E4B and
-is.
+**Gemma 4 E4B was the companion's model** (a trial from 2026-11-23; standard on
+2026-11-24, Kevin: "E4B shouldn't be trial now"), the 4.2 GB build
+(`unsloth/gemma-4-E4B-it-qat-GGUF`, UD-Q4_K_XL). The Duo holds it in memory,
+replying in a few seconds.
 
-**Gemma 4 26B-A4B was the companion's model** (2026-11-24 to 2026-11-25, on
-TurboFieldfare, which streamed its experts from storage). It scored best in the
-(30 s for 1,650 tokens), and an iPhone 15 Pro would be slower still.
+**Gemma 4 26B-A4B was the companion's model** (2026-11-24 to 2026-11-25). It
+doesn't fit in the phone's memory whole, but only ~4B of its parameters work per
+token: TurboFieldfare (Swift + Metal, Apache 2.0) kept ~2 GB in memory and
+streamed the experts each token needs from storage. On the Duo it wrote about 7
+tokens a second and read its prompt slowly (30 s for 1,650 tokens), and an iPhone
+15 Pro would be slower still.
 
 **The 26B, tried again on the higher memory limit** (2026-11-25, debug builds,
 removed the same day). With the patched xtool the app has about 6.4 GB on the
@@ -57,39 +49,22 @@ for an even faster more powerful model". Its download, TurboFieldfare's
 installer, had also refused it at first: that installer counted only empty
 space, not what iOS clears for a download (6.8 GB of 70).
 
-each model stock with its maker's sampling and the app's four tools; speeds on this PC's GPU):
-
-| | Score | Poor | Invented | Pointless question | Reply words | Time a reply | Writes |
-|---|---|---|---|---|---|---|---|
-| Nemotron, the old instructions and page background (thinking cap 128) | 6.19 | 18% | 1% | 5% | 16 | 4.6 s | 37 tok/s |
-| Nemotron stock, thinking cap 128 | 4.26 | 58% | 5% | 35% | 46 | 10.1 s | 30 tok/s |
-| Nemotron stock, cap 256 | 4.30 | 57% | 9% | 31% | 47 | 13.8 s | 31 tok/s |
-| Nemotron stock, uncapped | 4.28 | 61% | 7% | 39% | 42 | 14.6 s | 30 tok/s |
-| Ling-3.0-tiny stock (inclusionAI, uncapped, its default) | 2.96 | 77% | 30% | 30% | 78 | 8.2 s | 58 tok/s |
-
-Ling writes twice as fast but scores far lower (it invents in 30% of replies, writes
-unasked in 14%, mixes up who's who in 19%): faster, not smarter, so not a win. Nemotron's
-thinking cap changes nothing measurable, so 128 stays: NVIDIA's own setting, the fastest at
-the same quality. Stock is Nemotron's baseline (Kevin's method, docs/companion.md); the old
-prompt scored higher against it, but it differs in more than its instructions (the pages in
-the prompt, Gemma's top-k), so its parts are to be measured one at a time.
+**Ling-3.0-tiny** (inclusionAI) was tried stock on 2026-11-25 as a faster
+alternative and not taken: the bar is faster *and* stronger (Kevin).
 
 **Nemotron 3.5 Bolt E4B is the companion's model** (Kevin, 2026-11-25: "Yes",
 after the shortlist for 8 GB+ iPhones). NVIDIA post-trained it from Gemma 4
-conversations, today's instructions and search_pages) it scored 5.57 out of
-10 with its thinking capped at 128 tokens, against the 26B's 6.00: the same
-share of poor replies (23%), a third as much inventing (4% against 12%), and
-the right page for 90% of look-ups. Unlimited thinking scored 5.48 and was half
-again as long; a 64-token cap cut it off mid-plan. Gemma 4 E4B without thinking
-scored 5.21. It reads a prompt in seconds and writes well above reading speed,
-so it needs no saved cache, and it fits the 15 Pro's memory.
+E4B for multi-turn tool use and instruction following. It runs stock (Kevin:
+"only run models stock from now on"), with NVIDIA's thinking cap of 128 tokens.
+It reads a prompt in seconds and writes well above reading speed, so it needs
+no saved cache, and it fits the 15 Pro's memory.
 
 How it runs (`LlamaModel`): llama.cpp's prebuilt Apple framework, release
-measured (`bartowski/NVIDIA-Nemotron-3.5-Bolt-E4B-GGUF`,
+b12633 (`scripts/fetch-llama.sh`, checksum checked), on the GPU through Metal.
+The model is bartowski's 4-bit file
+(`bartowski/NVIDIA-Nemotron-3.5-Bolt-E4B-GGUF`,
 `NVIDIA-Nemotron-3.5-Bolt-E4B-Q4_K_M.gguf`, 5.2 GB) at one pinned revision with
-its SHA-256. NVIDIA's own 4-bit file (6.2 GB, its embeddings at 8 bits) was
-against 5.57, more poor replies (39% against 25%), and 5 of its 184 searches
-written as text instead of called (none for this file).
+its SHA-256, rather than NVIDIA's own 4-bit file (6.2 GB, its embeddings at 8 bits).
 Its per-layer embeddings (1.9 GB) stay in storage and are read a row at a time
 (llama.cpp's lazy reading), so about 2.3 GB of weights are in memory, plus
 about 0.3 GB for the conversation (8,192 tokens; its sliding-window layers keep
@@ -99,6 +74,8 @@ where its prompt differs from the last, unless that's further back than the
 window still covers, when it reads from the start (as llama.cpp's server does).
 
 The prompt is the model file's own chat template, rendered by the app
+(`GemmaChat`, tested against what llama.cpp's server renders from that
+template). The model thinks before each reply; once its thought has run
 128 tokens, the end of its thought is forced, as llama.cpp's server does with
 `--reasoning-budget 128` (`ThinkingBudget`), and each thought after a search
 gets its own 128. It looks things up with `search_pages` (two searches a
@@ -106,8 +83,7 @@ reply, then "that's the last search"; three calls at most, after which, or if
 it says nothing, it is asked once more without the tool). What it searched
 for shows in its collapsed thinking. Sampling is NVIDIA's (temperature 1,
 top-p 0.95, top-k 64 as the file says, a new seed each reply); filing is
-(82% with thinking, at three times the wait, so it doesn't think), and nothing
-filed from messages that state nothing.
+greedy without thinking, which is faster.
 
 The download goes over Wi-Fi only, in one file with HTTP range requests, so
 it resumes from where it stopped, even after the app is closed; on cellular,
@@ -129,9 +105,7 @@ weights read from storage aren't counted), 3.10 GB after a reply; it read a
 long conversation, heat over time, and how it does held to the 15 Pro's memory.
 
 **Updates to the companion's model.** It comes from one pinned revision and
-checksum, so the menu offers no updates: a new one arrives with the app, and
-is measured first, since it may not behave as the one the instructions were
-measured on (`docs/companion.md`).
+checksum, so the menu offers no updates: a new one arrives with the app.
 
 **Apple Foundation Models for extraction.** Built into iOS (no download),
 guided generation returns typed structures, and it runs on the Neural Engine.

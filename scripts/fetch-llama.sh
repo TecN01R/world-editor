@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Puts llama.cpp's prebuilt Apple framework (MIT; a pinned release, its checksum checked) in
+# Vendor/llama.xcframework, for Package.swift and project.yml.
 set -euo pipefail
 build=b12633
 sum=d0b199082096fc63c875ef55c4675de09b3d42fa25a0b8d2dba736938c9c9bc6

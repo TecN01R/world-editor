@@ -3,6 +3,8 @@ import XCTest
 @testable import Guardrails
 
 /// The companion's prompt as the phone renders it, against what llama.cpp renders with the model
+/// file's own chat template (Fixtures/gemma4-chat.json, rendered by llama.cpp's server with
+/// /apply-template from the model file's template).
 final class GemmaChatTests: XCTestCase {
     private struct Fixture: Decodable {
         struct Tool: Decodable {
@@ -73,6 +75,7 @@ final class GemmaChatTests: XCTestCase {
     }
 
     /// The fixture was rendered with the tools' texts as they are: changing them means
+    /// rendering it again with llama.cpp's server (/apply-template).
     func testTheFixtureDeclaresTheToolsAsTheAppDoes() throws {
         let tools = try fixture().tools
         XCTAssertEqual(tools.count, 2)

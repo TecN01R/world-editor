@@ -39,6 +39,7 @@ features below. Read `CLAUDE.md` first; this covers what isn't there.
 - **Filing from the companion** (`Guardrails/Filing.swift`, `FilingRecord`):
   what the author tells the companion becomes types, fields and linked pages
   on its own, in their words, with Undo in the conversation
+  (`docs/companion.md`, Filing).
 
 ## Open threads
 

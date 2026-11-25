@@ -3,8 +3,7 @@
 The companion is a language model running on the phone (NVIDIA's Nemotron 3.5
 Bolt E4B since 2026-11-25, Gemma 4 26B-A4B before; `docs/models.md`). What it says is decided by three things: which
 model it is, the text it's given before the conversation (its prompt), and how
-its output is sampled. This page records what those are, the reasons, and the
-measurements behind them, so the next change starts from evidence.
+its output is sampled. This page records what those are and the reasons.
 `docs/companion-roadmap.md` covers what isn't built yet (web search, images,
 documents).
 
@@ -39,6 +38,7 @@ the whole world; then the conversation, with `list_pages`, `search_pages` and
 `look_up` declared in the model's own chat format (`CompanionPrompt.plain`,
 built in `Companion.ask`). No instructions, no examples, no pages in the
 prompt: it finds them with its tools. Sampling and the thinking cap are the
+model maker's (`docs/models.md`).
 
 **Instructions grow from the author** (Kevin, 2026-11-25: "keep the prompting
 but keep it blank and the user can fill in instructions over time and the model
@@ -48,7 +48,10 @@ them in Instructions… in the companion's menu, and the companion adds one with
 a fourth tool, `add_instruction` (at most two a reply), when they tell it how
 to reply from now on. Shown in the prompt under "The writer's instructions for
 you:", after the line on what's open; "Added to Instructions: …" under the
-reply opens them. One set for every world, kept on the phone.
+reply opens them. One set for every world, kept on the phone. After a change
+to them, old conversations keep the old manner: a model copies the manner of its
+own earlier replies, which are in front of it. Start a new conversation to see
+the change.
 
 **No limits of the app's own** (Kevin, 2026-11-25: "you WILL lift the limits"):
 the whole conversation goes in, read from a later point only when it outgrows
@@ -56,9 +59,11 @@ the model's context (16K tokens); every tool call is answered, with no budget
 per reply (only a runaway loop, 10 calls, is asked to answer without tools); a
 search of their pages returns up to 6,000 characters and a look-up up to 12,000,
 every article found read; replies run until the model ends them. The thinking cap
-256 or uncapped.
+(128 tokens) is NVIDIA's setting.
 
-**Until then** it had the full prompt below, which stays in WriterKit as the
+**Until then** it had the full prompt below, which stays in WriterKit, unused by
+the app, until it's removed. Built by `CompanionPrompt` (WriterKit). One system
+turn, in this order, then the conversation:
 
 1. **Who it is** (`CompanionPrompt.instructions`, about 240 words). A friend
    the writer talks to about what they're writing, which may be an invented
@@ -81,7 +86,7 @@ every article found read; replies run until the model ends them. The thinking ca
    title is the name of who or what it is about: told only "a Character page
    titled Casperica", E4B said the page gave no name and asked whether
    Casperica was a place (Kevin's conversation, 2026-11-23); said outright,
-   it named her 7 times in 8 where it had 2 in 8, and never asked again. Then: the opening of the writer's other pages (those sharing words
+   it named her. Then: the opening of the writer's other pages (those sharing words
    with this page first), what the writer told it on other pages that bears on
    this one, and the open page (a long page as its opening and its latest
    part).
@@ -100,9 +105,9 @@ when the author begins instead (a reply is seconds of the GPU's work).
 Sampling is NVIDIA's (and Google's for Gemma 4): temperature 1.0, top-p 0.95,
 top-k 64, no repetition penalty. It thinks before each reply, briefly, and
 there's no switch for it (Kevin, 2026-11-24: "remove the thinking switch"):
-NVIDIA runs the model thinking, and without it it wrote a fifth of its searches
-64 cut it off mid-plan and unlimited ran half again as long for no better
-replies (2026-11-25). On the 26B, Gemma's thinking had drafted each reply four
+NVIDIA runs the model thinking. Its thought is capped at 128 tokens, NVIDIA's
+setting, as llama.cpp's server caps it with `--reasoning-budget 128`
+(`ThinkingBudget`). On the 26B, Gemma's thinking had drafted each reply four
 or five times at the phone's 7 tokens a second, so replies there didn't think.
 It looks things up in the writer's pages with `search_pages` (the prompt's
 tools mode: the open page, the pages most like it, the rest by name), and what
@@ -116,8 +121,7 @@ first (`Reasoned.gemmaPlain`).
 It looks up the real world on Wikipedia when it isn't sure (`look_up`; Kevin,
 2026-11-25), with one more reply case in its instructions
 (`CompanionPrompt.lookUpInstruction`): what it looked up shows under the reply with
-step 1): wrong facts on the real-world questions went from 6 of 23 to none. Look
-Things Up in its menu turns it off; a look-up never sends a name of theirs.
+the articles it read. Look Things Up in its menu turns it off; a look-up never sends a name of theirs.
 
 Kevin can replace the instructions and the examples himself (Kevin, 2026-11-25:
 "a settings panel for me to modify instructions myself"; "only available in
@@ -126,12 +130,13 @@ iOS's own form, kept on the phone (`CompanionPrompt.Texts`); a release build has
 neither the panel nor his text, and always reads the app's own.
 His text is used as he wrote it, from the next reply; empty examples are left
 out; Restore Defaults puts back the app's own, which the rest of this page
+describes. Search and the pages work the same whatever
 the instructions say, and nothing in them can make it write into his pages.
 
 ## Why it's shaped this way
 
-Each choice below was either measured here or comes from the model's maker;
-the sources are named so they can be checked.
+Each choice below comes from what was tried or from the model's maker; the
+sources are named so they can be checked.
 
 **Few rules.** Small models follow one instruction well and five badly: in one
 study a 2B model satisfied every instruction 80% of the time with one, 36%
@@ -176,7 +181,7 @@ been on by accident; turning it off was part of this change.
 
 **No reply filter.** Kevin's ruling. The filter that used to screen replies
 also made the companion fall silent and stiff, and it could only reject, not
-improve. What takes its place is measurement before a change ships.
+improve. What takes its place is the prompt itself.
 
 ### What Claude's and ChatGPT's prompts do
 
@@ -209,116 +214,6 @@ something that is the listener's but not content: what it understood, or its
 honest reaction. That is why the instructions ask for "a real reaction to
 what they just said" before any question.
 
-## What was measured
-
-full, blank and long pages, corrections, pushback, one-word answers,
-real-world questions, requests to write, being stuck, contradictions between
-pages. About half are set in a small invented world and half in Kevin's own
-(kept out of this repository). Each setup writes one reply to each moment.
-against Kevin's three rules (a reply that breaks one scores 3 at most), then
-on how good a companion it was. The judges are strict: 8 or more means a
-reply a good friend might have given.
-
-Round one, 106 moments, 2026-11-23 (score, with its 95% interval):
-
-| Setup | Score | Breaks a rule | Invents | Pointless question | Gushes |
-|---|---|---|---|---|---|
-| The phone before this change (Gemma 4 E2B, three bare rules) | 2.6 (2.3–2.8) | 74% | 59% | 44% | 67% |
-| This prompt on the same model | 4.5 (4.2–4.8) | 24% | 17% | 8% | 8% |
-| This prompt on Gemma 4 E4B | 5.2 (4.9–5.6) | 9% | 6% | 5% | 1% |
-
-- **The prompt** is worth about 1.9 points on the same model: better on 88 of
-  the 106 moments, worse on 9.
-- **The model** is worth another 0.7 (0.3 to 1.1). E4B is the 4.2 GB build
-  (`unsloth/gemma-4-E4B-it-qat-GGUF`, UD-Q4_K_XL). Whether the Duo runs it
-  fast enough, and in memory, is not measured yet. Its 3.2 GB "mobile" 2-bit
-  build is not a shortcut: it scored like E2B on the automatic checks and
-  thought three times as long. E2B's QAT build was no better than the file
-  the phone has.
-- **Thinking first** made no measurable difference to the score on either
-  model (+0.1, interval −0.3 to +0.5, on E4B), though replies written after
-  thinking broke a rule a little less often (9% against 15% on E4B). It costs
-  about 250 tokens before each reply: seconds on the phone.
-- **Handing a request to invent back** instead of doing it cost nothing
-  measurable (−0.25, interval −0.6 to +0.1, on E4B; +0.1 on E2B).
-- **It wasn't tuned to the test.** On the 68 moments never looked at while the
-  prompt was written, E4B scored 5.0 (5.5 on the 38 that were), the old
-  prompt 2.7.
-
-Round two, the same day, compared three versions of the wording on E4B over
-all 113 moments there were by then: as shipped 5.2; asked for fuller replies
-4.9; handing requests to invent back 4.7, which is 0.5 below the shipped
-wording (interval 0.1 to 0.8).
-
-Whole conversations came next: someone playing a writer (short, impatient,
-phone-typed messages) talked with it for eight or nine turns at a time, on a
-thin page, with real-world questions, asking it to write, and across pages of
-a bigger world.
-
-- **E4B**, six conversations: "maybe I'd keep using it" each time. It never
-  took over the writer's world and took corrections without fuss. Against it:
-  it mostly said the writer's words back in tidier ones, it asked almost
-  nothing after its opening, it missed the writer contradicting one of their
-  own pages, it mixed up two characters once, and it defended wrong facts
-  when doubted. The instructions now tell it not to defend them; in the two
-  conversations after that it owned up to guessing, though it then agreed
-  with whatever the writer suspected.
-- **E2B**, three conversations with the final wording: "maybe", "maybe,
-  leaning no" and "no". It over-reads ("so her core conflict is about
-  visibility"), misses
-  plain corrections ("i said from lol"), and what it writes on request
-  contradicts the writer's pages. In single moments the two models are 0.7
-  apart; over a conversation the gap feels wider.
-
-Tried and dropped, so it needn't be tried again without a new idea:
-
-- Handing a request to invent back ("that part is yours"). It scored lower,
-  and in conversation it held for a request or two and then gave in, which
-  the writer found arbitrary. The app follows Kevin's "won't write for me
-  unprompted": asked outright, it does it, briefly (his decision, 2026-11-23;
-- Telling it that it's a small offline model, unreliable on names and numbers.
-  It got vaguer, not more accurate, and still said the rowers were slaves.
-- Asking for fuller replies. The extra words were the page said back.
-- Inviting more questions about what the writer just said. A stock question
-  came back with them ("what kind of adventures does she go on?").
-- A line added by the app when its last two replies asked nothing, reminding
-  it that it may ask. In three conversations it changed nothing.
-- The rules restated beside the writer's last message; the rules after the
-  background; examples after the rules (it stopped thinking); a line on
-  ordinary turns saying the page hasn't changed.
-
-## What it still gets wrong
-
-A strict judge gives the best setup 5 out of 10, and one reply in eight an 8
-or better. What is left, from the judges' notes:
-
-- **Real-world facts.** It answers confidently and is often wrong on the
-  specifics: on 6 of 13 real-world questions E4B stated something false (that
-  trireme rowers were slaves, that triremes were ocean-going, a diameter off
-  by half). No wording fixed this; it has to be able to look things up
-  (`docs/companion-roadmap.md`, step 1).
-- **It echoes, and it stops asking.** With inventing ruled out and stock
-  questions discouraged, its easiest move is to say the writer's words back.
-  In a real conversation it asks in its opening and then hardly again: a
-  model copies the manner of its own earlier replies, so two statements in a
-  row become eight. Every tester named this first. After a correction or a
-  one-word answer it often says little more than "Got it."
-- **After a change to the prompt, old conversations keep the old manner**, for
-  the same reason: the earlier replies are in front of it. Start a new
-  conversation on the page to see the change.
-- **It doesn't read as closely as it should.** Past a few hundred words it
-  starts to misread who did what, and it can miss the writer contradicting
-  one of their own pages in conversation.
-- **It still invents now and then** (6% of replies on E4B, 17% on E2B): mostly
-  a pair of made-up options inside a question, or a guess offered when the
-  writer says "not sure yet".
-- **It assumes he or she** for a character about half the time when the page
-  doesn't say. One line telling it to use the name cut that to a third in a
-  small test; it isn't in the prompt yet.
-- **E2B more than E4B** falls back on a stock question ("what kind of
-  adventure is she on?") and on a critic's voice ("suggests a profound sense
-  of duty").
-
 ## Trying it again, and the plain model
 
 Try Again (hold the latest reply) keeps every try: swipe between them, or
@@ -346,11 +241,7 @@ Since it isn't shown their pages, it also has `list_pages` (their pages by name,
 type and opening, or one type's), without which "what can you tell me about my
 world?" gave its search nothing to look for (Kevin: "I don't think the tools are
 working fully with the base model").
-prompt without its example conversations 4.7 (a draw: better openings, worse
-corrections and "stuck"), Plain Model 1.6 (98% poor: it took his world for
-Star Wars or Hollow Knight, invented names, wrote 100-word help-desk replies).
-None of the 366 replies borrowed the examples' names; the "Dolores and the
-Regent" Kevin saw came from E2B, which the phone had fallen back to.
+
 Changes (beside the menu in the folded sheet; in the menu unfolded;
 `ChangesView`) lists everything filed from the conversation: a stock grouped
 list, newest message first, headed by the author's message and when they sent
@@ -409,7 +300,7 @@ the companion is filed, never the page's writing.
   JSON as the example shows, and `Filings.parse` reads each list on its own.
   Not constrained decoding: AnyLanguageModel's took a minute on the phone and
   looped (Kevin's first try, 2026-11-24); plain JSON took 2 to 3 seconds there
-  of stated facts, without thinking, where Gemma 4 E4B filed 89%).
+  on E4B. Not yet measured on the phone with Nemotron.
 - **What code guarantees** (`Filer`, tested in WriterKit): every value, new
   page title and new page text is found in the message, in a sentence that
   isn't a question or hedged ("maybe", "might", "what if", "either"); a
@@ -436,63 +327,30 @@ the companion is filed, never the page's writing.
   then "bireme (was trireme)" brought the trireme back. What one message did
   to a page it made goes with that page.
 
-scenarios, then 67 with events, dates and items; the generic ones in git
-plus 11 from Kevin's world):
-
-| Prompt | Sampling | Facts filed | New pages made | Filed from questions, hedges, chat |
-|---|---|---|---|---|
-| First (no example, pages listed first) | chat (temp 1), ×2 | 75/98 (77%) | 15/32 | 2/36 |
-| One worked example, facts first | chat, ×2 | 86/96 (90%) | 25/32 | 0/36 |
-| + "only when it means just that", "a ship is not a Place" | chat, ×2 | 90/96 (94%) | 29/32 | 0/36 |
-| same, with events, dates, items | chat, ×2 | 106/120 (88%) | 36/44 | 0/36 |
-| same | greedy | 55/60 (92%) | 17/22 | 0/18 |
-| + an event and a date in the example | greedy | 57/60 (95%) | 19/22 | 0/18 |
-| same, plain JSON (no constrained decoding) | greedy | 56/60 (93%) | 16/22 | 0/18 |
-| + "about" left out when empty, names in values get pages, lists read apart | greedy | 57/60 (95%) | 20/22 | 0/18 |
-
 Kevin's try on the phone (2026-11-24) filed the facts but left Myriddea blank:
-against the words the message used for it (two scenarios added, one his own
-message; ×2 samples, 65 + 12 scenarios):
-
-| Prompt | Sampling | Facts filed | New pages made | Their description as its text | Filed from questions, hedges, chat |
-|---|---|---|---|---|---|
-| as above | greedy, ×2 | 120/130 (92%) | 45/50 | 4/18 | 0/36 |
-| + an "about" rule with "the fishing village of Holm", two more in the example | greedy, ×2 | 116/130 (89%) | 42/50 | 2/18 | 0/36 |
-| "about" right after the title, and on every new page in the example (shipped) | greedy, ×2 | 118/130 (91%) | 44/50 | 14/18 | 0/36 |
-
-The code also drops text that is only part of the page's name ("Lady" for
-Lady Corvina) or says what it isn't ("not Port Vell").
+the model rarely gave a new page its text, so the prompt now asks for it
+("about") right after each new page's title, and on every new page in its
+example. The code also drops text that is only part of the page's name ("Lady"
+for Lady Corvina) or says what it isn't ("not Port Vell").
 
 Corrections (Kevin on the phone, 2026-11-24: "Actually it's a bireme" after
 Vessel: trireme, and nothing happened). The model gave the new value; the
 code dropped it, as it filled only empty fields. Now a filled field takes the
 new value, shown as "Vessel: bireme (was trireme)" with its own Undo, which
-puts the old one back. Seven scenarios added: three corrections and four
-facts that mustn't replace one ("her brother is 40", "she was 16 when…"):
+puts the old one back, but only in a message with a correcting word
+("actually", "not", "sorry", "wait"…), so facts like "her brother is 40" or
+"she was 16 when…" don't replace one.
 
-| Change | Facts filed | Corrections made | Filled values kept | Filed from questions, hedges, chat |
-|---|---|---|---|---|
-| filled fields replaced, nothing else | 124/136 (91%) | 6/6 | 12/14 | 0/36 |
-| + in the prompt's facts rule: correct only when told; "her age when something happened is not her age" | 100/136 (74%) | 6/6 | 14/14 | 0/36 |
-| the same sentence moved to the closing rules | 122/136 (90%) | 6/6 | 14/14, but "when she was nineteen" still replaced her age | 0/36 |
-| + the code replaces only in a message with a correcting word ("actually", "not", "sorry", "wait"…) (shipped) | 122/136 (90%) | 6/6 | all | 0/36 |
-
-In the 74% row the model stopped listing the open page with its type, so
-facts had no fields to go in; where a rule sits in the prompt matters.
-
-About 2.7 s a message on the computer's GPU. New types come from what's said
-(Event, Ship, Object, Organization appeared on their own). Read by hand, about
-1 in 30 filings in the shipped run were still wrong (a ship typed as a Place,
-"Gull Rock" for "Treaty of Gull Rock", a fact pinned on the wrong page): each
-shows as its own line in the conversation, undone in one tap.
+New types come from what's said (Event, Ship, Object, Organization). A wrong
+filing (a ship typed as a Place, a fact pinned on the wrong page) shows as its
+own line in the conversation, undone in one tap.
 Naming the open page's subject renames it (Kevin on the phone, 2026-11-24:
 "Her name is Florica" on Casperica made a new page Florica and a Name field).
 A fact on the open page whose field is Name, Full name or Called, in the
 author's words and capitalised, becomes the page's title, with Undo; links to
 it follow (`Library.commit`), and the title on screen updates. Facts by the new
 name land on the same page; an untitled page gets its name this way. Other
-×2: all renamed or not as they should; overall facts 91%, nothing filed from
-questions or guesses.
+names stay fields ("Her mother's name is Ilinca").
 
 Not yet: a change over time that isn't worded as a correction ("she moved
 to Calloway") leaves the old value, and the
@@ -502,20 +360,6 @@ page's own writing isn't read.
 
 Kevin's method (2026-11-25): "Once we know how models react to our content
 stock we can use that as a baseline to see whether our instructions improve or
-harm it, tailored to each model." Each model is measured stock first
-instruction is then measured against that model's stock result, and kept only
-for the model it helps.
-
-   `variants.py` that swaps it in for the app's.
-   (`make_scenarios.py`; Kevin's own world adds more from the git-ignored
-   `private/`). `python3 checks.py NAME` gives a first number in seconds:
-   automatic pass/fail checks for the failures seen most. They don't measure
-   how good a reply is.
-4. Only then move the text into `CompanionPrompt.swift`. Its tests pin the
-   builds, so what was measured is what ships.
-
-`phone` rendering (AnyLanguageModel's, as the app sent E4B its prompt) or the
-model file's own template. On the 26B the app rendered the prompt itself
-(`TurboModel.chat`: no tools, and with thinking off its thought channel came
-(`gemma_format.render_turbo`); measurements of the 26B use that. Since
-Nemotron the app renders the model file's own template (`GemmaChat`), which is
+harm it, tailored to each model." He judges the companion by using it
+(2026-11-25); a test suite from an open standard, built around how the app is
+used, is still to be chosen (`docs/todo.md`).

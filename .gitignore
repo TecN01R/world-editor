@@ -24,4 +24,5 @@ build/
 # TurboFieldfare, the companion's engine, fetched by scripts/fetch-turbo-fieldfare.sh
 /Vendor/
 
+# Python bytecode (ci/ and scripts/ helpers)
 __pycache__/

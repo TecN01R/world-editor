@@ -9,7 +9,7 @@ import UIKit
 
 /// The companion's model: NVIDIA's Nemotron 3.5 Bolt E4B (OpenMDW-1.1, post-trained from
 /// Google's Gemma 4 E4B, Apache-2.0), in bartowski's 4-bit file, on llama.cpp (MIT) with
-/// thinks before each reply, its thought capped at 128 tokens as llama.cpp's server caps it
+/// Metal. Kevin's choice, 2026-11-25: it thinks before each reply, its thought capped at 128 tokens as llama.cpp's server caps it
 /// (`ThinkingBudget`), and looks things up in the author's pages with `search_pages`, in the
 /// model file's own chat format (`GemmaChat`). Its largest table, the per-layer embeddings
 /// (1.9 GB), stays in storage and is read a row at a time (llama.cpp's lazy reading), so it
@@ -18,7 +18,7 @@ import UIKit
 final class LlamaModel: CompanionModel, @unchecked Sendable {
     static let name = "Nemotron 3.5 Bolt"
 
-    /// one's 5.57, and wrote 5 of its 184 searches as text (2026-11-25).
+    /// One checked revision of the file, on Hugging Face: bartowski's Q4_K_M of NVIDIA's model.
     private enum Source {
         static let url = URL(string: "https://huggingface.co/bartowski/NVIDIA-Nemotron-3.5-Bolt-E4B-GGUF/resolve/"
                              + "7a243bc11b80212594a71d2ecddde5798a43e265/NVIDIA-Nemotron-3.5-Bolt-E4B-Q4_K_M.gguf")!
@@ -34,7 +34,7 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
     /// The download so far, which a later try goes on from.
     private static let partial = folder.appending(path: "nemotron-3.5-bolt-e4b-5f0f982d.gguf.partial")
 
-    /// 64 cut it off mid-plan, unlimited thought half again as long for no better replies).
+    /// Thinking before each reply is capped at this many tokens, NVIDIA's setting for the model.
     static let thinkingBudget = 128
 
     private let onProgress: @Sendable (Download?) -> Void
@@ -103,6 +103,7 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
     }
 
     /// Reads what the message states: the model writes it as JSON, as the prompt's example
+    /// shows, greedily (its most likely reading) and without thinking.
     func file(_ prompt: FilingPrompt) async throws -> Filings {
         let text = GemmaChat.prompt(system: prompt.system, turns: [.init(speaker: .author, text: prompt.message)],
                                     tools: [], thinking: false)

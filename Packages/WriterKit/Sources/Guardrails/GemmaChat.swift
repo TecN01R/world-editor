@@ -1,16 +1,17 @@
 import Foundation
 
 /// Gemma 4's chat format, as the companion's model (NVIDIA's Nemotron 3.5 Bolt E4B, a
-/// Gemma 4 E4B) renders a conversation with its own chat template, and as it writes back:
-/// phone sends the same text. llama.cpp's server applies that template on the computer;
-/// on the phone there is no template engine, so this renders the part of it the companion
-/// uses: a system turn (thinking switched on there), its tools declared (`search_pages`,
-/// `look_up`), the conversation, and within the reply being written, the calls it has made so far.
+/// Gemma 4 E4B) renders a conversation with its own chat template, and as it writes back.
+/// llama.cpp's server applies that template on the computer; on the phone there is no
+/// template engine, so this renders the part of it the companion uses: a system turn
+/// (thinking switched on there), its tools declared (`search_pages`, `look_up`), the conversation, and within the reply being written, the calls it has made so far.
+/// The tests compare it with what llama.cpp's server renders from the model file's template.
 ///
 /// Everything put in is plain already: the app's texts through `Reasoned.gemmaPlain`, and
 /// `PageLookup.results`, so typed control tokens stay words.
 public enum GemmaChat {
     /// A tool the model is offered, with one argument (`query`, unless it says otherwise), which
+    /// isn't required.
     public struct Tool: Equatable, Sendable {
         public var name: String
         public var description: String
@@ -97,7 +98,7 @@ public enum GemmaChat {
                 + "<|tool_response>response:\(search.tool){value:" + quoted(search.found) + "}<tool_response|>"
         }
         // The template ends the model's turn after a call only when it said something before
-        // it, and opens its thought channel again after any call (as it was measured).
+        // it, and opens its thought channel again after any call (as llama.cpp's server renders it).
         if !trimmed(last.said).isEmpty { text += "<turn|>\n" }
         return text + (thinking ? thoughtOpened : "")
     }
@@ -199,7 +200,7 @@ public enum GemmaChat {
     }
 }
 
-/// llama.cpp's thinking budget (its reasoning-budget sampler, `--reasoning-budget N`), as the
+/// llama.cpp's thinking budget (its reasoning-budget sampler, `--reasoning-budget N`): once the model's thought has run `budget` tokens, the
 /// end of its thought channel is forced, mid-sentence if need be, after any character it's
 /// partway through. Each thought gets its own budget (after a search, it thinks again).
 /// Counted in tokens; the engine tells it each token and whether that token finishes a
