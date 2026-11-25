@@ -65,9 +65,12 @@ its SHA-256. NVIDIA's own 4-bit file (6.2 GB, its embeddings at 8 bits) was
 against 5.57, more poor replies (39% against 25%), and 5 of its 184 searches
 written as text instead of called (none for this file).
 Its per-layer embeddings (1.9 GB) stay in storage and are read a row at a time
-(llama.cpp's lazy reading), so about 3.2 GB of weights are in memory, plus the
-conversation's cache (8,192 tokens, every position kept so a follow-up can go
-back to where the prompt changed).
+(llama.cpp's lazy reading), so about 2.3 GB of weights are in memory, plus
+about 0.3 GB for the conversation (8,192 tokens; its sliding-window layers keep
+only their window, and room is made for one token's output at a time), about
+2.6 GB in all: the Duo gives the app about 3.4 GB. A follow-up reads only from
+where its prompt differs from the last, unless that's further back than the
+window still covers, when it reads from the start (as llama.cpp's server does).
 
 The prompt is the model file's own chat template, rendered by the app
 128 tokens, the end of its thought is forced, as llama.cpp's server does with

@@ -260,12 +260,17 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
             let handle = try FileHandle(forReadingFrom: partial)
             defer { try? handle.close() }
             var hash = SHA256(), done: Int64 = 0
-            while let chunk = try handle.read(upToCount: 8 << 20), !chunk.isEmpty {
+            // Each piece read is given back as soon as it's hashed: read without a pool of its
+            // own, every piece of the 5 GB stayed in memory until the end, and iOS closed the
+            // app partway through (Kevin, 2026-11-25).
+            while try autoreleasepool(invoking: {
+                guard let chunk = try handle.read(upToCount: 8 << 20), !chunk.isEmpty else { return false }
                 try Task.checkCancellation()
                 hash.update(data: chunk)
                 done += Int64(chunk.count)
                 progress.checking(done)
-            }
+                return true
+            }) {}
             return done == Source.bytes && hash.finalize().map { String(format: "%02x", $0) }.joined() == Source.sha256
         }.value
         guard whole else {
@@ -404,6 +409,8 @@ private final class Loaded: @unchecked Sendable {
     let batch: OpaquePointer
     let maxContext: Int
     let batchSize: Int
+    /// The sliding window of its local-attention layers, in tokens.
+    let window: Int32
     /// The tokens that open its thought (`<|channel>thought`), end it (`<channel|>`) and call a
     /// tool, and those a prompt ends with when it has opened its thought for it
     /// (`GemmaChat.thoughtOpened`).
@@ -418,6 +425,7 @@ private final class Loaded: @unchecked Sendable {
         self.context = context
         self.maxContext = maxContext
         self.batchSize = batchSize
+        window = max(1, llama_model_n_swa(model))
         guard let vocab = llama_model_get_vocab(model), let batch = llama_batch_ext_init(context) else {
             throw LlamaFailed(what: "no vocabulary or batch")
         }
@@ -476,15 +484,19 @@ private final class Loaded: @unchecked Sendable {
 
     /// Where reading `ids` can start: after the beginning it shares with what the cache holds
     /// (a prompt that only adds to the last reads only what's new), short of its last token,
-    /// which is read again to write from. The cache keeps every position (its sliding-window
-    /// layers in full), so it can go back to any point.
+    /// which is read again to write from. Going back further than that, the cache's
+    /// sliding-window layers keep only their last positions (a window and a batch), so it can
+    /// go back only as far as they still cover what follows; otherwise it reads from the start
+    /// (llama.cpp's server checks the same).
     func start(for ids: [llama_token]) -> Int {
         let common = min(zip(cached, ids).prefix { $0.0 == $0.1 }.count, ids.count - 1)
         let memory = llama_get_memory(context)
-        if common < cached.count, !llama_memory_seq_rm(memory, 0, llama_pos(common), -1) {
-            llama_memory_clear(memory, true)
-            cached = []
-            return 0
+        if common < cached.count {
+            let covered = common == 0 || llama_memory_seq_pos_min(memory, 0) <= max(0, llama_pos(common) - window)
+            guard covered, llama_memory_seq_rm(memory, 0, llama_pos(common), -1) else {
+                forget()
+                return 0
+            }
         }
         cached = Array(cached.prefix(common))
         return common
@@ -669,9 +681,11 @@ private final class Engine: @unchecked Sendable {
         context.n_batch = 512
         context.n_ubatch = 512
         context.n_seq_max = 1
-        // Every position kept in its sliding-window layers too, so a follow-up can go back
-        // to where it differs from the last prompt without reading everything again.
-        context.swa_full = true
+        // Memory kept small for the 15 Pro (Kevin's phone gives the app about 3.4 GB): its
+        // sliding-window layers keep only their window (168 MB of cache in all, not 448), and
+        // room is made for one token's output at a time, the only one read (117 MB, not 590).
+        context.swa_full = false
+        context.n_outputs_max = 1
         guard let ctx = llama_init_from_model(model, context) else {
             llama_model_free(model)
             throw LlamaFailed(what: "no context")
