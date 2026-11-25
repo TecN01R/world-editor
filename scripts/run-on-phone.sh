@@ -38,7 +38,10 @@ revive() {
     [[ "${USBMUXD_SOCKET_ADDRESS:-}" == "127.0.0.1:27099" ]] || return 1
     timeout 8 avahi-browse -tp _apple-mobdev2._tcp 2>/dev/null | grep -q . || return 1
     echo "The phone is on the network but netmuxd lost it: restarting netmuxd." >&2
-    pkill -u "$USER" -x netmuxd || true
+    # Only this one: other projects' sessions run their own netmuxd on other ports (2026-11-25).
+    for pid in $(pgrep -u "$USER" -x netmuxd); do
+        tr '\0' ' ' < "/proc/$pid/cmdline" | grep -q -- '-p 27099' && kill "$pid"
+    done
     sleep 1
     nohup setsid /usr/local/bin/netmuxd --disable-usb --disable-unix --host 127.0.0.1 -p 27099 \
         --plist-storage /var/lib/lockdown >/dev/null 2>&1 </dev/null &
