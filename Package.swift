@@ -27,7 +27,8 @@ let package = Package(
             // Each file sees only the modules it imports (SE-0444).
             swiftSettings: [.swiftLanguageMode(.v5), .enableUpcomingFeature("MemberImportVisibility")]
         ),
-        // The companion's model runs on llama.cpp (MIT): its prebuilt Apple framework, the
+        // The companion's model runs on llama.cpp (MIT): its prebuilt Apple framework, which
+        // scripts/fetch-llama.sh puts here (checked).
         .binaryTarget(name: "llama", path: "Vendor/llama.xcframework"),
     ]
 )

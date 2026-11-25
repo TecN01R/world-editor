@@ -48,6 +48,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Amend CLAUDE.md and docs/ai-charter.md to the new rule when it ships
 
 ## Companion
+- [ ] Choose a test suite for the companion from an open standard, built around how the app is used (Kevin, 2026-11-25: he judges by using it)
   - [ ] Blind taste test for Kevin (Kevin, 2026-11-25: "I'm also ok with blind taste test for me"): pairs of anonymous replies to his own messages, fresh from each candidate; he picks or ties; ranked as Chatbot Arena does (Bradley–Terry); he is the only judge
 - [ ] Search: built on Nemotron (search_pages, thinking capped); check it finds things on the phone
 - [ ] Filing through tools (make page, set field, rename, set page text), each with Undo
