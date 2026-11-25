@@ -613,9 +613,8 @@ private final class Engine: @unchecked Sendable {
     }
 
     /// Loads the installed model on the GPU, its per-layer embeddings left in storage and read
-    /// as needed, with room for the companion's prompts (instructions, examples, background
-    /// and conversation: 2,000 to 4,500 tokens) and its reply. Logs what the phone offers it
-    /// (TRIAL: the model's memory on the Duo isn't known yet).
+    /// as needed, with room for a whole conversation, its tools' answers and its reply. Logs what
+    /// the phone offers it (TRIAL).
     private static func load() throws -> Loaded {
         let clock = ContinuousClock()
         let began = clock.now
@@ -633,7 +632,9 @@ private final class Engine: @unchecked Sendable {
         }
         let opened = clock.now
         var context = llama_context_default_params()
-        context.n_ctx = 8192
+        // Room for a whole conversation, its tools' answers and its reply (Kevin, 2026-11-25: "you
+        // WILL lift the limits"; 8,192 before): the higher memory limit has the room.
+        context.n_ctx = 16384
         context.n_batch = 512
         context.n_ubatch = 512
         context.n_seq_max = 1

@@ -208,7 +208,7 @@ final class PageLookupTests: XCTestCase {
         }
         let ledger = lookup.results(for: "the ledger")
         let named = try XCTUnwrap(ledger.components(separatedBy: "\nAlso on their pages:").first)
-        XCTAssertLessThanOrEqual(named.count, 900)
+        XCTAssertLessThanOrEqual(named.count, 3600)
         XCTAssertTrue(named.contains("Entry 1: paid"))                                // how it opens
         XCTAssertTrue(named.contains("[\u{2026}]"))
         XCTAssertTrue(named.hasSuffix("Entry \(entries.count): paid the harbour toll in salt and rope, and wrote it down."))
@@ -457,13 +457,13 @@ final class PageLookupTests: XCTestCase {
 
     // MARK: Searches within a reply
 
-    func testAReplysSearchesAnswerUpToItsBudgetThenSayItsTheLast() {
+    func testAReplysSearchesAreEachAnswered() {
         var searches = PageLookup.Searches(world().lookup)
         XCTAssertTrue(searches.answer("search_pages", query: "Kestrel").contains("Twenty oars a side"))
         XCTAssertEqual(searches.answer("search_pages", query: "  "), PageLookup.needsQuery)
         XCTAssertEqual(searches.answer("search_pages", query: nil), PageLookup.needsQuery)
         XCTAssertFalse(searches.answer("search_pages", query: "Port Vell").isEmpty)
-        XCTAssertEqual(searches.answer("search_pages", query: "Ilsa"), PageLookup.lastSearch)
+        XCTAssertTrue(searches.answer("search_pages", query: "Ilsa").contains("Ilsa"))
         XCTAssertEqual(searches.answer("look_up", query: "Ilsa"), "Tool not found: look_up")
         XCTAssertEqual(searches.queries, ["Kestrel", "Port Vell", "Ilsa"])
     }

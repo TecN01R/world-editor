@@ -328,13 +328,13 @@ final class Companion {
                                                                 known: Self.dictionary()))
         var reply = Reasoned(reply: "")
         do {
-            // Unusual text takes more of the model's context than its length
-            // suggests: a prompt that doesn't fit is rebuilt with less of the conversation.
-            for room in [1, 2, 4] {
+            // The whole conversation (Kevin, 2026-11-25: "you WILL lift the limits"); only one
+            // that outgrows the model's context is read from a later point, newest kept.
+            for kept in [Int.max, 24000, 12000] {
                 let prompt = CompanionPrompt.plain(conversation, page: isWorld ? nil : page.title,
                                                    world: isWorld ? library.world.name : nil,
                                                    instructions: instructions,
-                                                   maxTurnCharacters: 6000 / room)
+                                                   maxTurnCharacters: kept)
                 do {
                     for try await partial in model.stream(prompt, tools: tools, thinking: thinks) {
                         guard !Task.isCancelled else { break }
@@ -344,7 +344,7 @@ final class Companion {
                         self.reading = partial.reading
                     }
                     break
-                } catch is PromptTooLong where room < 4 {
+                } catch is PromptTooLong where kept > 12000 {
                     continue
                 }
             }

@@ -9,6 +9,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Rotation crash: check it's gone
 
 ## Check on the phone
+- [ ] Limits lifted (Kevin, 2026-11-25: "you WILL lift the limits"): the whole conversation (16K context), no per-tool budgets (only a 10-call runaway guard), 4x larger Wikipedia and page-search results, all three articles read
 - [ ] The companion is the model stock now, with its tools (Kevin, 2026-11-25). Instructions… in its menu, blank at first: write your own, or tell it how to reply from now on and it adds one ("Added to Instructions: …" under the reply opens them)
 - [ ] More memory for the app (Kevin, 2026-11-25: "Yes" to the patched xtool): installed from d7a1eed on; the companion's next LOAD line should show about 5.8 GB left instead of 3.4
 - [ ] Wikipedia look-ups: ask a real-world question it might not know; "Searched Wikipedia for …" under the reply opens the articles; Look Things Up in the menu turns it off (Kevin, 2026-11-25)

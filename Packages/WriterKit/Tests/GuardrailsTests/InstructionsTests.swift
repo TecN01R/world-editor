@@ -15,7 +15,7 @@ final class InstructionsTests: XCTestCase {
                        "Be brief.\nDon't suggest names.\nNo lists.")
     }
 
-    func testTheModelAddsUpToTwoAReplyWhenOffered() async {
+    func testTheModelAddsThemWhenOffered() async {
         var tools = ReplyTools(pages: nil, lookingUp: false, instructing: true)
         XCTAssertEqual(tools.offered.map(\.name), [Instructions.toolName])
         let noLookUp: (String) async throws -> (text: String, found: LookedUp) = { _ in throw URLError(.badURL) }
@@ -24,9 +24,8 @@ final class InstructionsTests: XCTestCase {
         let first = await tools.answer(Instructions.toolName, query: " Don't suggest names unless they ask. ", lookUp: noLookUp)
         XCTAssertEqual(first, Instructions.added)
         _ = await tools.answer(Instructions.toolName, query: "Keep it short.", lookUp: noLookUp)
-        let third = await tools.answer(Instructions.toolName, query: "No lists.", lookUp: noLookUp)
-        XCTAssertEqual(third, Instructions.lastOne)
-        XCTAssertEqual(tools.instructions, ["Don't suggest names unless they ask.", "Keep it short."])
+        _ = await tools.answer(Instructions.toolName, query: "No lists.", lookUp: noLookUp)
+        XCTAssertEqual(tools.instructions, ["Don't suggest names unless they ask.", "Keep it short.", "No lists."])
         var off = ReplyTools(pages: nil, lookingUp: false)
         let missing = await off.answer(Instructions.toolName, query: "Keep it short.", lookUp: noLookUp)
         XCTAssertEqual(missing, "Tool not found: \(Instructions.toolName)")

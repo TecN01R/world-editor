@@ -344,9 +344,11 @@ public struct CompanionPrompt: Equatable, Sendable {
     /// instructions, examples or pages, only the conversation, and since 2026-11-25 one line on
     /// which page is open (`page`, its title), or, about the whole world, which world (`world`),
     /// then the writer's standing `instructions`, if they have any (`Instructions`; none at first).
+    /// The whole conversation, unless `maxTurns` or `maxTurnCharacters` (in all) say less: only
+    /// when it outgrows the model's context (Kevin, 2026-11-25: "you WILL lift the limits").
     /// The opening line stays only before its first reply, which has to answer something.
     public static func plain(_ conversation: Conversation, page: String? = nil, world: String? = nil, instructions: String? = nil,
-                             maxTurns: Int = 12, maxTurnCharacters: Int = 6000) -> CompanionPrompt {
+                             maxTurns: Int = .max, maxTurnCharacters: Int = .max) -> CompanionPrompt {
         let turns = recent(conversation, maxTurns: maxTurns, maxTurnCharacters: maxTurnCharacters)
         let open: String?
         if let page {

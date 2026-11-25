@@ -20,14 +20,11 @@ public enum WebLookup {
         + "aren't there."
     /// The guide of its one argument, `query`.
     public static let queryGuide = "A few words naming the real-world thing to look up"
-    /// Look-ups allowed in one reply; the next gets `lastLookUp`.
-    public static let lookupsPerReply = 2
-    /// The most a look-up returns.
-    public static let maxCharacters = 3000
-    /// The most of an article's opening it returns.
-    static let openingCharacters = 400
+    /// The most a look-up returns (Kevin, 2026-11-25: "you WILL lift the limits"; 3,000 before).
+    public static let maxCharacters = 12000
+    /// The most of an article's opening it returns (400 before).
+    static let openingCharacters = 1200
     public static let needsQuery = "look_up needs a few words to look for."
-    public static let lastLookUp = "That's the last look-up for this reply: answer from what you found."
     public static let unreachable = "Wikipedia couldn't be reached just now: answer from what you know, and say you couldn't check it."
 
     public static func theirs(_ name: String) -> String {
@@ -195,7 +192,7 @@ public enum WebLookup {
     /// most of its words (a word's singular or plural counts), at least half of them, up to
     /// `count`, in the article's order, each cut to `passageCharacters` from the sentence where
     /// its first match is.
-    static func passages(_ text: String, query: String, count: Int = 2) -> [String] {
+    static func passages(_ text: String, query: String, count: Int = 4) -> [String] {
         let terms = PageLookup.terms(query, leavingOut: PageLookup.stopwords).map { term in
             term.count == 1 ? [[term[0]] + PageLookup.numberForms(term[0])] : term.map { [$0] }
         }
@@ -215,7 +212,7 @@ public enum WebLookup {
             .map { cut(paragraphs[$0.index], from: $0.first) }
     }
 
-    static let passageCharacters = 600
+    static let passageCharacters = 1500
 
     /// An article's paragraphs that have something to say (not its section headings).
     private static func paragraphs(_ text: String) -> [String] {
@@ -249,11 +246,11 @@ public enum WebLookup {
         return String(head[..<(head.lastIndex(where: \.isWhitespace) ?? head.endIndex)]) + "\u{2026}"
     }
 
-    /// Looks `query` up: the search, then the text of the two articles that best match it.
+    /// Looks `query` up: the search, then the text of every article it found.
     public static func lookUp(_ query: String, session: URLSession = .shared) async throws -> (text: String, found: LookedUp) {
         let hits = try Self.hits(try await get(searchURL(query), session))
         var articles: [String: Article] = [:]
-        for hit in hits.prefix(2) {
+        for hit in hits {
             articles[hit.title] = try Self.article(try await get(articleURL(hit.title), session))
         }
         return answer(query, hits: hits, articles: articles)
@@ -281,8 +278,8 @@ public enum WebLookup {
 }
 
 /// them: `search_pages` (with `pages`), `look_up` (when looking up is on) and `add_instruction`
-/// (when instructing), each within its budget for the reply. It never fails: what goes wrong is
-/// told to the model in a sentence.
+/// (when instructing), as many as the model calls (`replyWithTools` stops a runaway loop). It never
+/// fails: what goes wrong is told to the model in a sentence.
 public struct ReplyTools: Sendable {
     /// What the model is offered, in the order the prompt declares them.
     public let offered: [GemmaChat.Tool]
@@ -290,7 +287,6 @@ public struct ReplyTools: Sendable {
     private let pages: PageLookup?
     /// Their names, which a look-up never sends.
     private let names: [String]
-    private var lookupsMade = 0
     /// What it looked up, and found, in order: what was sent to Wikipedia.
     public private(set) var lookups: [LookedUp] = []
     /// The instructions it added to the writer's, in order (`Instructions`).
@@ -320,8 +316,6 @@ public struct ReplyTools: Sendable {
         guard tool == WebLookup.toolName else { return searches?.answer(tool, query: query) ?? "Tool not found: \(tool)" }
         let query = (query ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return WebLookup.needsQuery }
-        lookupsMade += 1
-        guard lookupsMade <= WebLookup.lookupsPerReply else { return WebLookup.lastLookUp }
         if let name = WebLookup.theirName(in: query, names: names) { return Reasoned.gemmaPlain(WebLookup.theirs(name)) }
         do {
             let (text, found) = try await lookUp(query)
@@ -332,11 +326,10 @@ public struct ReplyTools: Sendable {
         }
     }
 
-    /// Keeps `text` as an instruction to add, up to `Instructions.perReply` a reply.
+    /// Keeps `text` as an instruction to add.
     private mutating func addInstruction(_ text: String?) -> String {
         let text = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return Instructions.needsInstruction }
-        guard instructions.count < Instructions.perReply else { return Instructions.lastOne }
         instructions.append(text)
         return Instructions.added
     }

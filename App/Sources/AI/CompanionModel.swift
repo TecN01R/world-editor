@@ -108,6 +108,9 @@ func streaming(_ body: @escaping @Sendable (AsyncThrowingStream<ReplySoFar, Erro
 
 /// What one pass of a model wrote: its output, a line about it for the TRIAL log, and how
 /// often it went on after the author came back.
+/// Calls in one reply past which it's a runaway loop, not a model at work: it answers without the tools.
+let maxCalls = 10
+
 struct PassDone {
     var output: GemmaChat.Output
     var summary: String
@@ -115,9 +118,9 @@ struct PassDone {
 }
 
 /// each pass of the model reads the prompt with the calls made so far and writes until it ends
-/// its turn or calls a tool (search_pages, look_up), whose answer goes in the next pass's prompt:
-/// at most three calls, after which, or if it says nothing at all, it's asked once more without
-/// the tools. `pass` runs a pass of the model on `text` (`inThought`: the prompt opened its
+/// its turn or calls a tool (list_pages, search_pages, look_up, add_instruction), whose answer goes
+/// in the next pass's prompt, as many as it calls (Kevin, 2026-11-25: "you WILL lift the limits"):
+/// only a runaway loop, `maxCalls`, or a reply with nothing said, is asked once more without the tools. `pass` runs a pass of the model on `text` (`inThought`: the prompt opened its
 /// thought), showing what it has written so far and, while it reads, how much of the prompt
 /// it has read (0 to 1). `model` and `state`: its name, and the memory and heat, for the
 /// TRIAL log.
@@ -146,7 +149,7 @@ func replyWithTools(_ prompt: CompanionPrompt, tools: ReplyTools, thinking: Bool
         resumed += done.resumed
         let output = done.output
         if !offered.isEmpty, let call = output.call {
-            guard made.count < 3 else { (offered, made) = ([], []); continue }   // a fourth: without the tools
+            guard made.count < maxCalls else { (offered, made) = ([], []); continue }   // a runaway loop: without the tools
             var search = GemmaChat.Search(thought: output.thought, said: output.said, tool: call.name, query: call.query, found: "")
             // Shown as it's made: a look-up is what leaves the phone.
             continuation.yield(ReplySoFar(reply: Reasoned.shown(made + [search], tools, GemmaChat.Output())))

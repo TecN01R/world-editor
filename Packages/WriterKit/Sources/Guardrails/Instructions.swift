@@ -14,11 +14,8 @@ public enum Instructions {
     /// Its one argument, and the guide to it.
     public static let argument = "instruction"
     public static let argumentGuide = "The instruction, as you'll read it (\"Don't suggest names unless they ask.\")"
-    /// At most this many a reply.
-    public static let perReply = 2
     public static let added = "Added. You'll read it before every reply from now on."
     public static let needsInstruction = "Nothing was added: give the instruction to add."
-    public static let lastOne = "Nothing was added: that's as many as one reply adds. Answer the writer now."
 
     /// The instructions as the prompt shows them, under a line saying whose they are; nil when
     /// there are none.

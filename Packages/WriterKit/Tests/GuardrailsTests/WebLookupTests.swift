@@ -59,7 +59,7 @@ final class WebLookupTests: XCTestCase {
 
     /// A long paragraph is shown from the sentence its answer is in.
     func testALongParagraphIsShownFromTheSentenceThatAnswers() {
-        let filler = String(repeating: "Ships were built along the coast in many sizes. ", count: 15)
+        let filler = String(repeating: "Ships were built along the coast in many sizes. ", count: 40)
         let text = "An opening paragraph about ships, long enough to count as the opening.\n" + filler + "A trireme carried 170 rowers. " + filler
         let passage = WebLookup.passages(text, query: "trireme rowers")
         XCTAssertEqual(passage.count, 1)
@@ -75,9 +75,9 @@ final class WebLookupTests: XCTestCase {
     }
 
     func testAnArticleOpensWithItsWholeSentences() {
-        let long = String(repeating: "A sentence about ships. ", count: 40)
+        let long = String(repeating: "A sentence about ships. ", count: 80)
         let opening = WebLookup.opening(long)
-        XCTAssertLessThanOrEqual(opening.count, 400)
+        XCTAssertLessThanOrEqual(opening.count, WebLookup.openingCharacters)
         XCTAssertTrue(opening.hasSuffix("ships."))
     }
 
@@ -120,7 +120,7 @@ final class WebLookupTests: XCTestCase {
         PageLookup(pages: [.init(heading: "Ilsa", paragraphs: [(UUID(), "A rower on the Kestrel.")])])
     }
 
-    func testLookUpsAreAnsweredUpToTheirBudgetAndKept() async {
+    func testLookUpsAreAnsweredAndKept() async {
         var tools = ReplyTools(pages: pages(), lookingUp: true)
         XCTAssertEqual(tools.offered.map(\.name), ["search_pages", "look_up"])
         var sent: [String] = []
@@ -132,12 +132,12 @@ final class WebLookupTests: XCTestCase {
         XCTAssertEqual(first, "found trireme")
         let theirs = await tools.answer("look_up", query: "Ilsa rowing", lookUp: fetch)
         XCTAssertEqual(theirs, Reasoned.gemmaPlain(WebLookup.theirs("Ilsa")))
-        let last = await tools.answer("look_up", query: "galley", lookUp: fetch)
-        XCTAssertEqual(last, WebLookup.lastLookUp)
+        let next = await tools.answer("look_up", query: "galley", lookUp: fetch)
+        XCTAssertEqual(next, "found galley")
         let empty = await tools.answer("look_up", query: nil, lookUp: fetch)
         XCTAssertEqual(empty, WebLookup.needsQuery)
-        XCTAssertEqual(sent, ["trireme"])   // never their name, never past the budget
-        XCTAssertEqual(tools.lookups.map(\.query), ["trireme"])
+        XCTAssertEqual(sent, ["trireme", "galley"])   // never their name
+        XCTAssertEqual(tools.lookups.map(\.query), ["trireme", "galley"])
         let page = await tools.answer("search_pages", query: "Ilsa", lookUp: fetch)
         XCTAssertTrue(page.contains("A rower on the Kestrel"))
         XCTAssertEqual(tools.queries, ["Ilsa"])

@@ -50,6 +50,14 @@ to reply from now on. Shown in the prompt under "The writer's instructions for
 you:", after the line on what's open; "Added to Instructions: …" under the
 reply opens them. One set for every world, kept on the phone.
 
+**No limits of the app's own** (Kevin, 2026-11-25: "you WILL lift the limits"):
+the whole conversation goes in, read from a later point only when it outgrows
+the model's context (16K tokens); every tool call is answered, with no budget
+per reply (only a runaway loop, 10 calls, is asked to answer without tools); a
+search of their pages returns up to 6,000 characters and a look-up up to 12,000,
+every article found read; replies run until the model ends them. The thinking cap
+256 or uncapped.
+
 **Until then** it had the full prompt below, which stays in WriterKit as the
 
 1. **Who it is** (`CompanionPrompt.instructions`, about 240 words). A friend

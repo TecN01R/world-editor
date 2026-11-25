@@ -63,12 +63,9 @@ public struct PageLookup: Sendable {
         + "one of their pages returns that page. For their world only: it knows nothing about the real world."
     /// The guide of its one argument, `query`.
     public static let queryGuide = "A name from their pages, or a few of their words to look for"
-    /// Searches allowed in one reply; the next gets `lastSearch`.
-    public static let searchesPerReply = 2
-    /// The most a search returns.
-    public static let maxCharacters = 1500
+    /// The most a search returns (Kevin, 2026-11-25: "you WILL lift the limits"; 1,500 before).
+    public static let maxCharacters = 6000
     public static let needsQuery = "search_pages needs a name or a few words to look for."
-    public static let lastSearch = "That's the last search for this reply: answer from what you found."
 
     public static func nothingFound(_ query: String) -> String {
         "Nothing on their pages or in what they've told you mentions \u{201C}\(CompanionPrompt.oneLine(query, maxCharacters: 80))\u{201D}."
@@ -133,7 +130,7 @@ public struct PageLookup: Sendable {
         let said = answerLines(match)
         let lines = self.lines(hits, cap: Self.maxCharacters / 2)
         if let first = named.first {
-            return Self.assemble(head: describe(first, answering: terms, maxCharacters: 900), pages: lines,
+            return Self.assemble(head: describe(first, answering: terms, maxCharacters: 3600), pages: lines,
                                  heading: "Also on their pages:", said: said, maxCharacters: Self.maxCharacters)
         }
         // A type asked for ("characters", or "Character" alone): its pages, then what else matched.
@@ -612,8 +609,8 @@ extension PageLookup {
 // MARK: - Searching within a reply
 
 extension PageLookup {
-    /// ReplyTools): it never fails. A call without a query gets `needsQuery`; past
-    /// `searchesPerReply` searches, `lastSearch`; a tool it doesn't have, that it isn't there.
+    /// ReplyTools): it never fails. A call without a query gets `needsQuery`, and a tool it
+    /// doesn't have, that it isn't there. No budget: every search is answered.
     public struct Searches: Sendable {
         private let lookup: PageLookup
         /// What it searched for, in order.
@@ -629,7 +626,7 @@ extension PageLookup {
             let query = (query ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             guard !query.isEmpty else { return PageLookup.needsQuery }
             queries.append(query)
-            return queries.count > PageLookup.searchesPerReply ? PageLookup.lastSearch : lookup.results(for: query)
+            return lookup.results(for: query)
         }
     }
 }
