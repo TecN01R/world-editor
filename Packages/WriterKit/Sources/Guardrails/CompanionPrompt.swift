@@ -137,7 +137,7 @@ public struct CompanionPrompt: Equatable, Sendable {
     ///   the few most like this one and the rest by name (nil: every page's opening, as before).
     public init(page: Page, others: [Page] = [], earlier: [(page: String, conversation: Conversation)] = [],
                 conversation: Conversation, maxCharacters: Int = 6000, maxTurns: Int = 12,
-                maxTurnCharacters: Int = 6000, lookup: Lookup? = nil) {
+                maxTurnCharacters: Int = 6000, lookup: Lookup? = nil, texts: Texts = Texts()) {
         let focus = [page.name, page.fields, page.writing, conversation.authorText].joined(separator: "\n")
         let memory = Self.memory(earlier, focus: focus, maxCharacters: maxCharacters / 4)
         var background = [Self.backgroundHeading(partial: lookup != nil)]
@@ -163,7 +163,7 @@ public struct CompanionPrompt: Equatable, Sendable {
         let used = world.count + related.count + memory.count + page.fields.count
         background.append("The page they have open now:\n" + Self.describe(page, maxCharacters: max(0, maxCharacters - used)))
 
-        var system = [Self.instructions(lookup: lookup), Self.examples, background.joined(separator: "\n\n")]
+        var system = Self.head(lookup: lookup, texts: texts) + [background.joined(separator: "\n\n")]
         // What to do first is said only when it applies: a small model follows
         // an instruction better than a condition.
         if conversation.turns.isEmpty { system.append(Self.opening(page, alone: world.isEmpty)) }
@@ -182,7 +182,7 @@ public struct CompanionPrompt: Equatable, Sendable {
     ///   shown (nil: as before).
     public init(world: String, pages: [Page], earlier: [(page: String, conversation: Conversation)] = [],
                 conversation: Conversation, maxCharacters: Int = 6000, maxTurns: Int = 12,
-                maxTurnCharacters: Int = 6000, lookup: Lookup? = nil) {
+                maxTurnCharacters: Int = 6000, lookup: Lookup? = nil, texts: Texts = Texts()) {
         let focus = conversation.authorText
         // Much more of each page than beside an open one: here the pages are all it has
         let room = maxCharacters * 2 / 3, perPage = 800
@@ -206,7 +206,7 @@ public struct CompanionPrompt: Equatable, Sendable {
         if !related.isEmpty { background.append(Self.relatedHeading + "\n" + related) }
         if !memory.isEmpty { background.append("From your earlier conversations:\n" + memory) }
         // It doesn't speak first here: it waits for the author (Kevin, 2026-11-24).
-        system = [Self.instructions(lookup: lookup), Self.examples, background.joined(separator: "\n\n")]
+        system = (Self.head(lookup: lookup, texts: texts) + [background.joined(separator: "\n\n")])
             .joined(separator: "\n\n")
         turns = Self.authorFirst(Self.recent(conversation, maxTurns: maxTurns, maxTurnCharacters: maxTurnCharacters),
                                  opener: Self.openedWorld)
@@ -275,9 +275,41 @@ public struct CompanionPrompt: Equatable, Sendable {
     /// `notShownInstruction`. Without a lookup, as they are.
     public static func instructions(lookup: Lookup?) -> String {
         guard let lookup else { return instructions }
-        let added = lookup.searching ? searchInstruction : notShownInstruction
+        return adding(lookup.searching ? searchInstruction : notShownInstruction)
+    }
+
+    /// The app's instructions for a companion that can, or can't, search the author's pages
+    /// (`instructions(lookup:)` with search, or without a lookup): what the companion's
+    /// settings show and restore.
+    public static func instructions(searching: Bool) -> String {
+        searching ? adding(searchInstruction) : instructions
+    }
+
+    /// `instructions` with `reply` among its reply cases, after the real-world one.
+    private static func adding(_ reply: String) -> String {
         let next = "- If they asked what you think"
-        return instructions.replacingOccurrences(of: next, with: added + "\n" + next)
+        return instructions.replacingOccurrences(of: next, with: reply + "\n" + next)
+    }
+
+    /// The author's own instructions and examples, from the companion's settings (Kevin,
+    /// 2026-11-25: "a settings panel for me to modify instructions myself"), in place of the
+    /// app's: nil keeps the app's; empty examples leave them out.
+    public struct Texts: Equatable, Sendable {
+        public var instructions: String?
+        public var examples: String?
+
+        public init(instructions: String? = nil, examples: String? = nil) {
+            self.instructions = instructions
+            self.examples = examples
+        }
+    }
+
+    /// What the system turn begins with: the instructions and the examples, the author's where
+    /// they set their own, any left empty left out.
+    private static func head(lookup: Lookup?, texts: Texts) -> [String] {
+        [texts.instructions ?? instructions(lookup: lookup), texts.examples ?? examples]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     /// The author's first turn in a world conversation the companion began (before it

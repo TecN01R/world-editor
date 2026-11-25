@@ -424,4 +424,31 @@ final class ConversationTests: XCTestCase {
         XCTAssertEqual(try store.load(talk.page), talk)
         XCTAssertEqual(try store.load(UUID()).turns, [])
     }
+
+    // MARK: The author's own texts (the companion's settings)
+
+    func testTheAuthorsInstructionsReplaceTheAppsAndKeepItsExamples() {
+        let page = CompanionPrompt.Page(name: "Dolores", writing: "Runs the Regent.")
+        let mine = CompanionPrompt(page: page, conversation: Conversation(page: UUID()),
+                                   texts: .init(instructions: "  Be blunt.\n"))
+        XCTAssertTrue(mine.system.hasPrefix("Be blunt.\n\n" + CompanionPrompt.examples + "\n\n"))
+        XCTAssertFalse(mine.system.contains(CompanionPrompt.instructions))
+        let app = CompanionPrompt(page: page, conversation: Conversation(page: UUID()))
+        XCTAssertEqual(app.system, CompanionPrompt(page: page, conversation: Conversation(page: UUID()), texts: .init()).system)
+        XCTAssertTrue(app.system.hasPrefix(CompanionPrompt.instructions + "\n\n" + CompanionPrompt.examples))
+    }
+
+    func testEmptyExamplesAreLeftOut() {
+        let prompt = CompanionPrompt(world: "Tidewater", pages: [], conversation: Conversation(page: UUID()),
+                                     texts: .init(examples: " \n"))
+        XCTAssertTrue(prompt.system.hasPrefix(CompanionPrompt.instructions + "\n\nWhat the app shows you"))
+        XCTAssertFalse(prompt.system.contains("\n\n\n"))
+    }
+
+    /// What the settings show and restore is what the prompt would have.
+    func testTheSettingsDefaultsAreThePromptsOwn() {
+        XCTAssertEqual(CompanionPrompt.instructions(searching: true),
+                       CompanionPrompt.instructions(lookup: .init(pages: PageLookup(pages: []), retrieving: false, searching: true)))
+        XCTAssertEqual(CompanionPrompt.instructions(searching: false), CompanionPrompt.instructions(lookup: nil))
+    }
 }

@@ -61,6 +61,22 @@ final class Companion {
     var plain = UserDefaults.standard.bool(forKey: "companionPlain") {
         didSet { UserDefaults.standard.set(plain, forKey: "companionPlain") }
     }
+    /// The author's own instructions and examples (`CompanionInstructions`), kept on the phone,
+    /// in place of the app's: nil for the app's own. The next reply reads them.
+    var texts = CompanionPrompt.Texts(instructions: UserDefaults.standard.string(forKey: "companionInstructions"),
+                                      examples: UserDefaults.standard.string(forKey: "companionExamples")) {
+        didSet {
+            UserDefaults.standard.set(texts.instructions, forKey: "companionInstructions")
+            UserDefaults.standard.set(texts.examples, forKey: "companionExamples")
+            background = nil   // the background kept for follow-ups began with the old ones
+        }
+    }
+
+    /// The app's own instructions and examples for this model, which the settings show and restore.
+    var defaultTexts: (instructions: String, examples: String) {
+        (CompanionPrompt.instructions(searching: model.canSearch), CompanionPrompt.examples)
+    }
+
     /// The reply Try Again took back, kept as a version of the next one, or put back if that fails.
     private var retracted: Conversation.Turn?
     /// The world's other conversations, as of opening this page: their filings can
@@ -329,12 +345,14 @@ final class Companion {
                 } else if isWorld {
                     prompt = CompanionPrompt(world: library.world.name, pages: others.map { library.companionPage($0, fields: true) },
                                              earlier: earlier, conversation: conversation,
-                                             maxCharacters: 6000 / room, maxTurnCharacters: 6000 / room, lookup: lookup)
+                                             maxCharacters: 6000 / room, maxTurnCharacters: 6000 / room, lookup: lookup,
+                                             texts: texts)
                 } else {
                     prompt = CompanionPrompt(page: library.companionPage(page, open: true),
                                              others: others.map { library.companionPage($0) },
                                              earlier: earlier, conversation: conversation,
-                                             maxCharacters: 6000 / room, maxTurnCharacters: 6000 / room, lookup: lookup)
+                                             maxCharacters: 6000 / room, maxTurnCharacters: 6000 / room, lookup: lookup,
+                                             texts: texts)
                 }
                 // Its background as last read, while what it rests on is unchanged. Not before
                 // its first reply, whose background has "Right now…" for its opening only.

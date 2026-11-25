@@ -15,6 +15,7 @@ struct CompanionPanel: View {
     @State private var message = ""
     @State private var confirmingNew = false
     @State private var showingChanges = false
+    @State private var editingInstructions = false
     /// Where the conversation is scrolled: the newest message, as in Messages.
     @State private var position = ScrollPosition(edge: .bottom)
     /// One height for the whole message bar: the HIG's minimum touch size,
@@ -127,6 +128,7 @@ struct CompanionPanel: View {
             if phase == .active, companion.state == .downloadPaused { resume() }
         }
         .sheet(isPresented: $showingChanges) { ChangesView().environment(library).environment(companion) }
+        .sheet(isPresented: $editingInstructions) { CompanionInstructions().environment(companion) }
         .confirmationDialog("Start a new conversation about this page?", isPresented: $confirmingNew,
                             titleVisibility: .visible) {
             Button("New Conversation", role: .destructive) {
@@ -562,6 +564,7 @@ struct CompanionPanel: View {
         ShareLink("Share Conversation", item: transcript)
             .disabled(companion.conversation.turns.isEmpty)
         if !inSheet && !aboutWorld { changesButton }   // the sheet (Kevin, 2026-11-24) and the world's screen have it beside the menu
+        Button("Instructions…", systemImage: "text.document") { editingInstructions = true }
         // TRIAL (Kevin, 2026-11-24): the model on its own.
         Toggle(isOn: Binding { companion.plain } set: { companion.plain = $0 }) {
             Label("Plain Model", systemImage: "cube")
