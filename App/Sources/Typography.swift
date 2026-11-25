@@ -1,11 +1,12 @@
 import SwiftUI
 import UIKit
 
-// Anything the user authors is New York, wherever it's shown; the rest of
-// the UI is San Francisco (CLAUDE.md, Conventions). Both scale with Dynamic Type.
+// What the user writes is New York, wherever it's shown: their writing, page
+// titles, the world's name, field values. The rest of the UI is San Francisco,
+// type and field names included (CLAUDE.md, Conventions). Both scale with Dynamic Type.
 
 extension Font {
-    /// The user's own words (titles, names, values) at a text style, in New York.
+    /// The user's own words (writing, titles, values) at a text style, in New York.
     static func authored(_ style: Font.TextStyle) -> Font {
         .system(style, design: .serif)
     }

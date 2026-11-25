@@ -286,9 +286,10 @@ private struct UndoPointButton: View {
 }
 
 /// One change as a line on the timeline: an icon for its kind and what it did, the
-/// author's words and names in New York; a corrected value shows the one it
-/// replaced ("Age: about sixteen → seventeen"). Every change has one, even one whose
-/// page, type or field has since been deleted, so its point can still be undone.
+/// author's words and page names in New York, types and fields in San Francisco; a
+/// corrected value shows the one it replaced ("Age: about sixteen → seventeen"). Every
+/// change has one, even one whose page, type or field has since been deleted, so its
+/// point can still be undone.
 private struct Change {
     let symbol: String
     let detail: Text
@@ -309,11 +310,11 @@ private struct Change {
             symbol = "doc.badge.plus"
             let type = library.schema.type((library.pages.first { $0.id == created }
                                             ?? library.recentlyDeleted.first { $0.id == created })?.type)?.name
-            detail = Text("New \(type.map(authored) ?? Text("page")): \(page)")
+            detail = Text("New \(type ?? "page"): \(page)")
             spoken = detail
         case .typed(_, let type):
             symbol = "tag"
-            detail = Text("Type: \(library.schema.type(type).map { authored($0.name) } ?? Text("Deleted type"))")
+            detail = Text("Type: \(library.schema.type(type)?.name ?? "Deleted type")")
             spoken = Text("\(page), \(detail)")
         case .renamed(_, let was, let title):
             symbol = "character.cursor.ibeam"
@@ -325,7 +326,7 @@ private struct Change {
             detail = Text("Page text: \(authored(text))")
             spoken = Text("\(page), \(detail)")
         case .value(_, let fieldID, let new), .replaced(_, let fieldID, _, let new):
-            let field = library.schema.fields.first { $0.id == fieldID }.map { authored($0.name) } ?? Text("Deleted field")   // the app's words, in San Francisco
+            let field = library.schema.fields.first { $0.id == fieldID }?.name ?? "Deleted field"
             if let was = action.was {
                 symbol = "pencil"
                 detail = Text("\(field): \(value(was)) → \(value(new))")

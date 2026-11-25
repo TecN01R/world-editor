@@ -272,7 +272,7 @@ struct CompanionPanel: View {
 
     /// What was filed from the author's message, under the companion's reply to it,
     /// left-aligned with the reply: each page made, type given and field filled, in
-    /// their words (New York), with its own Undo.
+    /// their words, with its own Undo.
     private func filed(_ record: FilingRecord, from turn: UUID) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Label("Added to Your Pages", systemImage: "square.stack.3d.up")
@@ -288,18 +288,27 @@ struct CompanionPanel: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// "New page: Myriddea (Place)", "Casperica · Character", "Casperica · Origin: Myriddea".
+    /// "New page: Myriddea (Place)", "Casperica · Character", "Casperica · Origin: Myriddea":
+    /// page names and filed words in New York, types and fields in San Francisco.
     private func filed(_ line: FilingLine) -> Text {
-        let page = Text(line.page).font(.authored(.footnote))
+        func authored(_ s: String) -> Text { Text(s).font(.authored(.footnote)) }
+        let page = authored(line.page)
         if case .renamed(_, let was, _) = line.action {
-            let old = was.isEmpty ? Text("untitled") : Text(was).font(.authored(.footnote))
-            return Text("\(page) · renamed, was \(old)")
+            return Text("\(page) · renamed, was \(was.isEmpty ? Text("untitled") : authored(was))")
         }
         if line.isNew {
-            let type = line.type.map { Text(" (\(Text($0).font(.authored(.footnote))))") } ?? Text("")
-            return Text("New page: \(page)\(type)")
+            return Text("New page: \(page)\(line.type.map { " (\($0))" } ?? "")")
         }
-        return Text("\(page) · \(Text(line.detail ?? "").font(.authored(.footnote)))")
+        let words = line.words.map { words in
+            Text("\(authored(words))\(line.was.map { Text(" (was \(authored($0)))") } ?? Text(""))")
+        }
+        let detail = switch (line.label, words) {
+        case let (label?, words?): Text("\(label): \(words)")
+        case (let label?, nil): Text(label)
+        case (nil, let words?): words
+        case (nil, nil): Text("")
+        }
+        return Text("\(page) · \(detail)")
     }
 
     /// No conversation yet: what the companion is doing, centred like iOS's own

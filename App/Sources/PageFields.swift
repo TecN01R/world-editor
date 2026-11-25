@@ -5,48 +5,85 @@ import WriterCore
 /// type is a small line under the title, as Contacts puts a company under a
 /// name ("Add Type" on a plain page). Fields float on the page, without a
 /// card: a quiet name, then its value, stacked when the two columns don't fit.
-/// Stock controls throughout, without glass: the HIG keeps Liquid Glass out
-/// of the content layer.
+/// Only fields with something in them show, as Contacts shows a contact (Kevin,
+/// 2026-11-24: not every field of a type fits every page); Add Field's menu
+/// lists the empty ones. Stock controls throughout, without glass: the HIG
+/// keeps Liquid Glass out of the content layer.
 struct PageFields: View {
     @Environment(Library.self) private var library
     /// Its height, so the writing below starts after it.
     let onHeight: (CGFloat) -> Void
+    /// Empty fields shown anyway until the page closes: picked from Add Field's menu,
+    /// added to the type here, or emptied here (so none vanishes under the cursor).
+    @State private var shown: Set<UUID> = []
+    @FocusState private var focused: UUID?
 
     var body: some View {
         let page = library.document
         let type = library.type(of: page)
-        let fields = library.fields(of: page)
+        let all = library.fields(of: page)
+        let filled = Set(all.lazy.map(\.id).filter { page.values[$0] != nil })
+        let visible = filled.union(shown)
+        let fields = all.filter { visible.contains($0.id) }
         VStack(alignment: .leading, spacing: 10) {
             typeMenu(Label {
-                if let type { Text(type.name).font(.authored(.subheadline)) } else { Text("Add Type") }
+                if let type { Text(type.name) } else { Text("Add Type") }
             } icon: {
                 Image(systemName: "square.text.square")
             })
             if let type {
-                ViewThatFits(in: .horizontal) {   // HIG layout: stack only where the columns don't fit
-                    Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {   // each row centred on its control
-                        ForEach(fields) { field in
-                            GridRow { name(field); valueView(field) }
-                                .modifier(FieldRow(field: field, type: type))
+                if !fields.isEmpty {
+                    ViewThatFits(in: .horizontal) {   // HIG layout: stack only where the columns don't fit
+                        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {   // each row centred on its control
+                            ForEach(fields) { field in
+                                GridRow { name(field); valueView(field) }
+                                    .modifier(FieldRow(field: field, type: type))
+                            }
                         }
-                    }
-                    VStack(alignment: .leading, spacing: 12) {
-                        ForEach(fields) { field in
-                            VStack(alignment: .leading, spacing: 2) { name(field); valueView(field) }
-                                .modifier(FieldRow(field: field, type: type))
+                        VStack(alignment: .leading, spacing: 12) {
+                            ForEach(fields) { field in
+                                VStack(alignment: .leading, spacing: 2) { name(field); valueView(field) }
+                                    .modifier(FieldRow(field: field, type: type))
+                            }
                         }
                     }
                 }
-                Button("Add Field", systemImage: "plus") { library.fieldsRequest = .addField(type: type.id) }
-                    .font(.subheadline)
-                    .tint(.secondary)
+                addField(type, empty: all.filter { !visible.contains($0.id) })
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onChange(of: filled, initial: true) { shown.formUnion(filled) }
+        .onChange(of: type) { old, new in   // a field just added to this type, not a type just chosen
+            if let old, let new, old.id == new.id { shown.formUnion(Set(new.fields).subtracting(old.fields)) }
+        }
         // Not animated: the page's writing below moves to the fields' new height at once, so
         // rows growing or fading in overlapped it until they settled.
         .fixedSize(horizontal: false, vertical: true)   // its own height, whatever the frame
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onHeight($0) }
+    }
+
+    /// Add Field: a menu of the type's empty fields (one picked shows, ready to fill in), then
+    /// New Field…; just New Field when none is empty.
+    @ViewBuilder private func addField(_ type: PageType, empty: [FieldDefinition]) -> some View {
+        let newField = { library.fieldsRequest = .addField(type: type.id) }
+        Group {
+            if empty.isEmpty {
+                Button("Add Field", systemImage: "plus", action: newField)
+            } else {
+                Menu("Add Field", systemImage: "plus") {
+                    ForEach(empty) { field in
+                        Button(field.name) {
+                            shown.insert(field.id)
+                            Task { focused = field.id }   // once its row exists
+                        }
+                    }
+                    Divider()
+                    Button("New Field…", systemImage: "plus", action: newField)
+                }
+            }
+        }
+        .font(.subheadline)
+        .tint(.secondary)
     }
 
     private func typeMenu(_ label: some View) -> some View {
@@ -78,7 +115,7 @@ struct PageFields: View {
     /// menu, which also removes it from the type.
     private func name(_ field: FieldDefinition) -> some View {
         Button { library.fieldsRequest = .editField(field.id) } label: {
-            Text(field.name).font(.authored(.body)).foregroundStyle(.secondary)
+            Text(field.name).font(.body).foregroundStyle(.secondary)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(field.name)
@@ -86,7 +123,7 @@ struct PageFields: View {
     }
 
     private func valueView(_ field: FieldDefinition) -> some View {
-        FieldValueView(field: field, value: value(field)).frame(maxWidth: .infinity, alignment: .leading)
+        FieldValueView(field: field, value: value(field), focused: $focused).frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func value(_ field: FieldDefinition) -> Binding<FieldValue?> {
@@ -117,19 +154,23 @@ private struct FieldValueView: View {
     @Environment(Library.self) private var library
     let field: FieldDefinition
     @Binding var value: FieldValue?
+    let focused: FocusState<UUID?>.Binding
 
     var body: some View {
         switch field.kind {
         case .text:
             TextField(field.name, text: text, prompt: Text("Add").font(.body))
                 .font(.authored(.body))
+                .focused(focused, equals: field.id)
         case .longText:
             TextField(field.name, text: text, prompt: Text("Add").font(.body), axis: .vertical)
                 .font(.authored(.body))
+                .focused(focused, equals: field.id)
         case .number:
             TextField(field.name, value: number, format: .number, prompt: Text("Add").font(.body))
                 .font(.authored(.body))
                 .keyboardType(.decimalPad)
+                .focused(focused, equals: field.id)
         case .date:
             if case .date(let date)? = value {
                 DatePicker(field.name, selection: Binding { date } set: { value = .date($0) }, displayedComponents: .date)
@@ -225,7 +266,7 @@ struct TypeFieldsSheet: View {
                 Section {
                     ForEach(fields) { field in
                         Button { editing = field } label: {
-                            LabeledContent { Text(field.kind.label) } label: { Text(field.name).font(.authored(.body)) }
+                            LabeledContent(field.name) { Text(field.kind.label) }
                         }
                         .tint(.primary)
                         .accessibilityHint("Edits this field.")
@@ -235,7 +276,7 @@ struct TypeFieldsSheet: View {
                     }
                     .onMove { library.moveFields(in: self.type, from: $0, to: $1) }
                 } footer: {
-                    let name = Text(type?.name ?? "").font(.authored(.footnote))
+                    let name = type?.name ?? ""
                     if fields.isEmpty {
                         Text("Add a field to give every \(name) page a place for it.")
                     } else {
@@ -288,14 +329,14 @@ struct FieldSheet: View {
                     Section("Shared Fields") {
                         ForEach(shared) { field in
                             Button { add(field) } label: {
-                                LabeledContent { Text(field.kind.label) } label: { Text(field.name).font(.authored(.body)) }
+                                LabeledContent(field.name) { Text(field.kind.label) }
                             }
                             .tint(.primary)
                         }
                     }
                 }
                 Section(editing == nil ? "New Field" : "Field") {
-                    TextField("Name", text: $name).font(.authored(.body))
+                    TextField("Name", text: $name)
                 }
                 // Its own section, titled Kind; each kind shows a sample of
                 // how a page shows it.
@@ -361,6 +402,7 @@ struct FieldSheet: View {
 private struct KindRow: View {
     let kind: FieldDefinition.Kind
     private static let option = "Option"
+    @FocusState private var focused: UUID?   // never set: the samples aren't tappable
 
     var body: some View {
         Group {
@@ -375,7 +417,7 @@ private struct KindRow: View {
             default:
                 LabeledContent(kind.label) {
                     FieldValueView(field: FieldDefinition(name: kind.label, kind: kind, options: [Self.option]),
-                                   value: .constant(sample))
+                                   value: .constant(sample), focused: $focused)
                         .allowsHitTesting(false)
                 }
             }

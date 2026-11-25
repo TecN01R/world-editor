@@ -227,18 +227,17 @@ final class Library {
             switch action {
             case .created(let id, _):
                 let type = (pages.first { $0.id == id } ?? recentlyDeleted.first { $0.id == id })?.type
-                return FilingLine(action: action, page: page, detail: nil, type: schema.type(type)?.name)
+                return FilingLine(action: action, page: page, type: schema.type(type)?.name)
             case .typed(_, let type):
-                return FilingLine(action: action, page: page, detail: schema.type(type)?.name ?? "Deleted type", type: nil)
+                return FilingLine(action: action, page: page, label: schema.type(type)?.name ?? "Deleted type")
             case .described(_, let text):
-                return FilingLine(action: action, page: page, detail: "\u{201C}\(text)\u{201D}", type: nil)
+                return FilingLine(action: action, page: page, words: "\u{201C}\(text)\u{201D}")
             case .renamed:
-                return FilingLine(action: action, page: page, detail: nil, type: nil)
+                return FilingLine(action: action, page: page)
             case .value(_, let fieldID, let value), .replaced(_, let fieldID, _, let value):
                 let field = schema.fields.first { $0.id == fieldID }?.name ?? "Deleted field"
-                var detail = "\(field): \(filedValue(value))"
-                if case .replaced(_, _, let was, _) = action { detail += " (was \(filedValue(was)))" }
-                return FilingLine(action: action, page: page, detail: detail, type: nil)
+                return FilingLine(action: action, page: page, label: field, words: filedValue(value),
+                                  was: action.was.map(filedValue))
             case .newType, .newField, .fieldAdded:
                 return nil
             }
@@ -598,9 +597,24 @@ enum Screenshots {
 struct FilingLine: Hashable {
     var action: FilingRecord.Entry
     var page: String
-    /// The type given, "Field: value", or the page text filed (quoted); nil for a new page.
-    var detail: String?
+    /// The type given, or the field filled: the app's labels, in San Francisco.
+    var label: String? = nil
+    /// The value filed, or the page text filed (quoted): the author's words, in New York.
+    var words: String? = nil
+    /// The value a corrected field had.
+    var was: String? = nil
     /// A new page's type.
-    var type: String?
+    var type: String? = nil
     var isNew: Bool { if case .created = action { true } else { false } }
+
+    /// "Field: value (was old)", the type given, or the page text filed; nil for a new page or a rename.
+    var detail: String? {
+        let words = words.map { $0 + (was.map { " (was \($0))" } ?? "") }
+        return switch (label, words) {
+        case let (label?, words?): "\(label): \(words)"
+        case (let label?, nil): label
+        case (nil, let words?): words
+        case (nil, nil): nil
+        }
+    }
 }

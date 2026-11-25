@@ -322,7 +322,7 @@ struct PageList: View {
                     Section {
                         ForEach(library.pages.filter { type == nil || $0.type == type?.id }) { row($0, snippet: nil) }
                     } header: {
-                        if let type { Text(type.name).fontDesign(.serif) } else { Text("Pages") }
+                        Text(type?.name ?? "Pages")
                     }
                 }
                 // Out of the way at the bottom, as Notes and Photos keep it (Kevin, 2026-11-24: cluttered).
@@ -480,12 +480,7 @@ struct PageList: View {
             withAnimation { filter = shown ? nil : rowFilter }
         } label: {
             HStack {
-                Label {
-                    // A type's name is the user's; "Recently Deleted" is the app's.
-                    if case .type = rowFilter { Text(title).fontDesign(.serif) } else { Text(title) }
-                } icon: {
-                    Image(systemName: systemImage)
-                }
+                Label(title, systemImage: systemImage)
                 Spacer()
                 Text(count, format: .number).foregroundStyle(.secondary)
                 if shown { Image(systemName: "checkmark").foregroundStyle(.tint) }

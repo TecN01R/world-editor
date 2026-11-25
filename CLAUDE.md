@@ -51,9 +51,10 @@ only once it's on Kevin's phone and checked, or he has answered it.
 - Accessibility is not optional: Dynamic Type for all text (Focus mode
   sizes itself to the page), VoiceOver labels on every control, standard
   controls over custom ones.
-- Type: anything the user authors is New York (their writing, page titles,
-  world, type and field names, field values), wherever it's shown; all
-  other UI is San Francisco. System-drawn text (menus, alerts, iOS's own
+- Type: what the user writes is New York (their writing, page titles,
+  world, field values), wherever it's shown; all other UI is San Francisco,
+  including type and field names, which are the app's labels (Kevin,
+  2026-11-24). System-drawn text (menus, alerts, iOS's own
   navigation titles, as the unfolded pages list's) keeps the system font:
   iOS ignores the app's fonts there.
 - Naming: a note is a **page**; projects are **worlds**; the two ways to
