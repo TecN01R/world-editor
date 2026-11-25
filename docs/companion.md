@@ -86,8 +86,10 @@ writer's text that Gemma would read as one of its control tokens is defused
 first (`Reasoned.gemmaPlain`).
 
 Kevin can replace the instructions and the examples himself (Kevin, 2026-11-25:
-"a settings panel for me to modify instructions myself"): Instructions… in the
-companion's menu, iOS's own form, kept on the phone (`CompanionPrompt.Texts`).
+"a settings panel for me to modify instructions myself"; "only available in
+debug mode of course"): Instructions… in the companion's menu of a debug build,
+iOS's own form, kept on the phone (`CompanionPrompt.Texts`); a release build has
+neither the panel nor his text, and always reads the app's own.
 His text is used as he wrote it, from the next reply; empty examples are left
 out; Restore Defaults puts back the app's own, which the rest of this page
 the instructions say, and nothing in them can make it write into his pages.

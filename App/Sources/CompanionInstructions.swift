@@ -1,9 +1,10 @@
+#if DEBUG
 import Guardrails
 import SwiftUI
 
 /// The companion's instructions and example exchanges, for the author to change (Kevin,
-/// 2026-11-25: "a settings panel for me to modify instructions myself"), from the companion's
-/// menu: iOS's own form and text editors. What's shown at first is what the companion reads
+/// 2026-11-25: "a settings panel for me to modify instructions myself"; debug builds only), from
+/// the companion's menu: iOS's own form and text editors. What's shown at first is what the companion reads
 /// now; Done keeps it, from the next reply on; Restore Defaults puts back the app's own.
 /// Text left as the app's is kept as the app's, so it follows the app's when they change.
 struct CompanionInstructions: View {
@@ -70,3 +71,4 @@ struct CompanionInstructions: View {
         dismiss()
     }
 }
+#endif

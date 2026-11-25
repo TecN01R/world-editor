@@ -62,7 +62,9 @@ final class Companion {
         didSet { UserDefaults.standard.set(plain, forKey: "companionPlain") }
     }
     /// The author's own instructions and examples (`CompanionInstructions`), kept on the phone,
-    /// in place of the app's: nil for the app's own. The next reply reads them.
+    /// in place of the app's: nil for the app's own. The next reply reads them. Debug builds
+    /// only, as the settings are (Kevin, 2026-11-25): a release build always reads the app's.
+    #if DEBUG
     var texts = CompanionPrompt.Texts(instructions: UserDefaults.standard.string(forKey: "companionInstructions"),
                                       examples: UserDefaults.standard.string(forKey: "companionExamples")) {
         didSet {
@@ -76,6 +78,9 @@ final class Companion {
     var defaultTexts: (instructions: String, examples: String) {
         (CompanionPrompt.instructions(searching: model.canSearch), CompanionPrompt.examples)
     }
+    #else
+    let texts = CompanionPrompt.Texts()
+    #endif
 
     /// The reply Try Again took back, kept as a version of the next one, or put back if that fails.
     private var retracted: Conversation.Turn?
