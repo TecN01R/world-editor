@@ -95,9 +95,12 @@ the app stops a reply or filing before its next piece of GPU work; once the
 author is back, a reply goes on from what it had written and filing starts
 over. The screen stays on while the model works.
 
-Not yet measured on the Duo (the app logs LOAD, SPEED and FILING to
-`candidates.log`): memory, reading and writing speed, heat, and how it does
-held to the 15 Pro's memory.
+First measured on the Duo (2026-11-25, `candidates.log`): it loads in 3.3 s;
+the memory iOS counts against the app went from 3.46 GB free to 3.15 GB (the
+weights read from storage aren't counted), 3.10 GB after a reply; it read a
+1,795-token prompt in 1.3 s and wrote 23 tokens a second; the first words came
+7.4 s after asking, the load included; filing took 1.1 s. Still to measure: a
+long conversation, heat over time, and how it does held to the 15 Pro's memory.
 
 **Updates to the companion's model.** It comes from one pinned revision and
 checksum, so the menu offers no updates: a new one arrives with the app, and
