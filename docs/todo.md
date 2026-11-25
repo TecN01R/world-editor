@@ -9,6 +9,8 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Rotation crash: check it's gone
 
 ## Check on the phone
+- [ ] Wikipedia look-ups: ask a real-world question it might not know; "Searched Wikipedia for …" under the reply opens the articles; Look Things Up in the menu turns it off (Kevin, 2026-11-25)
+- [ ] Plain Model (debug builds): the tools, and which page is open (Kevin, 2026-11-25)
 - [ ] Instructions… in the companion's menu (debug builds only): your own instructions and examples, Restore Defaults (Kevin, 2026-11-25)
 - [ ] The new companion model, Nemotron 3.5 Bolt (Kevin, 2026-11-25: "Yes"): downloaded, loads and replies, 26B freed (seen in the log). Left: how the replies feel, a search shown in its thinking
 - [ ] Type and field names in San Francisco everywhere; values stay New York (Kevin, 2026-11-24)
@@ -54,7 +56,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Swift 6 language mode
 - [ ] Replies keep running in the background (continued processing with the GPU)
 - [ ] Download keeps its speed when the app isn't in front
-- [ ] Look-ups online (Wikipedia first) and uploads (images)
+- [ ] Documents (PDF, text) and images in the companion (after Wikipedia look-ups; Kevin, 2026-11-25: "go for it with the web stuff"); the whole web needs a search provider and key
 - [ ] VoiceOver pass over the page title and fields
 - [ ] Paragraph IDs drifting when paragraphs are edited (`reconcile`)
 - [ ] World calendar date picker

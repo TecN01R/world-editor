@@ -4,24 +4,54 @@ import Foundation
 /// Gemma 4 E4B) renders a conversation with its own chat template, and as it writes back:
 /// phone sends the same text. llama.cpp's server applies that template on the computer;
 /// on the phone there is no template engine, so this renders the part of it the companion
-/// uses: a system turn (thinking switched on there), `search_pages` declared, the
-/// conversation, and within the reply being written, the searches it has made so far.
+/// uses: a system turn (thinking switched on there), its tools declared (`search_pages`,
+/// `look_up`), the conversation, and within the reply being written, the calls it has made so far.
 ///
 /// Everything put in is plain already: the app's texts through `Reasoned.gemmaPlain`, and
 /// `PageLookup.results`, so typed control tokens stay words.
 public enum GemmaChat {
-    /// A search the model made while writing the reply: what it thought and said before it,
-    /// what it looked for, and what it found. Replayed in the prompt for the rest of the reply.
+    /// A tool the model is offered, with one argument, `query`, which isn't required (as the
+    public struct Tool: Equatable, Sendable {
+        public var name: String
+        public var description: String
+        /// The guide of its argument.
+        public var queryGuide: String
+
+        public init(name: String, description: String, queryGuide: String) {
+            self.name = name
+            self.description = description
+            self.queryGuide = queryGuide
+        }
+
+        /// It as the template declares it.
+        var declaration: String {
+            "declaration:\(name){description:" + quoted(description) + ",parameters:{properties:{query:{description:"
+                + quoted(queryGuide) + ",type:" + quoted("STRING") + "}},type:" + quoted("OBJECT") + "}}"
+        }
+    }
+
+    /// Searches the author's pages (`PageLookup`).
+    public static let searchPages = Tool(name: PageLookup.toolName, description: PageLookup.toolDescription,
+                                         queryGuide: PageLookup.queryGuide)
+    /// Looks up the real world (`WebLookup`).
+    public static let lookUp = Tool(name: WebLookup.toolName, description: WebLookup.toolDescription,
+                                    queryGuide: WebLookup.queryGuide)
+
+    /// A call the model made while writing the reply: what it thought and said before it,
+    /// which tool it called and with what, and what came back. Replayed in the prompt for the
+    /// rest of the reply.
     public struct Search: Equatable, Sendable {
         public var thought: String
         public var said: String
+        public var tool: String
         /// nil when it gave none.
         public var query: String?
         public var found: String
 
-        public init(thought: String = "", said: String = "", query: String?, found: String) {
+        public init(thought: String = "", said: String = "", tool: String = PageLookup.toolName, query: String?, found: String) {
             self.thought = thought
             self.said = said
+            self.tool = tool
             self.query = query
             self.found = found
         }
@@ -29,15 +59,16 @@ public enum GemmaChat {
 
     /// The prompt, from after `<bos>` (the tokenizer adds it): the system turn when there's
     /// one (`system`, thinking or tools), the turns, and the model's turn opened; within it,
-    /// `searches` made so far, after which the model goes on thinking (`thinking`) or writing.
-    /// - Parameter tools: `search_pages` is declared.
+    /// the calls (`searches`) made so far, after which the model goes on thinking
+    /// (`thinking`) or writing.
+    /// - Parameter tools: the tools declared, in order.
     public static func prompt(system: String, turns: [CompanionPrompt.Turn], searches: [Search] = [],
-                              tools: Bool, thinking: Bool) -> String {
+                              tools: [Tool], thinking: Bool) -> String {
         var text = ""
         let system = system.trimmingCharacters(in: .whitespacesAndNewlines)
-        if thinking || tools || !system.isEmpty {
+        if thinking || !tools.isEmpty || !system.isEmpty {
             text = "<|turn>system\n" + (thinking ? "<|think|>\n" : "") + system
-                + (tools ? "<|tool>" + searchDeclaration + "<tool|>" : "") + "<turn|>\n"
+                + tools.map { "<|tool>" + $0.declaration + "<tool|>" }.joined() + "<turn|>\n"
         }
         for turn in turns {
             switch turn.speaker {
@@ -49,11 +80,11 @@ public enum GemmaChat {
         guard let last = searches.last else { return text }
         for search in searches {
             if !search.thought.isEmpty { text += "<|channel>thought\n" + search.thought + "\n<channel|>" }
-            text += withoutThoughts(search.said) + call(search.query)
-                + "<|tool_response>response:\(PageLookup.toolName){value:" + quoted(search.found) + "}<tool_response|>"
+            text += withoutThoughts(search.said) + call(search.tool, search.query)
+                + "<|tool_response>response:\(search.tool){value:" + quoted(search.found) + "}<tool_response|>"
         }
-        // The template ends the model's turn after a search only when it said something before
-        // it, and opens its thought channel again after any search (as it was measured).
+        // The template ends the model's turn after a call only when it said something before
+        // it, and opens its thought channel again after any call (as it was measured).
         if !trimmed(last.said).isEmpty { text += "<turn|>\n" }
         return text + (thinking ? thoughtOpened : "")
     }
@@ -61,13 +92,8 @@ public enum GemmaChat {
     /// The model's thought channel opened: the end of a prompt where it goes on thinking.
     public static let thoughtOpened = "<|channel>thought\n"
 
-    /// `search_pages` as the template declares it (from `PageLookup`'s texts): its one
-    public static let searchDeclaration = "declaration:\(PageLookup.toolName){description:" + quoted(PageLookup.toolDescription)
-        + ",parameters:{properties:{query:{description:" + quoted(PageLookup.queryGuide) + ",type:" + quoted("STRING")
-        + "}},type:" + quoted("OBJECT") + "}}"
-
-    private static func call(_ query: String?) -> String {
-        "<|tool_call>call:\(PageLookup.toolName){" + (query.map { "query:" + quoted($0) } ?? "") + "}<tool_call|>"
+    private static func call(_ tool: String, _ query: String?) -> String {
+        "<|tool_call>call:\(tool){" + (query.map { "query:" + quoted($0) } ?? "") + "}<tool_call|>"
     }
 
     /// The chat format's quotation mark, around every string it holds.

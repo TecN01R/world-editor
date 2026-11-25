@@ -1,20 +1,38 @@
 {
- "tool": {
-  "name": "search_pages",
-  "description": "Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.",
-  "parameters": {
-   "type": "object",
-   "description": "Generated Arguments",
-   "required": [],
-   "properties": {
-    "query": {
-     "description": "A name from their pages, or a few of their words to look for",
-     "type": "string"
-    }
-   },
-   "additionalProperties": false
+ "tools": [
+  {
+   "name": "search_pages",
+   "description": "Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.",
+   "parameters": {
+    "type": "object",
+    "description": "Generated Arguments",
+    "required": [],
+    "properties": {
+     "query": {
+      "description": "A name from their pages, or a few of their words to look for",
+      "type": "string"
+     }
+    },
+    "additionalProperties": false
+   }
+  },
+  {
+   "name": "look_up",
+   "description": "Looks up the real world on Wikipedia: history, science, places, people, how things work. Returns passages from the articles it finds. Not for the writer's own world: their names and inventions aren't there.",
+   "parameters": {
+    "type": "object",
+    "description": "Generated Arguments",
+    "required": [],
+    "properties": {
+     "query": {
+      "description": "A few words naming the real-world thing to look up",
+      "type": "string"
+     }
+    },
+    "additionalProperties": false
+   }
   }
- },
+ ],
  "cases": [
   {
    "name": "first",
@@ -25,9 +43,12 @@
      "content": "(I've just opened this page.)"
     }
    ],
-   "tools": true,
+   "tools": [
+    "search_pages",
+    "look_up"
+   ],
    "thinking": true,
-   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\n(I've just opened this page.)<turn|>\n<|turn>model\n"
+   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><|tool>declaration:look_up{description:<|\"|>Looks up the real world on Wikipedia: history, science, places, people, how things work. Returns passages from the articles it finds. Not for the writer's own world: their names and inventions aren't there.<|\"|>,parameters:{properties:{query:{description:<|\"|>A few words naming the real-world thing to look up<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\n(I've just opened this page.)<turn|>\n<|turn>model\n"
   },
   {
    "name": "follow-up",
@@ -46,9 +67,12 @@
      "content": "  yeah it's hers.\nher husband built it  "
     }
    ],
-   "tools": true,
+   "tools": [
+    "search_pages",
+    "look_up"
+   ],
    "thinking": true,
-   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\n(I've just opened this page.)<turn|>\n<|turn>model\nDolores runs the Regent. Does “runs” mean it's hers?<turn|>\n<|turn>user\nyeah it's hers.\nher husband built it<turn|>\n<|turn>model\n"
+   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><|tool>declaration:look_up{description:<|\"|>Looks up the real world on Wikipedia: history, science, places, people, how things work. Returns passages from the articles it finds. Not for the writer's own world: their names and inventions aren't there.<|\"|>,parameters:{properties:{query:{description:<|\"|>A few words naming the real-world thing to look up<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\n(I've just opened this page.)<turn|>\n<|turn>model\nDolores runs the Regent. Does “runs” mean it's hers?<turn|>\n<|turn>user\nyeah it's hers.\nher husband built it<turn|>\n<|turn>model\n"
   },
   {
    "name": "after-search",
@@ -79,9 +103,12 @@
      "content": "“Regent”: The last cinema in town.\nBuilt by \"Arthur\" in 1951."
     }
    ],
-   "tools": true,
+   "tools": [
+    "search_pages",
+    "look_up"
+   ],
    "thinking": true,
-   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nwho built the Regent?<turn|>\n<|turn>model\n<|channel>thought\nThey ask about the Regent. Search.\n<channel|><|tool_call>call:search_pages{query:<|\"|>Regent<|\"|>}<tool_call|><|tool_response>response:search_pages{value:<|\"|>“Regent”: The last cinema in town.\nBuilt by \"Arthur\" in 1951.<|\"|>}<tool_response|><|channel>thought\n"
+   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><|tool>declaration:look_up{description:<|\"|>Looks up the real world on Wikipedia: history, science, places, people, how things work. Returns passages from the articles it finds. Not for the writer's own world: their names and inventions aren't there.<|\"|>,parameters:{properties:{query:{description:<|\"|>A few words naming the real-world thing to look up<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nwho built the Regent?<turn|>\n<|turn>model\n<|channel>thought\nThey ask about the Regent. Search.\n<channel|><|tool_call>call:search_pages{query:<|\"|>Regent<|\"|>}<tool_call|><|tool_response>response:search_pages{value:<|\"|>“Regent”: The last cinema in town.\nBuilt by \"Arthur\" in 1951.<|\"|>}<tool_response|><|channel>thought\n"
   },
   {
    "name": "said-then-search",
@@ -112,9 +139,12 @@
      "content": "Nothing on their pages mentions “Regent”."
     }
    ],
-   "tools": true,
+   "tools": [
+    "search_pages",
+    "look_up"
+   ],
    "thinking": true,
-   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nwho built the Regent?<turn|>\n<|turn>model\n<|channel>thought\nSearch it\n<channel|>Let me look.<|tool_call>call:search_pages{query:<|\"|>Regent<|\"|>}<tool_call|><|tool_response>response:search_pages{value:<|\"|>Nothing on their pages mentions “Regent”.<|\"|>}<tool_response|><turn|>\n<|channel>thought\n"
+   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><|tool>declaration:look_up{description:<|\"|>Looks up the real world on Wikipedia: history, science, places, people, how things work. Returns passages from the articles it finds. Not for the writer's own world: their names and inventions aren't there.<|\"|>,parameters:{properties:{query:{description:<|\"|>A few words naming the real-world thing to look up<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nwho built the Regent?<turn|>\n<|turn>model\n<|channel>thought\nSearch it\n<channel|>Let me look.<|tool_call>call:search_pages{query:<|\"|>Regent<|\"|>}<tool_call|><|tool_response>response:search_pages{value:<|\"|>Nothing on their pages mentions “Regent”.<|\"|>}<tool_response|><turn|>\n<|channel>thought\n"
   },
   {
    "name": "two-searches",
@@ -165,9 +195,12 @@
      "content": "Her husband built it."
     }
    ],
-   "tools": true,
+   "tools": [
+    "search_pages",
+    "look_up"
+   ],
    "thinking": true,
-   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nwho built the Regent?<turn|>\n<|turn>model\n<|channel>thought\nSearch.\n<channel|><|tool_call>call:search_pages{query:<|\"|>Regent<|\"|>}<tool_call|><|tool_response>response:search_pages{value:<|\"|>Nothing.<|\"|>}<tool_response|><|channel>thought\nTry the husband.\n<channel|><|tool_call>call:search_pages{query:<|\"|>husband<|\"|>}<tool_call|><|tool_response>response:search_pages{value:<|\"|>Her husband built it.<|\"|>}<tool_response|><|channel>thought\n"
+   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><|tool>declaration:look_up{description:<|\"|>Looks up the real world on Wikipedia: history, science, places, people, how things work. Returns passages from the articles it finds. Not for the writer's own world: their names and inventions aren't there.<|\"|>,parameters:{properties:{query:{description:<|\"|>A few words naming the real-world thing to look up<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nwho built the Regent?<turn|>\n<|turn>model\n<|channel>thought\nSearch.\n<channel|><|tool_call>call:search_pages{query:<|\"|>Regent<|\"|>}<tool_call|><|tool_response>response:search_pages{value:<|\"|>Nothing.<|\"|>}<tool_response|><|channel>thought\nTry the husband.\n<channel|><|tool_call>call:search_pages{query:<|\"|>husband<|\"|>}<tool_call|><|tool_response>response:search_pages{value:<|\"|>Her husband built it.<|\"|>}<tool_response|><|channel>thought\n"
   },
   {
    "name": "search-no-thought",
@@ -197,9 +230,104 @@
      "content": "Nothing."
     }
    ],
-   "tools": true,
+   "tools": [
+    "search_pages",
+    "look_up"
+   ],
    "thinking": true,
-   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nwho built the Regent?<turn|>\n<|turn>model\n<|tool_call>call:search_pages{query:<|\"|>Regent<|\"|>}<tool_call|><|tool_response>response:search_pages{value:<|\"|>Nothing.<|\"|>}<tool_response|><|channel>thought\n"
+   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><|tool>declaration:look_up{description:<|\"|>Looks up the real world on Wikipedia: history, science, places, people, how things work. Returns passages from the articles it finds. Not for the writer's own world: their names and inventions aren't there.<|\"|>,parameters:{properties:{query:{description:<|\"|>A few words naming the real-world thing to look up<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nwho built the Regent?<turn|>\n<|turn>model\n<|tool_call>call:search_pages{query:<|\"|>Regent<|\"|>}<tool_call|><|tool_response>response:search_pages{value:<|\"|>Nothing.<|\"|>}<tool_response|><|channel>thought\n"
+  },
+  {
+   "name": "look-up",
+   "system": "You're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61",
+   "messages": [
+    {
+     "role": "user",
+     "content": "how many rowers did a trireme have?"
+    },
+    {
+     "role": "assistant",
+     "content": "",
+     "reasoning_content": "Not sure. Look it up.",
+     "tool_calls": [
+      {
+       "id": "c1",
+       "type": "function",
+       "function": {
+        "name": "look_up",
+        "arguments": "{\"query\": \"trireme rowers\"}"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "tool_call_id": "c1",
+     "content": "From Wikipedia, for “trireme rowers”:\n\n[1] Trireme: A trireme was an ancient vessel.\n   Where it matched: …170 rowers…"
+    }
+   ],
+   "tools": [
+    "search_pages",
+    "look_up"
+   ],
+   "thinking": true,
+   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><|tool>declaration:look_up{description:<|\"|>Looks up the real world on Wikipedia: history, science, places, people, how things work. Returns passages from the articles it finds. Not for the writer's own world: their names and inventions aren't there.<|\"|>,parameters:{properties:{query:{description:<|\"|>A few words naming the real-world thing to look up<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nhow many rowers did a trireme have?<turn|>\n<|turn>model\n<|channel>thought\nNot sure. Look it up.\n<channel|><|tool_call>call:look_up{query:<|\"|>trireme rowers<|\"|>}<tool_call|><|tool_response>response:look_up{value:<|\"|>From Wikipedia, for “trireme rowers”:\n\n[1] Trireme: A trireme was an ancient vessel.\n   Where it matched: …170 rowers…<|\"|>}<tool_response|><|channel>thought\n"
+  },
+  {
+   "name": "search-then-look-up",
+   "system": "You're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61",
+   "messages": [
+    {
+     "role": "user",
+     "content": "could the Regent's projector be from 1910?"
+    },
+    {
+     "role": "assistant",
+     "content": "",
+     "reasoning_content": "Check their page.",
+     "tool_calls": [
+      {
+       "id": "c1",
+       "type": "function",
+       "function": {
+        "name": "search_pages",
+        "arguments": "{\"query\": \"Regent projector\"}"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "tool_call_id": "c1",
+     "content": "Nothing."
+    },
+    {
+     "role": "assistant",
+     "content": "",
+     "reasoning_content": "Now the real world.",
+     "tool_calls": [
+      {
+       "id": "c2",
+       "type": "function",
+       "function": {
+        "name": "look_up",
+        "arguments": "{\"query\": \"film projector history\"}"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "tool_call_id": "c2",
+     "content": "From Wikipedia: projectors date from the 1890s."
+    }
+   ],
+   "tools": [
+    "search_pages",
+    "look_up"
+   ],
+   "thinking": true,
+   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><|tool>declaration:look_up{description:<|\"|>Looks up the real world on Wikipedia: history, science, places, people, how things work. Returns passages from the articles it finds. Not for the writer's own world: their names and inventions aren't there.<|\"|>,parameters:{properties:{query:{description:<|\"|>A few words naming the real-world thing to look up<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\ncould the Regent's projector be from 1910?<turn|>\n<|turn>model\n<|channel>thought\nCheck their page.\n<channel|><|tool_call>call:search_pages{query:<|\"|>Regent projector<|\"|>}<tool_call|><|tool_response>response:search_pages{value:<|\"|>Nothing.<|\"|>}<tool_response|><|channel>thought\nNow the real world.\n<channel|><|tool_call>call:look_up{query:<|\"|>film projector history<|\"|>}<tool_call|><|tool_response>response:look_up{value:<|\"|>From Wikipedia: projectors date from the 1890s.<|\"|>}<tool_response|><|channel>thought\n"
   },
   {
    "name": "earlier-search",
@@ -218,9 +346,67 @@
      "content": "ok"
     }
    ],
-   "tools": true,
+   "tools": [
+    "search_pages",
+    "look_up"
+   ],
    "thinking": true,
-   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nwho built the Regent?<turn|>\n<|turn>model\nHer husband built it.<turn|>\n<|turn>user\nok<turn|>\n<|turn>model\n"
+   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><|tool>declaration:look_up{description:<|\"|>Looks up the real world on Wikipedia: history, science, places, people, how things work. Returns passages from the articles it finds. Not for the writer's own world: their names and inventions aren't there.<|\"|>,parameters:{properties:{query:{description:<|\"|>A few words naming the real-world thing to look up<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nwho built the Regent?<turn|>\n<|turn>model\nHer husband built it.<turn|>\n<|turn>user\nok<turn|>\n<|turn>model\n"
+  },
+  {
+   "name": "pages-only",
+   "system": "You're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61",
+   "messages": [
+    {
+     "role": "user",
+     "content": "who built the Regent?"
+    },
+    {
+     "role": "assistant",
+     "content": "",
+     "reasoning_content": "Search.",
+     "tool_calls": [
+      {
+       "id": "c1",
+       "type": "function",
+       "function": {
+        "name": "search_pages",
+        "arguments": "{\"query\": \"Regent\"}"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "tool_call_id": "c1",
+     "content": "Nothing."
+    },
+    {
+     "role": "assistant",
+     "content": "",
+     "reasoning_content": "Try the husband.",
+     "tool_calls": [
+      {
+       "id": "c2",
+       "type": "function",
+       "function": {
+        "name": "search_pages",
+        "arguments": "{\"query\": \"husband\"}"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "tool_call_id": "c2",
+     "content": "Her husband built it."
+    }
+   ],
+   "tools": [
+    "search_pages"
+   ],
+   "thinking": true,
+   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nwho built the Regent?<turn|>\n<|turn>model\n<|channel>thought\nSearch.\n<channel|><|tool_call>call:search_pages{query:<|\"|>Regent<|\"|>}<tool_call|><|tool_response>response:search_pages{value:<|\"|>Nothing.<|\"|>}<tool_response|><|channel>thought\nTry the husband.\n<channel|><|tool_call>call:search_pages{query:<|\"|>husband<|\"|>}<tool_call|><|tool_response>response:search_pages{value:<|\"|>Her husband built it.<|\"|>}<tool_response|><|channel>thought\n"
   },
   {
    "name": "no-tools",
@@ -239,7 +425,7 @@
      "content": "  yeah it's hers.\nher husband built it  "
     }
    ],
-   "tools": false,
+   "tools": [],
    "thinking": true,
    "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<turn|>\n<|turn>user\n(I've just opened this page.)<turn|>\n<|turn>model\nDolores runs the Regent. Does “runs” mean it's hers?<turn|>\n<|turn>user\nyeah it's hers.\nher husband built it<turn|>\n<|turn>model\n"
   },
@@ -260,9 +446,12 @@
      "content": "  yeah it's hers.\nher husband built it  "
     }
    ],
-   "tools": true,
+   "tools": [
+    "search_pages",
+    "look_up"
+   ],
    "thinking": false,
-   "prompt": "<|turn>system\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\n(I've just opened this page.)<turn|>\n<|turn>model\nDolores runs the Regent. Does “runs” mean it's hers?<turn|>\n<|turn>user\nyeah it's hers.\nher husband built it<turn|>\n<|turn>model\n"
+   "prompt": "<|turn>system\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><|tool>declaration:look_up{description:<|\"|>Looks up the real world on Wikipedia: history, science, places, people, how things work. Returns passages from the articles it finds. Not for the writer's own world: their names and inventions aren't there.<|\"|>,parameters:{properties:{query:{description:<|\"|>A few words naming the real-world thing to look up<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\n(I've just opened this page.)<turn|>\n<|turn>model\nDolores runs the Regent. Does “runs” mean it's hers?<turn|>\n<|turn>user\nyeah it's hers.\nher husband built it<turn|>\n<|turn>model\n"
   },
   {
    "name": "filing",
@@ -273,7 +462,7 @@
      "content": "Dolores is 61."
     }
    ],
-   "tools": false,
+   "tools": [],
    "thinking": false,
    "prompt": "<|turn>system\nRead what the message states.<turn|>\n<|turn>user\nDolores is 61.<turn|>\n<|turn>model\n"
   }

@@ -1,4 +1,5 @@
 import Foundation
+import WriterCore
 
 /// A model's output split into what it thought and what it said. Thinking
 /// models write their reasoning before the reply; the reasoning is shown apart
@@ -9,11 +10,15 @@ public struct Reasoned: Equatable, Sendable {
     /// What it searched the author's pages for while replying, in order (`PageLookup`):
     /// shown as "Searched your pages for …" and kept with the reply (`Conversation.Turn.searches`).
     public var searches: [String]
+    /// What it looked up in the real world while replying, and found (`WebLookup`): shown as
+    /// "Searched Wikipedia for …" under the reply, with its sources.
+    public var lookups: [LookedUp]
 
-    public init(reasoning: String = "", reply: String = "", searches: [String] = []) {
+    public init(reasoning: String = "", reply: String = "", searches: [String] = [], lookups: [LookedUp] = []) {
         self.reasoning = reasoning
         self.reply = reply
         self.searches = searches
+        self.lookups = lookups
     }
 
     /// Gemma 4's output, whole or so far: `<|channel>thought\n…<channel|>reply`

@@ -228,13 +228,17 @@ public struct CompanionPrompt: Equatable, Sendable {
         public var retrieving: Bool
         /// The model is offered `search_pages` and told to look with it.
         public var searching: Bool
+        /// The model is offered `look_up` and told to look up the real world when unsure.
+        public var lookingUp: Bool
 
-        public init(pages: PageLookup, ranked: [String] = [], open: UUID? = nil, retrieving: Bool, searching: Bool) {
+        public init(pages: PageLookup, ranked: [String] = [], open: UUID? = nil, retrieving: Bool, searching: Bool,
+                    lookingUp: Bool = false) {
             self.pages = pages
             self.ranked = ranked
             self.open = open
             self.retrieving = retrieving
             self.searching = searching
+            self.lookingUp = lookingUp
         }
 
         /// What the pages say about the author's last message in `conversation`, if retrieving.
@@ -270,25 +274,35 @@ public struct CompanionPrompt: Equatable, Sendable {
         even when it comes up in their world.
         """
 
+    /// The reply case added when the model can look up the real world (`WebLookup`), after the
+    /// real-world one it narrows: what it isn't sure of, it looks up rather than guesses.
+    public static let lookUpInstruction = """
+        - If you aren't sure of something about the real world, look it up with \(WebLookup.toolName) first, then \
+        answer from what it finds and say it's from Wikipedia. Look up only the real world: never their names or \
+        anything they've made up.
+        """
+
     /// `instructions`, with a case for the author's pages after the real-world one when the
     /// companion has a lookup: `searchInstruction` when it can search them, otherwise
-    /// `notShownInstruction`. Without a lookup, as they are.
+    /// `notShownInstruction`, after `lookUpInstruction` when it can look up the real world.
+    /// Without a lookup, as they are.
     public static func instructions(lookup: Lookup?) -> String {
         guard let lookup else { return instructions }
-        return adding(lookup.searching ? searchInstruction : notShownInstruction)
+        return adding((lookup.lookingUp ? [lookUpInstruction] : []) + [lookup.searching ? searchInstruction : notShownInstruction])
     }
 
     /// The app's instructions for a companion that can, or can't, search the author's pages
-    /// (`instructions(lookup:)` with search, or without a lookup): what the companion's
-    /// settings show and restore.
-    public static func instructions(searching: Bool) -> String {
-        searching ? adding(searchInstruction) : instructions
+    /// and look up the real world (`instructions(lookup:)` with search, or without a lookup):
+    /// what the companion's settings show and restore.
+    public static func instructions(searching: Bool, lookingUp: Bool = false) -> String {
+        adding((lookingUp ? [lookUpInstruction] : []) + (searching ? [searchInstruction] : []))
     }
 
-    /// `instructions` with `reply` among its reply cases, after the real-world one.
-    private static func adding(_ reply: String) -> String {
+    /// `instructions` with `replies` among its reply cases, after the real-world one.
+    private static func adding(_ replies: [String]) -> String {
+        guard !replies.isEmpty else { return instructions }
         let next = "- If they asked what you think"
-        return instructions.replacingOccurrences(of: next, with: reply + "\n" + next)
+        return instructions.replacingOccurrences(of: next, with: replies.joined(separator: "\n") + "\n" + next)
     }
 
     /// The author's own instructions and examples, from the companion's settings (Kevin,
@@ -324,11 +338,22 @@ public struct CompanionPrompt: Equatable, Sendable {
 
     /// The model with nothing of the app's (Kevin's trial, 2026-11-24: "remove all your rules and
     /// context and prompts so I can see how this actually works as a model"): no instructions,
-    /// examples or pages, only the conversation. The opening line stays only before its first
-    /// reply, which has to answer something.
-    public static func plain(_ conversation: Conversation, maxTurns: Int = 12, maxTurnCharacters: Int = 6000) -> CompanionPrompt {
+    /// examples or pages, only the conversation, and since 2026-11-25 one line on which page is
+    /// open (`page`, its title), or, about the whole world, which world (`world`). The opening
+    /// line stays only before its first reply, which has to answer something.
+    public static func plain(_ conversation: Conversation, page: String? = nil, world: String? = nil,
+                             maxTurns: Int = 12, maxTurnCharacters: Int = 6000) -> CompanionPrompt {
         let turns = recent(conversation, maxTurns: maxTurns, maxTurnCharacters: maxTurnCharacters)
-        return CompanionPrompt(system: "", turns: turns.isEmpty ? [Turn(speaker: .author, text: opened)] : turns)
+        let system: String
+        if let page {
+            system = page.isEmpty ? "The writer has an untitled page open."
+                                  : "The writer has their page \u{201C}\(oneLine(page, maxCharacters: 80))\u{201D} open."
+        } else if let world {
+            system = "The writer is talking about their world \u{201C}\(oneLine(world, maxCharacters: 80))\u{201D} as a whole."
+        } else {
+            system = ""
+        }
+        return CompanionPrompt(system: system, turns: turns.isEmpty ? [Turn(speaker: .author, text: opened)] : turns)
     }
 
     private init(system: String, turns: [Turn]) {

@@ -20,6 +20,17 @@ research when a question is asked, and image and text upload and analysis.
 
 ## 1. Looking things up, starting with Wikipedia
 
+**Built 2026-11-25** (Kevin: "go for it with the web stuff"; `WebLookup`, `ReplyTools`):
+`look_up` beside `search_pages`, English Wikipedia's search, the two best articles read
+whole for the paragraphs that answer, "Searched Wikipedia for …" under the reply with
+its sources, Look Things Up in the companion's menu (on by default). Never sent: their
+pages' names and every name they wrote, unless the phone's dictionary knows it. Requests
+name the app by its public repository (Kevin's choice), which Wikimedia's policy asks for
+17 of 18 real-world questions and 5 of 166 others (3 of those real-world too); judged
+blind on the 23 where it looked up, 5.74 against 4.83 without, wrong facts 0 against 6.
+Left: it once wrote a look-up as text, and once suggested Wikipedia for their own world.
+What follows is the design as planned.
+
 The companion gets one tool, `look_up(query)`. It decides when to use it: a
 question about the real world it isn't sure of. The app runs the search and
 hands back a few numbered passages; the companion answers from them and the app

@@ -155,6 +155,24 @@ struct CompanionPanel: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// What it looked up in the real world for a reply, under it: the words that left the
+    /// phone, exactly, and the articles it read (iOS's own menu of links, opened in Safari).
+    @ViewBuilder private func lookedUp(_ lookup: LookedUp) -> some View {
+        let label = Label("Searched Wikipedia for \u{201C}\(lookup.query)\u{201D}", systemImage: "globe")
+        Group {
+            if lookup.sources.isEmpty {
+                label
+            } else {
+                Menu {
+                    ForEach(lookup.sources, id: \.url) { source in Link(source.title, destination: source.url) }
+                } label: { label }
+            }
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .tint(.secondary)
+    }
+
     /// A reply. Its latest, unanswered one can be tried again (hold it), and
     /// each try is kept: swipe between them, or use "‹ 2 of 3 ›" under it. The
     /// one showing when the author answers is the one the conversation goes on
@@ -188,6 +206,10 @@ struct CompanionPanel: View {
                     guard versions.count > 1, abs(x) > 2 * abs(y) else { return }
                     show(x < 0 ? at + 1 : at - 1)
                 })
+            // What it looked up for this reply, under it.
+            ForEach(Array((turn.lookups?[turn.question] ?? []).enumerated()), id: \.offset) { _, lookup in
+                lookedUp(lookup)
+            }
             if versions.count > 1 {
                 HStack(spacing: 0) {
                     versionButton("Previous Version", "chevron.left") { show(at - 1) }
@@ -566,12 +588,16 @@ struct CompanionPanel: View {
         ShareLink("Share Conversation", item: transcript)
             .disabled(companion.conversation.turns.isEmpty)
         if !inSheet && !aboutWorld { changesButton }   // the sheet (Kevin, 2026-11-24) and the world's screen have it beside the menu
+        Toggle(isOn: Binding { companion.looksUp } set: { companion.looksUp = $0 }) {
+            Label("Look Things Up", systemImage: "globe")
+            Text("On Wikipedia, for questions about the real world")
+        }
         #if DEBUG   // for trying the model out: debug builds only (Kevin, 2026-11-25)
         Button("Instructions…", systemImage: "text.document") { editingInstructions = true }
         // TRIAL (Kevin, 2026-11-24): the model on its own.
         Toggle(isOn: Binding { companion.plain } set: { companion.plain = $0 }) {
             Label("Plain Model", systemImage: "cube")
-            Text("No instructions or pages, only the conversation")
+            Text("Only the conversation, the page’s name and the tools")
         }
         #endif
     }

@@ -9,14 +9,15 @@ protocol CompanionModel: Sendable {
     /// Why it can't run here, or nil if it can.
     var unavailableReason: String? { get async }
     /// The reply so far, growing as the model writes it, with any reasoning
-    /// before it; the last is the whole reply. `lookup`: the author's pages, which it
-    /// searches with search_pages (if it `canSearch`); `thinking`: reason first, if the
-    /// model can. Throws `PromptTooLong` when the prompt doesn't fit the model.
-    func stream(_ prompt: CompanionPrompt, lookup: PageLookup?, thinking: Bool) -> AsyncThrowingStream<ReplySoFar, Error>
+    /// before it; the last is the whole reply. `tools`: what it may call while replying
+    /// (search_pages, look_up), if it `canSearch`; `thinking`: reason first, if the model
+    /// can. Throws `PromptTooLong` when the prompt doesn't fit the model.
+    func stream(_ prompt: CompanionPrompt, tools: ReplyTools, thinking: Bool) -> AsyncThrowingStream<ReplySoFar, Error>
     // Declared here, not only defaulted below, so a model's own versions are the
     // ones called through `any CompanionModel` (a default that isn't a
     // requirement is always the one used, whatever the model).
-    /// It can look things up in the author's pages (search_pages): its prompt says so.
+    /// It can use tools: search the author's pages (search_pages) and look up the real world
+    /// (look_up). Its prompt says so.
     var canSearch: Bool { get }
     var isInstalled: Bool { get }
     func downloadSize() async -> Int64?
@@ -96,7 +97,7 @@ struct AppleModel: CompanionModel {
         }
     }
 
-    func stream(_ prompt: CompanionPrompt, lookup: PageLookup?, thinking: Bool) -> AsyncThrowingStream<ReplySoFar, Error> {
+    func stream(_ prompt: CompanionPrompt, tools: ReplyTools, thinking: Bool) -> AsyncThrowingStream<ReplySoFar, Error> {
         streaming { continuation in   // Apple's model has no thinking step, nor search
             #if canImport(FoundationModels)
             let session = LanguageModelSession(model: .default, instructions: prompt.system)

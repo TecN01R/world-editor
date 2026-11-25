@@ -16,7 +16,7 @@ final class GemmaChatTests: XCTestCase {
         }
         struct Message: Decodable {
             struct Call: Decodable {
-                struct Function: Decodable { let arguments: String }
+                struct Function: Decodable { let name: String; let arguments: String }
                 let function: Function
             }
             let role: String
@@ -28,13 +28,16 @@ final class GemmaChatTests: XCTestCase {
             let name: String
             let system: String
             let messages: [Message]
-            let tools: Bool
+            let tools: [String]
             let thinking: Bool
             let prompt: String
         }
-        let tool: Tool
+        let tools: [Tool]
         let cases: [Case]
     }
+
+    /// The app's tools, in the order the fixture declares them.
+    private let appTools = [GemmaChat.searchPages, GemmaChat.lookUp]
 
     private func fixture() throws -> Fixture {
         let url = try XCTUnwrap(Bundle.module.url(forResource: "gemma4-chat", withExtension: "json", subdirectory: "Fixtures"))
@@ -50,14 +53,15 @@ final class GemmaChatTests: XCTestCase {
             case "user": turns.append(.init(speaker: .author, text: message.content))
             case "assistant" where message.tool_calls == nil: turns.append(.init(speaker: .companion, text: message.content))
             case "assistant":
-                let arguments = try XCTUnwrap(message.tool_calls?.first?.function.arguments)
-                let query = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(arguments.utf8)) as? [String: String])["query"]
+                let function = try XCTUnwrap(message.tool_calls?.first?.function)
+                let query = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(function.arguments.utf8)) as? [String: String])["query"]
                 searches.append(GemmaChat.Search(thought: message.reasoning_content ?? "", said: message.content,
-                                                 query: query, found: c.messages[i + 1].content))
+                                                 tool: function.name, query: query, found: c.messages[i + 1].content))
             default: break   // the tool's answer, taken with its call
             }
         }
-        return GemmaChat.prompt(system: c.system, turns: turns, searches: searches, tools: c.tools, thinking: c.thinking)
+        let tools = try c.tools.map { name in try XCTUnwrap(appTools.first { $0.name == name }) }
+        return GemmaChat.prompt(system: c.system, turns: turns, searches: searches, tools: tools, thinking: c.thinking)
     }
 
     func testEveryCaseRendersAsTheModelsTemplateDoes() throws {
@@ -68,17 +72,20 @@ final class GemmaChatTests: XCTestCase {
         }
     }
 
-    /// The fixture was rendered with search_pages' texts as they are: changing them means
-    func testTheFixtureDeclaresSearchPagesAsTheAppDoes() throws {
-        let tool = try fixture().tool
-        XCTAssertEqual(tool.name, PageLookup.toolName)
-        XCTAssertEqual(tool.description, PageLookup.toolDescription)
-        XCTAssertEqual(tool.parameters.properties["query"]?.description, PageLookup.queryGuide)
+    /// The fixture was rendered with the tools' texts as they are: changing them means
+    func testTheFixtureDeclaresTheToolsAsTheAppDoes() throws {
+        let tools = try fixture().tools
+        XCTAssertEqual(tools.count, 2)
+        for (tool, app) in zip(tools, appTools) {
+            XCTAssertEqual(tool.name, app.name)
+            XCTAssertEqual(tool.description, app.description)
+            XCTAssertEqual(tool.parameters.properties["query"]?.description, app.queryGuide)
+        }
     }
 
     func testASearchWithoutAQueryIsReplayedWithout() {
         let text = GemmaChat.prompt(system: "S", turns: [.init(speaker: .author, text: "hi")],
-                                    searches: [.init(query: nil, found: PageLookup.needsQuery)], tools: true, thinking: true)
+                                    searches: [.init(query: nil, found: PageLookup.needsQuery)], tools: [GemmaChat.searchPages], thinking: true)
         XCTAssertTrue(text.contains("<|tool_call>call:search_pages{}<tool_call|><|tool_response>"))
     }
 

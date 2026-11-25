@@ -32,6 +32,9 @@ public struct Conversation: Codable, Hashable, Sendable {
         /// replies here (`question` or one of `versions`), in order, for the "Searched your
         /// pages for …" line. Kept so the line survives reopening; never sent to the model.
         public var searches: [String: [String]]?
+        /// What it looked up in the real world (Wikipedia) while writing each of its replies
+        /// here, as `searches` is kept, for the "Searched Wikipedia for …" line and its sources.
+        public var lookups: [String: [LookedUp]]?
 
         public init(id: UUID = UUID(), question: String, answer: String? = nil, asked: Date = Date(),
                     filed: FilingRecord? = nil) {
@@ -155,11 +158,13 @@ public struct Conversation: Codable, Hashable, Sendable {
     /// Everything the author said here, in their words.
     public var authorText: String { turns.compactMap(\.answer).joined(separator: "\n") }
 
-    /// The companion's reply, and what it searched the author's pages for while writing it.
-    public mutating func ask(_ question: String, searches: [String] = [], at date: Date = Date()) {
+    /// The companion's reply, and what it searched the author's pages for and looked up in
+    /// the real world while writing it.
+    public mutating func ask(_ question: String, searches: [String] = [], lookups: [LookedUp] = [], at date: Date = Date()) {
         guard waiting == nil else { return }
         var turn = Turn(question: question, asked: date)
         if !searches.isEmpty { turn.searches = [question: searches] }
+        if !lookups.isEmpty { turn.lookups = [question: lookups] }
         turns.append(turn)
     }
 
@@ -170,15 +175,21 @@ public struct Conversation: Codable, Hashable, Sendable {
     }
 
     /// The new reply in place of `retracted` (if Try Again took one back), which is kept with
-    /// its versions and what each searched for.
-    public mutating func ask(_ question: String, after retracted: Turn?, searches: [String] = [], at date: Date = Date()) {
-        ask(question, searches: searches, at: date)
+    /// its versions and what each searched for and looked up.
+    public mutating func ask(_ question: String, after retracted: Turn?, searches: [String] = [], lookups: [LookedUp] = [],
+                             at date: Date = Date()) {
+        ask(question, searches: searches, lookups: lookups, at: date)
         guard let retracted else { return }
         let earlier = (retracted.versions ?? [retracted.question]).filter { $0 != question }
         guard !earlier.isEmpty, let i = turns.indices.last else { return }
         turns[i].versions = earlier + [question]
-        let kept = (retracted.searches ?? [:]).filter { earlier.contains($0.key) }.merging(turns[i].searches ?? [:]) { $1 }
-        turns[i].searches = kept.isEmpty ? nil : kept
+        /// The earlier versions' from `retracted`, with the new reply's; nil when there are none.
+        func kept<Value>(_ retracted: [String: Value]?, _ new: [String: Value]?) -> [String: Value]? {
+            let kept = (retracted ?? [:]).filter { earlier.contains($0.key) }.merging(new ?? [:]) { $1 }
+            return kept.isEmpty ? nil : kept
+        }
+        turns[i].searches = kept(retracted.searches, turns[i].searches)
+        turns[i].lookups = kept(retracted.lookups, turns[i].lookups)
     }
 
     /// Makes `version` the reply the conversation goes on from, while it waits for an answer
@@ -196,8 +207,12 @@ public struct Conversation: Codable, Hashable, Sendable {
         versions.remove(at: at)
         if turns[i].question == version { turns[i].question = versions[max(at - 1, 0)] }
         turns[i].versions = versions.count > 1 ? versions : nil
-        if !versions.contains(version) { turns[i].searches?[version] = nil }
+        if !versions.contains(version) {
+            turns[i].searches?[version] = nil
+            turns[i].lookups?[version] = nil
+        }
         if turns[i].searches?.isEmpty == true { turns[i].searches = nil }
+        if turns[i].lookups?.isEmpty == true { turns[i].lookups = nil }
     }
 
     /// The author's words: an answer to the waiting reply, or, if nothing has been said
@@ -278,5 +293,27 @@ public final class ConversationStore: @unchecked Sendable {
     /// Deletes the page's conversation, unless this version can't read it.
     public func delete(_ page: UUID) {
         try? file(page).delete()
+    }
+}
+
+/// A look-up of the real world the companion made while replying (its look_up tool, on
+/// Wikipedia): the words it sent, and the articles it found, for the line under its reply.
+public struct LookedUp: Codable, Hashable, Sendable {
+    public struct Source: Codable, Hashable, Sendable {
+        public var title: String
+        public var url: URL
+
+        public init(title: String, url: URL) {
+            self.title = title
+            self.url = url
+        }
+    }
+
+    public var query: String
+    public var sources: [Source]
+
+    public init(query: String, sources: [Source]) {
+        self.query = query
+        self.sources = sources
     }
 }

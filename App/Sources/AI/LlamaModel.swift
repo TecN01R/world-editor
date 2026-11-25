@@ -6,6 +6,7 @@ import llama
 import Network
 import os
 import UIKit
+import WriterCore
 
 /// The companion's model: NVIDIA's Nemotron 3.5 Bolt E4B (OpenMDW-1.1, post-trained from
 /// Google's Gemma 4 E4B, Apache-2.0), in bartowski's 4-bit file, on llama.cpp (MIT) with
@@ -74,33 +75,33 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
     /// temperature 1, top-p 0.95, top-k 64, no repetition penalty, a new seed each reply.
     private static let replying = Sampling(temperature: 1, topK: 64, topP: 0.95)
 
-    /// A reply: each pass of the model reads the prompt with the searches made so far and
-    /// writes until it ends its turn or calls search_pages, whose answer goes in the next
-    /// or if it says nothing at all, it's asked once more without the tool.
-    func stream(_ prompt: CompanionPrompt, lookup: PageLookup?, thinking: Bool) -> AsyncThrowingStream<ReplySoFar, Error> {
+    /// A reply: each pass of the model reads the prompt with the calls made so far and writes
+    /// until it ends its turn or calls a tool (search_pages, look_up), whose answer goes in the
+    /// or if it says nothing at all, it's asked once more without the tools.
+    func stream(_ prompt: CompanionPrompt, tools: ReplyTools, thinking: Bool) -> AsyncThrowingStream<ReplySoFar, Error> {
         streaming { continuation in
             let began = ContinuousClock.now
-            var searches = lookup.map(PageLookup.Searches.init)
+            var tools = tools
+            var offered = tools.offered
             var made: [GemmaChat.Search] = []
             var runs: [Run] = []
             var firstWords: Duration?
             var resumed = 0
             while true {
-                let offered = searches != nil
                 let text = GemmaChat.prompt(system: prompt.system, turns: prompt.turns, searches: made, tools: offered, thinking: thinking)
-                let inThought = thinking && !made.isEmpty   // after a search its thought is opened for it
-                let pass = Pass(), soFar = made
+                let inThought = thinking && !made.isEmpty   // after a call its thought is opened for it
+                let pass = Pass(), soFar = made, lookups = tools.lookups
                 let run = try await Self.again(pass) {
                     try await self.engine.generate(text, written: pass.tokens, sampling: Self.replying,
                                                    budget: thinking ? Self.thinkingBudget : nil, inThought: inThought,
                                                    room: thinking ? 1000 : 300, maxNew: 1500 - pass.tokens.count) { event in
                         switch event {
                         case .reading(let done, let total):
-                            continuation.yield(ReplySoFar(reply: Self.shown(soFar, pass.output(inThought)),
+                            continuation.yield(ReplySoFar(reply: Self.shown(soFar, lookups, pass.output(inThought)),
                                                           reading: Double(done) / Double(max(total, 1))))
                         case .token(let token, let piece):
                             pass.add(token, piece)
-                            let reply = Self.shown(soFar, pass.output(inThought))
+                            let reply = Self.shown(soFar, lookups, pass.output(inThought))
                             if firstWords == nil, !reply.reply.isEmpty { firstWords = ContinuousClock.now - began }
                             continuation.yield(ReplySoFar(reply: reply))
                         }
@@ -109,46 +110,52 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
                 runs.append(run)
                 resumed += pass.resumed
                 let output = pass.output(inThought)
-                if offered, let call = output.call {
-                    guard made.count < 3 else { (searches, made) = (nil, []); continue }   // a fourth: without the tool
-                    let found = searches?.answer(call.name, query: call.query) ?? ""
-                    made.append(GemmaChat.Search(thought: output.thought, said: output.said, query: call.query, found: found))
-                    continuation.yield(ReplySoFar(reply: Self.shown(made, GemmaChat.Output())))
+                if !offered.isEmpty, let call = output.call {
+                    guard made.count < 3 else { (offered, made) = ([], []); continue }   // a fourth: without the tools
+                    var search = GemmaChat.Search(thought: output.thought, said: output.said, tool: call.name, query: call.query, found: "")
+                    // Shown as it's made: a look-up is what leaves the phone.
+                    continuation.yield(ReplySoFar(reply: Self.shown(made + [search], tools.lookups, GemmaChat.Output())))
+                    search.found = await tools.answer(call.name, query: call.query) { try await WebLookup.lookUp($0) }
+                    made.append(search)
                     continue
                 }
-                let reply = Self.shown(made, output)
-                if offered, reply.reply.isEmpty { (searches, made) = (nil, []); continue }   // nothing said: once without the tool
+                let reply = Self.shown(made, tools.lookups, output)
+                if !offered.isEmpty, reply.reply.isEmpty { (offered, made) = ([], []); continue }   // nothing said: once without the tools
                 continuation.yield(ReplySoFar(reply: reply))
                 // TRIAL: speed on the phone, pass by pass, and what's left.
                 func count(_ text: String) -> Int { text.split(whereSeparator: \.isWhitespace).count }
                 trialLog("SPEED \(Self.name)\(thinking ? ", thinking" : ""): \(runs.map(\.summary).joined(separator: "; ")); "
                     + "first words after \(firstWords ?? .zero) (\(count(reply.reasoning)) words of thinking, "
-                    + "\(reply.searches.count) searches), whole reply (\(count(reply.reply)) words) in \(ContinuousClock.now - began); "
+                    + "\(reply.searches.count) searches, \(reply.lookups.count) look-ups), whole reply (\(count(reply.reply)) words) "
+                    + "in \(ContinuousClock.now - began); "
                     + (resumed > 0 ? "went on after the author came back \(resumed) times; " : "") + Engine.state)
                 return
             }
         }
     }
 
-    /// The reply as shown: its thoughts with the searches between them (in its collapsed
-    /// thinking), and what it said, around its searches and after.
-    private static func shown(_ made: [GemmaChat.Search], _ now: GemmaChat.Output) -> Reasoned {
+    /// The reply as shown: its thoughts with its calls between them (in its collapsed
+    /// thinking), what it said, around its calls and after, and what it looked up.
+    private static func shown(_ made: [GemmaChat.Search], _ lookups: [LookedUp], _ now: GemmaChat.Output) -> Reasoned {
         var thoughts: [String] = [], said: [String] = []
-        for search in made {
-            thoughts.append(search.thought)
-            thoughts.append("Searched your pages for \u{201C}\(search.query ?? "")\u{201D}.")
-            said.append(search.said)
+        for call in made {
+            thoughts.append(call.thought)
+            let query = call.query ?? ""
+            thoughts.append(call.tool == WebLookup.toolName ? "Searched Wikipedia for \u{201C}\(query)\u{201D}."
+                                                             : "Searched your pages for \u{201C}\(query)\u{201D}.")
+            said.append(call.said)
         }
         thoughts.append(now.thought)
         said.append(now.said)
         func joined(_ parts: [String]) -> String { parts.filter { !$0.isEmpty }.joined(separator: "\n\n") }
-        return Reasoned(reasoning: joined(thoughts), reply: joined(said), searches: made.compactMap(\.query))
+        return Reasoned(reasoning: joined(thoughts), reply: joined(said),
+                        searches: made.filter { $0.tool == PageLookup.toolName }.compactMap(\.query), lookups: lookups)
     }
 
     /// Reads what the message states: the model writes it as JSON, as the prompt's example
     func file(_ prompt: FilingPrompt) async throws -> Filings {
         let text = GemmaChat.prompt(system: prompt.system, turns: [.init(speaker: .author, text: prompt.message)],
-                                    tools: false, thinking: false)
+                                    tools: [], thinking: false)
         let began = ContinuousClock.now
         let pass = Pass()
         let run = try await Self.again(pass, startOver: true) {

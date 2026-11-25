@@ -451,4 +451,13 @@ final class ConversationTests: XCTestCase {
                        CompanionPrompt.instructions(lookup: .init(pages: PageLookup(pages: []), retrieving: false, searching: true)))
         XCTAssertEqual(CompanionPrompt.instructions(searching: false), CompanionPrompt.instructions(lookup: nil))
     }
+
+    func testThePlainModelIsToldOnlyWhichPageIsOpen() {
+        let talk = Conversation(page: UUID())
+        XCTAssertEqual(CompanionPrompt.plain(talk).system, "")
+        XCTAssertEqual(CompanionPrompt.plain(talk, page: "Ilsa").system, "The writer has their page \u{201C}Ilsa\u{201D} open.")
+        XCTAssertEqual(CompanionPrompt.plain(talk, page: "").system, "The writer has an untitled page open.")
+        XCTAssertEqual(CompanionPrompt.plain(talk, world: "Tidewater").system,
+                       "The writer is talking about their world \u{201C}Tidewater\u{201D} as a whole.")
+    }
 }

@@ -536,7 +536,7 @@ public struct PageLookup: Sendable {
 // MARK: - Searching within a reply
 
 extension PageLookup {
-    /// SearchPages): it never fails. A call without a query gets `needsQuery`; past
+    /// ReplyTools): it never fails. A call without a query gets `needsQuery`; past
     /// `searchesPerReply` searches, `lastSearch`; a tool it doesn't have, that it isn't there.
     public struct Searches: Sendable {
         private let lookup: PageLookup

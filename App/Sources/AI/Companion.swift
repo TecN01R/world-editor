@@ -1,6 +1,7 @@
 import Foundation
 import Guardrails
 import OSLog
+import UIKit
 import WriterCore
 
 /// The companion: talks with the author about the open page like a friend
@@ -55,9 +56,19 @@ final class Companion {
     /// "remove the thinking switch"): the companion's model is made to think (NVIDIA runs
     private let thinks = true
 
+    /// It may look up the real world on Wikipedia when it isn't sure (`WebLookup`; Kevin,
+    /// 2026-11-25: "go for it with the web stuff"): on unless turned off in its menu. Only
+    /// the words it looks up leave the phone, never a name from the author's pages.
+    var looksUp = UserDefaults.standard.object(forKey: "companionLooksUp") as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(looksUp, forKey: "companionLooksUp")
+            background = nil   // its instructions say whether it can
+        }
+    }
+
     /// TRIAL (Kevin, 2026-11-24): the model with none of the app's instructions,
-    /// examples or pages, only the conversation (`CompanionPrompt.plain`), to see
-    /// how it does on its own.
+    /// examples or pages, only the conversation, which page is open (`CompanionPrompt.plain`)
+    /// and the tools, described as they're declared, to see how it does on its own.
     /// Debug builds only (Kevin, 2026-11-25): a release build always reads the whole prompt.
     #if DEBUG
     var plain = UserDefaults.standard.bool(forKey: "companionPlain") {
@@ -81,7 +92,7 @@ final class Companion {
 
     /// The app's own instructions and examples for this model, which the settings show and restore.
     var defaultTexts: (instructions: String, examples: String) {
-        (CompanionPrompt.instructions(searching: model.canSearch), CompanionPrompt.examples)
+        (CompanionPrompt.instructions(searching: model.canSearch, lookingUp: model.canSearch && looksUp), CompanionPrompt.examples)
     }
     #else
     let texts = CompanionPrompt.Texts()
@@ -343,7 +354,13 @@ final class Companion {
         // What it can search with search_pages: every page, with its type and fields, and
         // what the author said in their other conversations (this one's words are in the
         let pageLookup = model.canSearch ? PageLookup(pages: library.pages, schema: library.schema, conversations: talks) : nil
-        let lookup = pageLookup.map { CompanionPrompt.Lookup(pages: $0, open: isWorld ? nil : page.id, retrieving: false, searching: true) }
+        let lookup = pageLookup.map { CompanionPrompt.Lookup(pages: $0, open: isWorld ? nil : page.id, retrieving: false,
+                                                             searching: true, lookingUp: looksUp) }
+        // A look-up never sends their names: their pages', and those they wrote, unless the
+        // phone's dictionary knows the word (a real place's name).
+        let tools = ReplyTools(pages: pageLookup, lookingUp: looksUp && pageLookup != nil,
+                               theirNames: WebLookup.theirNames(pages: pageLookup, said: conversation.turns.compactMap(\.answer),
+                                                                known: Self.dictionary()))
         var reply = Reasoned(reply: "")
         do {
             // Unusual text takes more of the model's context than its length
@@ -351,7 +368,8 @@ final class Companion {
             for room in [1, 2, 4] {
                 var prompt: CompanionPrompt
                 if plain {
-                    prompt = CompanionPrompt.plain(conversation, maxTurnCharacters: 6000 / room)
+                    prompt = CompanionPrompt.plain(conversation, page: isWorld ? nil : page.title,
+                                                   world: isWorld ? library.world.name : nil, maxTurnCharacters: 6000 / room)
                 } else if isWorld {
                     prompt = CompanionPrompt(world: library.world.name, pages: others.map { library.companionPage($0, fields: true) },
                                              earlier: earlier, conversation: conversation,
@@ -383,7 +401,9 @@ final class Companion {
                     }
                 }
                 do {
-                    for try await partial in model.stream(prompt, lookup: plain ? nil : pageLookup, thinking: thinks) {
+                    // Plain Model too has the tools, as their declarations describe them (Kevin,
+                    // 2026-11-25: "otherwise it's kind of useless").
+                    for try await partial in model.stream(prompt, tools: tools, thinking: thinks) {
                         guard !Task.isCancelled else { break }
                         reply = partial.reply
                         self.reasoning = reply.reasoning
@@ -408,7 +428,7 @@ final class Companion {
         trialLog("REPLY\(plain ? " (plain)" : "") \(page.title): \(reply.reply)")   // TRIAL
         guard !reply.reply.isEmpty else { restoreRetracted(); state = .failed; return }   // ran out of room while thinking
         if modelVersion == nil { modelVersion = model.version }   // just downloaded
-        conversation.ask(reply.reply, after: retracted, searches: reply.searches)
+        conversation.ask(reply.reply, after: retracted, searches: reply.searches, lookups: reply.lookups)
         retracted = nil
         if !reply.reasoning.isEmpty { thoughts[reply.reply] = reply.reasoning }
         save()
@@ -422,6 +442,15 @@ final class Companion {
                 try? await Task.sleep(for: .seconds(120))
                 if !Task.isCancelled { fileWaiting() }
             }
+        }
+    }
+
+    /// Whether a word is one of the language's, by the phone's own English dictionary.
+    private static func dictionary() -> (String) -> Bool {
+        let checker = UITextChecker()
+        return { word in
+            checker.rangeOfMisspelledWord(in: word, range: NSRange(location: 0, length: (word as NSString).length),
+                                          startingAt: 0, wrap: false, language: "en_US").location == NSNotFound
         }
     }
 

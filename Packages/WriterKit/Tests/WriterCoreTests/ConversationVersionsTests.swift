@@ -86,6 +86,28 @@ final class ConversationVersionsTests: XCTestCase {
         talk.ask("D")
         XCTAssertNil(talk.turns[0].searches)
     }
+
+    /// What each reply looked up on Wikipedia stays with that reply, as its searches do; saved
+    /// conversations from before look-ups load without them.
+    func testEachReplyKeepsWhatItLookedUp() throws {
+        let trireme = LookedUp(query: "trireme rowers", sources: [.init(title: "Trireme", url: URL(string: "https://en.wikipedia.org/wiki/Trireme")!)])
+        let peat = LookedUp(query: "how peat forms", sources: [])
+        var talk = Conversation(page: UUID())
+        talk.ask("A", lookups: [trireme])
+        XCTAssertEqual(talk.turns[0].lookups, ["A": [trireme]])
+        talk.ask("B", after: try XCTUnwrap(talk.retract()), searches: ["Kestrel"], lookups: [peat])
+        talk.ask("C", after: try XCTUnwrap(talk.retract()))
+        XCTAssertEqual(talk.turns[0].lookups, ["A": [trireme], "B": [peat]])
+        XCTAssertEqual(talk.turns[0].searches, ["B": ["Kestrel"]])
+        let saved = try JSONDecoder().decode(Conversation.self, from: JSONEncoder().encode(talk))
+        XCTAssertEqual(saved.turns[0].lookups, talk.turns[0].lookups)
+        talk.delete("A", in: talk.turns[0].id)
+        XCTAssertEqual(talk.turns[0].lookups, ["B": [peat]])
+        talk.delete("B", in: talk.turns[0].id)
+        XCTAssertNil(talk.turns[0].lookups)
+        let old = Data(#"{"page":"\#(UUID())","turns":[{"id":"\#(UUID())","question":"Hi","asked":0}]}"#.utf8)
+        XCTAssertNil(try JSONDecoder().decode(Conversation.self, from: old).turns[0].lookups)
+    }
 }
 
 /// The world's conversations: marked, titled by the author's first words, dated by the last turn.

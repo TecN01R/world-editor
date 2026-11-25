@@ -85,6 +85,12 @@ channel, so the thinking shows, collapsed, as it comes. Anything in the
 writer's text that Gemma would read as one of its control tokens is defused
 first (`Reasoned.gemmaPlain`).
 
+It looks up the real world on Wikipedia when it isn't sure (`look_up`; Kevin,
+2026-11-25), with one more reply case in its instructions
+(`CompanionPrompt.lookUpInstruction`): what it looked up shows under the reply with
+step 1): wrong facts on the real-world questions went from 6 of 23 to none. Look
+Things Up in its menu turns it off; a look-up never sends a name of theirs.
+
 Kevin can replace the instructions and the examples himself (Kevin, 2026-11-25:
 "a settings panel for me to modify instructions myself"; "only available in
 debug mode of course"): Instructions… in the companion's menu of a debug build,
@@ -302,7 +308,12 @@ time, though temperature was already Gemma's 1.0).
 Plain Model (TRIAL, in the menu; Kevin, 2026-11-24: "remove all your rules
 and context and prompts so I can see how this actually works as a model"):
 the model gets only the conversation, no instructions, examples or pages
-(`CompanionPrompt.plain`). It knows nothing of the page but what's been said.
+(`CompanionPrompt.plain`), and, since 2026-11-25, the tools, described as their
+declarations describe them (Kevin: "Can the plain model at least have access to
+the tools and how those work? Otherwise it's kind of useless"), and one line
+saying which page is open (its title), or which world, about the whole world:
+it can search the pages and look up the real world, but is told nothing else.
+In debug builds only.
 prompt without its example conversations 4.7 (a draw: better openings, worse
 corrections and "stuck"), Plain Model 1.6 (98% poor: it took his world for
 Star Wars or Hollow Knight, invented names, wrote 100-word help-desk replies).
