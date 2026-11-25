@@ -58,9 +58,14 @@ final class Companion {
     /// TRIAL (Kevin, 2026-11-24): the model with none of the app's instructions,
     /// examples or pages, only the conversation (`CompanionPrompt.plain`), to see
     /// how it does on its own.
+    /// Debug builds only (Kevin, 2026-11-25): a release build always reads the whole prompt.
+    #if DEBUG
     var plain = UserDefaults.standard.bool(forKey: "companionPlain") {
         didSet { UserDefaults.standard.set(plain, forKey: "companionPlain") }
     }
+    #else
+    let plain = false
+    #endif
     /// The author's own instructions and examples (`CompanionInstructions`), kept on the phone,
     /// in place of the app's: nil for the app's own. The next reply reads them. Debug builds
     /// only, as the settings are (Kevin, 2026-11-25): a release build always reads the app's.

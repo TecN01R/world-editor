@@ -566,14 +566,14 @@ struct CompanionPanel: View {
         ShareLink("Share Conversation", item: transcript)
             .disabled(companion.conversation.turns.isEmpty)
         if !inSheet && !aboutWorld { changesButton }   // the sheet (Kevin, 2026-11-24) and the world's screen have it beside the menu
-        #if DEBUG
-        Button("Instructions…", systemImage: "text.document") { editingInstructions = true }   // debug builds only (Kevin, 2026-11-25)
-        #endif
+        #if DEBUG   // for trying the model out: debug builds only (Kevin, 2026-11-25)
+        Button("Instructions…", systemImage: "text.document") { editingInstructions = true }
         // TRIAL (Kevin, 2026-11-24): the model on its own.
         Toggle(isOn: Binding { companion.plain } set: { companion.plain = $0 }) {
             Label("Plain Model", systemImage: "cube")
             Text("No instructions or pages, only the conversation")
         }
+        #endif
     }
 
     /// "World Editor 0.1.0 (1)".

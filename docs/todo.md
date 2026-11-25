@@ -47,7 +47,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Search: built on Nemotron (search_pages, thinking capped); check it finds things on the phone
 - [ ] Filing through tools (make page, set field, rename, set page text), each with Undo
 - [ ] Live Activity: does tapping it reach the app? If never, our own Live Activity
-- [ ] Remove the Plain Model switch from the menu
+- [ ] Plain Model: in debug builds only now (Kevin, 2026-11-25); remove it altogether once it's no longer used
 
 ## Later
 - [ ] Spotlight finds every world's pages
