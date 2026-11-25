@@ -48,11 +48,15 @@ revive() {
     sleep 6
     reachable
 }
+# Signs and installs with xtool-duo where it's installed: a patched xtool that asks Apple for the
+# increased-memory-limit entitlement on a free team, which stock xtool drops (the app then gets
+# about 3.4 GB on the Duo instead of 5.8; Kevin, 2026-11-25). Stock xtool otherwise.
+installer=$(command -v xtool-duo || echo xtool)
 if [[ "${1:-}" == "--no-launch" ]]; then
     shift
     xtool dev build --ipa "$@"
     reachable || revive || unreachable   # built, ready for when it is
-    exec timeout 600 xtool install xtool/WorldEditor.ipa
+    exec timeout 600 "$installer" install xtool/WorldEditor.ipa
 fi
 reachable || revive || unreachable
-exec timeout 900 xtool dev "$@"   # never waits for a phone that drops out for good
+exec timeout 900 "$installer" dev "$@"   # never waits for a phone that drops out for good

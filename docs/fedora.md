@@ -64,6 +64,11 @@ opens with the new build the next time Kevin opens it.
   To re-pair over USB: `sudo systemctl stop netmuxd`, plug in, `idevicepair
   pair`, then `sudo systemctl start netmuxd`. Charging from this PC over USB
   pauses wireless installs until the cable is out.
+- **More memory for the app:** stock xtool drops the
+  `increased-memory-limit` entitlement for a free Apple ID, so the app gets
+  iOS's default (about 3.4 GB on the Duo). A patched xtool that asks Apple for it
+  gets about 5.8 GB: `scripts/run-on-phone.sh` signs and installs with
+  `xtool-duo` when one is on the PATH, and with stock xtool otherwise.
 - **When `netmuxd` loses the phone** though it's still on the Wi-Fi
   (`avahi-browse -tp _apple-mobdev2._tcp` lists it) and nobody can restart the
   system one with sudo, run a private one and point the tools at it:
