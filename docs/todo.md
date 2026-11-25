@@ -9,6 +9,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Rotation crash: check it's gone
 
 ## Check on the phone
+- [ ] Documents (Kevin, 2026-11-25): the paperclip beside the message field, a PDF or text file; ask about it; a long one is searched ("Searched your documents for …" in its thinking)
 - [ ] Limits lifted (Kevin, 2026-11-25: "you WILL lift the limits"): the whole conversation (16K context), no per-tool budgets (only a 10-call runaway guard), 4x larger Wikipedia and page-search results, all three articles read
 - [ ] The companion is the model stock now, with its tools (Kevin, 2026-11-25). Instructions… in its menu, blank at first: write your own, or tell it how to reply from now on and it adds one ("Added to Instructions: …" under the reply opens them)
 - [ ] More memory for the app (Kevin, 2026-11-25: "Yes" to the patched xtool): installed from d7a1eed on; the companion's next LOAD line should show about 5.8 GB left instead of 3.4
@@ -56,7 +57,6 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Swift 6 language mode
 - [ ] Replies keep running in the background (continued processing with the GPU)
 - [ ] Download keeps its speed when the app isn't in front
-- [ ] Documents (PDF, text) and images in the companion (after Wikipedia look-ups; Kevin, 2026-11-25: "go for it with the web stuff"); the whole web needs a search provider and key
 - [ ] VoiceOver pass over the page title and fields
 - [ ] Paragraph IDs drifting when paragraphs are edited (`reconcile`)
 - [ ] World calendar date picker

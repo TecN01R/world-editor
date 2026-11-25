@@ -56,6 +56,7 @@ extension Reasoned {
             case WebLookup.toolName: thoughts.append("Searched Wikipedia for \u{201C}\(query)\u{201D}.")
             case PageLookup.listToolName: thoughts.append(query.isEmpty ? "Listed your pages." : "Listed your pages: \u{201C}\(query)\u{201D}.")
             case Instructions.toolName: thoughts.append("Added to your instructions: \u{201C}\(query)\u{201D}.")
+            case Documents.toolName: thoughts.append("Searched your documents for \u{201C}\(query)\u{201D}.")
             default: thoughts.append("Searched your pages for \u{201C}\(query)\u{201D}.")
             }
             said.append(call.said)

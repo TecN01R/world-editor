@@ -38,6 +38,9 @@ public struct Conversation: Codable, Hashable, Sendable {
         /// The instructions it added to the writer's (Instructions…) while writing each of its
         /// replies here, as `searches` is kept, for the "Added to Instructions: …" line.
         public var instructions: [String: [String]]?
+        /// The documents the author attached to their answer (a PDF's or text file's text), for
+        /// the companion to read and answer from: not their words, so never filed.
+        public var attached: [Attached]?
 
         public init(id: UUID = UUID(), question: String, answer: String? = nil, asked: Date = Date(),
                     filed: FilingRecord? = nil) {
@@ -225,14 +228,27 @@ public struct Conversation: Codable, Hashable, Sendable {
 
     /// The author's words: an answer to the waiting reply, or, if nothing has been said
     /// yet, the conversation's first words (the world's conversation waits for them;
-    /// Kevin, 2026-11-24), on a turn with no reply before it.
-    public mutating func answer(_ text: String, at date: Date = Date()) {
+    /// Kevin, 2026-11-24), on a turn with no reply before it; with any documents they
+    /// `attached` (then the words may be none).
+    public mutating func answer(_ text: String, attached: [Attached] = [], at date: Date = Date()) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty || !attached.isEmpty else { return }
         if turns.isEmpty { turns.append(Turn(question: "", asked: date)) }
         guard let i = turns.indices.last, turns[i].answer == nil else { return }
         turns[i].answer = trimmed
         turns[i].answered = date
+        if !attached.isEmpty { turns[i].attached = attached }
+    }
+
+    /// A document the author attached: its file's name and its text.
+    public struct Attached: Codable, Hashable, Sendable {
+        public var name: String
+        public var text: String
+
+        public init(name: String, text: String) {
+            self.name = name
+            self.text = text
+        }
     }
 
     /// One value filing gave a field, for the field's timeline.

@@ -277,9 +277,10 @@ final class Companion {
         askNow(about: page, in: library)
     }
 
-    /// The author's answer, in their words; then the companion's reply.
-    func answer(_ text: String, page: WriterCore.Document, in library: Library) {
-        conversation.answer(text)
+    /// The author's answer, in their words, with any documents they `attached`; then the
+    /// companion's reply.
+    func answer(_ text: String, attached: [Conversation.Attached] = [], page: WriterCore.Document, in library: Library) {
+        conversation.answer(text, attached: attached)
         // The page as they sent it: filing, after the reply, changes only what's still so.
         if let i = conversation.turns.indices.last, let now = library.pages.first(where: { $0.id == page.id }) {
             conversation.turns[i].seen = now.values
@@ -324,6 +325,7 @@ final class Companion {
         // phone's dictionary knows the word (a real place's name).
         let tools = ReplyTools(pages: pageLookup, lookingUp: looksUp && pageLookup != nil, listing: true,
                                instructing: model.canSearch,
+                               documents: model.canSearch ? Documents.Lookup(conversation) : nil,
                                theirNames: WebLookup.theirNames(pages: pageLookup, said: conversation.turns.compactMap(\.answer),
                                                                 known: Self.dictionary()))
         var reply = Reasoned(reply: "")

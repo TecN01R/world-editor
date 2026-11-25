@@ -371,15 +371,18 @@ public struct CompanionPrompt: Equatable, Sendable {
     /// The newest exchanges that fit; the last one always, cut down if it alone is too long.
     private static func recent(_ conversation: Conversation, maxTurns: Int, maxTurnCharacters: Int) -> [Turn] {
         var recent: [Conversation.Turn] = [], length = 0
+        // The author's turn as the model reads it: their words and what they attached.
+        func said(_ turn: Conversation.Turn) -> String? { turn.answer.map { Documents.turn($0, turn.attached ?? []) } }
         for turn in conversation.turns.suffix(maxTurns).reversed() {
-            length += turn.question.count + (turn.answer?.count ?? 0)
+            length += turn.question.count + (said(turn)?.count ?? 0)
             guard recent.isEmpty || length <= maxTurnCharacters else { break }
             recent.insert(turn, at: 0)
         }
-        func fitted(_ text: String) -> String { excerpt(text, maxCharacters: maxTurnCharacters) ?? text }
+        // Words that read as the model's control tokens stay words (`Reasoned.gemmaPlain`).
+        func fitted(_ text: String) -> String { Reasoned.gemmaPlain(excerpt(text, maxCharacters: maxTurnCharacters) ?? text) }
         return recent.flatMap { turn in
             (turn.question.isEmpty ? [] : [Turn(speaker: .companion, text: fitted(turn.question))])   // the author began
-                + (turn.answer.map { [Turn(speaker: .author, text: fitted($0))] } ?? [])
+                + (said(turn).map { [Turn(speaker: .author, text: fitted($0))] } ?? [])
         }
     }
 

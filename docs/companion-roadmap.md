@@ -90,6 +90,12 @@ shows where they came from.
 
 ## 3. Text the writer hands it
 
+**Built 2026-11-25** (Kevin: "when can we get picture analysis and pdf or text analysis"): a
+paperclip beside the message field opens iOS's file picker (PDF, text, Markdown; several at
+once); PDFKit reads a PDF's text. A document up to 8,000 characters goes to the model whole in
+the author's turn; a longer one with its opening, and `search_document` finds the rest in
+overlapping pieces (`Documents`). Not yet: Paste as a document, .docx, scanned PDFs (no text).
+
 - **Bringing it in:** a **+** beside the message field: *Photo*, *File*,
   *Paste*. Files through `fileImporter` (.txt, .md, .pdf via PDFKit; .docx
   later). A long paste into the field is treated as a document, not a message.

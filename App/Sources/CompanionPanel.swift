@@ -13,6 +13,10 @@ struct CompanionPanel: View {
     @Environment(Companion.self) private var companion
     @Environment(\.scenePhase) private var scenePhase
     @State private var message = ""
+    /// Files chosen to go with the next message (`AttachedFile`), and why one couldn't be read.
+    @State private var attached: [Conversation.Attached] = []
+    @State private var attaching = false
+    @State private var unreadable: String?
     @State private var confirmingNew = false
     @State private var showingChanges = false
     @State private var editingInstructions = false
@@ -90,7 +94,7 @@ struct CompanionPanel: View {
                     // reply, as the companion's doing, in the order it happens: filing runs after
                     // the reply, once the conversation pauses (Kevin, 2026-11-24).
                     if i > 0, let record = turns[i - 1].filed, !record.isEmpty { filed(record, from: turns[i - 1].id) }
-                    if let answer = turn.answer { mine(answer) }
+                    if let answer = turn.answer { mine(answer, attached: turn.attached ?? []) }
                     // No reply after it (being tried again): under the message meanwhile.
                     if i == turns.count - 1, let record = turn.filed, !record.isEmpty { filed(record, from: turn.id) }
                 }
@@ -250,17 +254,61 @@ struct CompanionPanel: View {
         Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = text }
     }
 
-    /// The author's words: a bubble on the right, in New York. A plain fill, not glass:
-    /// Apple keeps Liquid Glass for controls, off content.
-    private func mine(_ text: String) -> some View {
-        Text(text)
-            .font(.authored(.body))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(.fill.secondary, in: .rect(cornerRadius: 20))
-            .contextMenu { copy(text) }
-            .padding(.leading, 48)
-            .frame(maxWidth: .infinity, alignment: .trailing)
+    /// The author's words: a bubble on the right, in New York, under the files they attached
+    /// to it (Kevin, 2026-11-25: "pdf or text analysis"). A plain fill, not glass: Apple keeps
+    /// Liquid Glass for controls, off content.
+    private func mine(_ text: String, attached: [Conversation.Attached]) -> some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            ForEach(Array(attached.enumerated()), id: \.offset) { _, document in
+                Label(document.name, systemImage: "doc.text")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            if !text.isEmpty {
+                Text(text)
+                    .font(.authored(.body))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(.fill.secondary, in: .rect(cornerRadius: 20))
+                    .contextMenu { copy(text) }
+            }
+        }
+        .padding(.leading, 48)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    /// The files waiting to go with the next message, each with a way to take it off.
+    @ViewBuilder private var waitingFiles: some View {
+        if !attached.isEmpty {
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(Array(attached.enumerated()), id: \.offset) { i, document in
+                        HStack(spacing: 4) {
+                            Label(document.name, systemImage: "doc.text")
+                                .lineLimit(1)
+                            Button("Remove \(document.name)", systemImage: "xmark.circle.fill") { attached.remove(at: i) }
+                                .labelStyle(.iconOnly)
+                                .foregroundStyle(.secondary)
+                        }
+                        .font(.footnote)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.fill.secondary, in: .capsule)
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+        }
+    }
+
+    /// The files the picker returned, read into text; one that can't be read is said why.
+    private func attach(_ result: Result<[URL], Error>) {
+        guard case .success(let urls) = result else { return }
+        for url in urls {
+            do { attached.append(try AttachedFile.read(url)) } catch {
+                unreadable = (error as? LocalizedError)?.errorDescription ?? "\u{201C}\(url.lastPathComponent)\u{201D} couldn\u{2019}t be read."
+            }
+        }
     }
 
     /// An arrow beside "2 of 3", with the HIG's minimum touch size.
@@ -532,42 +580,63 @@ struct CompanionPanel: View {
     private func retry() { companion.retry(page: subject, in: library) }
     private func resume() { companion.startDownload(page: subject, in: library) }
 
-    /// The message field in Liquid Glass: (unfolded) the menu, the field and
-    /// send, one height (the stock glass button styles each come in a different one).
+    /// The message field in Liquid Glass: (unfolded) the menu, attach, the field and
+    /// send, one height (the stock glass button styles each come in a different one); the
+    /// files waiting to go above it.
     private var composer: some View {
-        GlassEffectContainer {
-            HStack(alignment: .bottom, spacing: 8) {
-                if !inSheet && !aboutWorld {
-                    // The whole circle is the menu's to tap, not only its dots (Kevin, 2026-11-24:
-                    // sized from outside, taps beside the dots did nothing while the glass reacted).
-                    Menu { moreItems } label: {
-                        Label("More", systemImage: "ellipsis")
+        VStack(alignment: .leading, spacing: 8) {
+            waitingFiles
+            GlassEffectContainer {
+                HStack(alignment: .bottom, spacing: 8) {
+                    if !inSheet && !aboutWorld {
+                        // The whole circle is the menu's to tap, not only its dots (Kevin, 2026-11-24:
+                        // sized from outside, taps beside the dots did nothing while the glass reacted).
+                        Menu { moreItems } label: {
+                            Label("More", systemImage: "ellipsis")
+                                .labelStyle(.iconOnly)
+                                .frame(width: barHeight, height: barHeight)
+                                .contentShape(.circle)
+                        }
+                        .glassEffect(.regular.interactive(), in: .circle)
+                        .tint(.primary)   // a menu's label takes the tint, not a foreground style
+                    }
+                    // A PDF or text file for it to read (Kevin, 2026-11-25), through iOS's file picker.
+                    Button { attaching = true } label: {
+                        Label("Attach a File", systemImage: "paperclip")
                             .labelStyle(.iconOnly)
                             .frame(width: barHeight, height: barHeight)
                             .contentShape(.circle)
                     }
                     .glassEffect(.regular.interactive(), in: .circle)
-                    .tint(.primary)   // a menu's label takes the tint, not a foreground style
-                }
-                // What they type is theirs (New York); the placeholder is the app's.
-                TextField("Message", text: $message, prompt: Text("Message").font(.body), axis: .vertical)
-                    .font(.authored(.body))
-                    .lineLimit(1...6)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .frame(minHeight: barHeight)
-                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: barHeight / 2))
+                    .tint(.primary)
                     .disabled(!canWrite)
-                Button(action: send) {
-                    Image(systemName: "arrow.up")
-                        .fontWeight(.semibold)
-                        .foregroundStyle(canSend ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
-                        .frame(width: barHeight, height: barHeight)
+                    .fileImporter(isPresented: $attaching, allowedContentTypes: AttachedFile.types,
+                                  allowsMultipleSelection: true, onCompletion: attach)
+                    // What they type is theirs (New York); the placeholder is the app's.
+                    TextField("Message", text: $message, prompt: Text("Message").font(.body), axis: .vertical)
+                        .font(.authored(.body))
+                        .lineLimit(1...6)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .frame(minHeight: barHeight)
+                        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: barHeight / 2))
+                        .disabled(!canWrite)
+                    Button(action: send) {
+                        Image(systemName: "arrow.up")
+                            .fontWeight(.semibold)
+                            .foregroundStyle(canSend ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
+                            .frame(width: barHeight, height: barHeight)
+                    }
+                    .glassEffect(canSend ? .regular.tint(.accentColor).interactive() : .regular.interactive(), in: .circle)
+                    .disabled(!canSend)
+                    .accessibilityLabel("Send")
                 }
-                .glassEffect(canSend ? .regular.tint(.accentColor).interactive() : .regular.interactive(), in: .circle)
-                .disabled(!canSend)
-                .accessibilityLabel("Send")
             }
+        }
+        .alert("Couldn\u{2019}t Attach the File", isPresented: Binding { unreadable != nil } set: { if !$0 { unreadable = nil } }) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(unreadable ?? "")
         }
         .padding(.horizontal, Self.margin)
         .padding(.vertical)
@@ -619,8 +688,9 @@ struct CompanionPanel: View {
             title = library.document.title.isEmpty ? "Untitled page" : library.document.title
         }
         let header = "World Editor companion on “\(title)” (\(Companion.modelName))"
-        let turns = companion.conversation.turns.flatMap { turn in
-            (turn.question.isEmpty ? [] : ["Companion: \(turn.question)"]) + (turn.answer.map { ["Me: \($0)"] } ?? [])
+        let turns = companion.conversation.turns.flatMap { turn -> [String] in
+            let files = (turn.attached ?? []).map { "[Attached: \($0.name)] " }.joined()
+            return (turn.question.isEmpty ? [] : ["Companion: \(turn.question)"]) + (turn.answer.map { ["Me: " + files + $0] } ?? [])
         }
         return ([header] + turns).joined(separator: "\n\n")
     }
@@ -631,13 +701,14 @@ struct CompanionPanel: View {
     }
 
     private var canSend: Bool {
-        canWrite && !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        canWrite && (!message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attached.isEmpty)
     }
 
     private func send() {
         guard canSend else { return }
-        companion.answer(message, page: subject, in: library)
+        companion.answer(message, attached: attached, page: subject, in: library)
         message = ""
+        attached = []
         scrollToEnd()
     }
 

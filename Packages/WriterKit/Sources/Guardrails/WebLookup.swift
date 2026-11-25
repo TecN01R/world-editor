@@ -285,6 +285,7 @@ public struct ReplyTools: Sendable {
     public let offered: [GemmaChat.Tool]
     private var searches: PageLookup.Searches?
     private let pages: PageLookup?
+    private let documents: Documents.Lookup?
     /// Their names, which a look-up never sends.
     private let names: [String]
     /// What it looked up, and found, in order: what was sent to Wikipedia.
@@ -294,13 +295,18 @@ public struct ReplyTools: Sendable {
 
     /// - Parameter listing: `list_pages` is offered too (the plain model, which isn't shown their pages).
     /// - Parameter instructing: `add_instruction` is offered too.
+    /// - Parameter documents: the long documents attached in the conversation; `search_document` is
+    ///   offered with them.
     /// - Parameter theirNames: what a look-up never sends (`WebLookup.theirNames`; by default
     ///   their pages' names and the names they wrote, none taken as words of the language).
-    public init(pages: PageLookup?, lookingUp: Bool, listing: Bool = false, instructing: Bool = false, theirNames: [String]? = nil) {
+    public init(pages: PageLookup?, lookingUp: Bool, listing: Bool = false, instructing: Bool = false,
+                documents: Documents.Lookup? = nil, theirNames: [String]? = nil) {
         self.pages = pages
+        self.documents = documents
         searches = pages.map(PageLookup.Searches.init)
         names = theirNames ?? WebLookup.theirNames(pages: pages)
         offered = (pages == nil ? [] : (listing ? [GemmaChat.listPages] : []) + [GemmaChat.searchPages])
+            + (documents == nil ? [] : [GemmaChat.searchDocument])
             + (lookingUp ? [GemmaChat.lookUp] : []) + (instructing ? [GemmaChat.addInstruction] : [])
     }
 
@@ -313,6 +319,7 @@ public struct ReplyTools: Sendable {
         guard offered.contains(where: { $0.name == tool }) else { return "Tool not found: \(tool)" }
         if tool == PageLookup.listToolName { return pages?.list(query) ?? "Tool not found: \(tool)" }
         if tool == Instructions.toolName { return addInstruction(query) }
+        if tool == Documents.toolName { return documents?.results(for: query ?? "") ?? "Tool not found: \(tool)" }
         guard tool == WebLookup.toolName else { return searches?.answer(tool, query: query) ?? "Tool not found: \(tool)" }
         let query = (query ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return WebLookup.needsQuery }

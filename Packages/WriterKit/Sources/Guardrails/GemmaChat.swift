@@ -42,6 +42,9 @@ public enum GemmaChat {
     /// Looks up the real world (`WebLookup`).
     public static let lookUp = Tool(name: WebLookup.toolName, description: WebLookup.toolDescription,
                                     queryGuide: WebLookup.queryGuide)
+    /// Searches the documents attached to the conversation (`Documents`).
+    public static let searchDocument = Tool(name: Documents.toolName, description: Documents.toolDescription,
+                                            queryGuide: Documents.queryGuide)
     /// Adds to the writer's standing instructions (`Instructions`).
     public static let addInstruction = Tool(name: Instructions.toolName, description: Instructions.toolDescription,
                                             queryGuide: Instructions.argumentGuide, argument: Instructions.argument)
