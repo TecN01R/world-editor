@@ -9,6 +9,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Rotation crash: check it's gone
 
 ## Check on the phone
+- [ ] The new companion model, Nemotron 3.5 Bolt (Kevin, 2026-11-25: "Yes"): the 6.2 GB download (Wi-Fi), its first reply, how long before the first word, its searches shown in its thinking, and that the 26B's 14 GB is freed once it runs
 - [ ] Type and field names in San Francisco everywhere; values stay New York (Kevin, 2026-11-24)
 - [ ] Empty fields hidden; Add Field's menu lists them, and one picked shows ready to fill in (Kevin, 2026-11-24)
 - [ ] Back from the app switcher with the companion open unfolded: the page keeps its normal margins
@@ -32,8 +33,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - One model, for every iPhone from the 15 Pro on (≈6 GB app budget, whatever the RAM) and Android phones with 12 GB+; 8 GB Androids get no companion (Kevin, 2026-11-24). Budget: ≤4–4.5 GB of the app's own memory, ≤5–5.5 GB resident with the weights
 - [ ] 3 Benchmark mode on the Duo, held to an 8 GB phone's memory
 - [ ] 4 iOS: the one model, offered where the phone's memory allows it
-- [ ] Speed floor (Kevin, 2026-11-24): about reading speed once it starts writing, ~6 tokens/s, on the weakest phone (the iPhone 15 Pro). The 26B writes ~7 on the Duo; the 15 Pro is unmeasured
-- [ ] Requirement (Kevin, 2026-11-24): each conversation's model cache saved to storage and restored, so coming back (even after the model was unloaded) doesn't read the whole prompt again; the chosen engine must support it (llama.cpp and MLX do; the 26B's TurboFieldfare doesn't)
+- [ ] Speed floor (Kevin, 2026-11-24): about reading speed once it starts writing, ~6 tokens/s, on the weakest phone (the iPhone 15 Pro); no saved cache ("I'm not taking more space"), so reading the prompt has to be fast too. Nemotron on the Duo: to measure (LOAD and SPEED in candidates.log)
 - [ ] Android app: later, its own native project
 
 ## Your words into your pages (design: claude.ai/artifact/4GgWK8rCVJUdjwsTrVW9QT)
@@ -43,7 +43,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 ## Companion
 - [ ] Rewrite the instructions to Kevin's taste (his ChatGPT style notes); remove the sample
       conversations; current page fields win over older conversations
-- [ ] Search on the 26B, with thinking turned on for the replies that search
+- [ ] Search: built on Nemotron (search_pages, thinking capped); check it finds things on the phone
 - [ ] Filing through tools (make page, set field, rename, set page text), each with Undo
 - [ ] Live Activity: does tapping it reach the app? If never, our own Live Activity
 - [ ] Remove the Plain Model switch from the menu

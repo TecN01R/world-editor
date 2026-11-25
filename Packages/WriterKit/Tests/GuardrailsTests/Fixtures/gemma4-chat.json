@@ -1,0 +1,281 @@
+{
+ "tool": {
+  "name": "search_pages",
+  "description": "Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.",
+  "parameters": {
+   "type": "object",
+   "description": "Generated Arguments",
+   "required": [],
+   "properties": {
+    "query": {
+     "description": "A name from their pages, or a few of their words to look for",
+     "type": "string"
+    }
+   },
+   "additionalProperties": false
+  }
+ },
+ "cases": [
+  {
+   "name": "first",
+   "system": "You're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61",
+   "messages": [
+    {
+     "role": "user",
+     "content": "(I've just opened this page.)"
+    }
+   ],
+   "tools": true,
+   "thinking": true,
+   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\n(I've just opened this page.)<turn|>\n<|turn>model\n"
+  },
+  {
+   "name": "follow-up",
+   "system": "You're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61",
+   "messages": [
+    {
+     "role": "user",
+     "content": "(I've just opened this page.)"
+    },
+    {
+     "role": "assistant",
+     "content": "Dolores runs the Regent. Does “runs” mean it's hers?"
+    },
+    {
+     "role": "user",
+     "content": "  yeah it's hers.\nher husband built it  "
+    }
+   ],
+   "tools": true,
+   "thinking": true,
+   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\n(I've just opened this page.)<turn|>\n<|turn>model\nDolores runs the Regent. Does “runs” mean it's hers?<turn|>\n<|turn>user\nyeah it's hers.\nher husband built it<turn|>\n<|turn>model\n"
+  },
+  {
+   "name": "after-search",
+   "system": "You're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61",
+   "messages": [
+    {
+     "role": "user",
+     "content": "who built the Regent?"
+    },
+    {
+     "role": "assistant",
+     "content": "",
+     "reasoning_content": "They ask about the Regent. Search.",
+     "tool_calls": [
+      {
+       "id": "c1",
+       "type": "function",
+       "function": {
+        "name": "search_pages",
+        "arguments": "{\"query\": \"Regent\"}"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "tool_call_id": "c1",
+     "content": "“Regent”: The last cinema in town.\nBuilt by \"Arthur\" in 1951."
+    }
+   ],
+   "tools": true,
+   "thinking": true,
+   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nwho built the Regent?<turn|>\n<|turn>model\n<|channel>thought\nThey ask about the Regent. Search.\n<channel|><|tool_call>call:search_pages{query:<|\"|>Regent<|\"|>}<tool_call|><|tool_response>response:search_pages{value:<|\"|>“Regent”: The last cinema in town.\nBuilt by \"Arthur\" in 1951.<|\"|>}<tool_response|><|channel>thought\n"
+  },
+  {
+   "name": "said-then-search",
+   "system": "You're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61",
+   "messages": [
+    {
+     "role": "user",
+     "content": "who built the Regent?"
+    },
+    {
+     "role": "assistant",
+     "content": "Let me look.",
+     "reasoning_content": "Search it",
+     "tool_calls": [
+      {
+       "id": "c1",
+       "type": "function",
+       "function": {
+        "name": "search_pages",
+        "arguments": "{\"query\": \"Regent\"}"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "tool_call_id": "c1",
+     "content": "Nothing on their pages mentions “Regent”."
+    }
+   ],
+   "tools": true,
+   "thinking": true,
+   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nwho built the Regent?<turn|>\n<|turn>model\n<|channel>thought\nSearch it\n<channel|>Let me look.<|tool_call>call:search_pages{query:<|\"|>Regent<|\"|>}<tool_call|><|tool_response>response:search_pages{value:<|\"|>Nothing on their pages mentions “Regent”.<|\"|>}<tool_response|><turn|>\n<|channel>thought\n"
+  },
+  {
+   "name": "two-searches",
+   "system": "You're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61",
+   "messages": [
+    {
+     "role": "user",
+     "content": "who built the Regent?"
+    },
+    {
+     "role": "assistant",
+     "content": "",
+     "reasoning_content": "Search.",
+     "tool_calls": [
+      {
+       "id": "c1",
+       "type": "function",
+       "function": {
+        "name": "search_pages",
+        "arguments": "{\"query\": \"Regent\"}"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "tool_call_id": "c1",
+     "content": "Nothing."
+    },
+    {
+     "role": "assistant",
+     "content": "",
+     "reasoning_content": "Try the husband.",
+     "tool_calls": [
+      {
+       "id": "c2",
+       "type": "function",
+       "function": {
+        "name": "search_pages",
+        "arguments": "{\"query\": \"husband\"}"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "tool_call_id": "c2",
+     "content": "Her husband built it."
+    }
+   ],
+   "tools": true,
+   "thinking": true,
+   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nwho built the Regent?<turn|>\n<|turn>model\n<|channel>thought\nSearch.\n<channel|><|tool_call>call:search_pages{query:<|\"|>Regent<|\"|>}<tool_call|><|tool_response>response:search_pages{value:<|\"|>Nothing.<|\"|>}<tool_response|><|channel>thought\nTry the husband.\n<channel|><|tool_call>call:search_pages{query:<|\"|>husband<|\"|>}<tool_call|><|tool_response>response:search_pages{value:<|\"|>Her husband built it.<|\"|>}<tool_response|><|channel>thought\n"
+  },
+  {
+   "name": "search-no-thought",
+   "system": "You're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61",
+   "messages": [
+    {
+     "role": "user",
+     "content": "who built the Regent?"
+    },
+    {
+     "role": "assistant",
+     "content": "",
+     "tool_calls": [
+      {
+       "id": "c1",
+       "type": "function",
+       "function": {
+        "name": "search_pages",
+        "arguments": "{\"query\": \"Regent\"}"
+       }
+      }
+     ]
+    },
+    {
+     "role": "tool",
+     "tool_call_id": "c1",
+     "content": "Nothing."
+    }
+   ],
+   "tools": true,
+   "thinking": true,
+   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nwho built the Regent?<turn|>\n<|turn>model\n<|tool_call>call:search_pages{query:<|\"|>Regent<|\"|>}<tool_call|><|tool_response>response:search_pages{value:<|\"|>Nothing.<|\"|>}<tool_response|><|channel>thought\n"
+  },
+  {
+   "name": "earlier-search",
+   "system": "You're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61",
+   "messages": [
+    {
+     "role": "user",
+     "content": "who built the Regent?"
+    },
+    {
+     "role": "assistant",
+     "content": "Her husband built it."
+    },
+    {
+     "role": "user",
+     "content": "ok"
+    }
+   ],
+   "tools": true,
+   "thinking": true,
+   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\nwho built the Regent?<turn|>\n<|turn>model\nHer husband built it.<turn|>\n<|turn>user\nok<turn|>\n<|turn>model\n"
+  },
+  {
+   "name": "no-tools",
+   "system": "You're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61",
+   "messages": [
+    {
+     "role": "user",
+     "content": "(I've just opened this page.)"
+    },
+    {
+     "role": "assistant",
+     "content": "Dolores runs the Regent. Does “runs” mean it's hers?"
+    },
+    {
+     "role": "user",
+     "content": "  yeah it's hers.\nher husband built it  "
+    }
+   ],
+   "tools": false,
+   "thinking": true,
+   "prompt": "<|turn>system\n<|think|>\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<turn|>\n<|turn>user\n(I've just opened this page.)<turn|>\n<|turn>model\nDolores runs the Regent. Does “runs” mean it's hers?<turn|>\n<|turn>user\nyeah it's hers.\nher husband built it<turn|>\n<|turn>model\n"
+  },
+  {
+   "name": "no-thinking",
+   "system": "You're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61",
+   "messages": [
+    {
+     "role": "user",
+     "content": "(I've just opened this page.)"
+    },
+    {
+     "role": "assistant",
+     "content": "Dolores runs the Regent. Does “runs” mean it's hers?"
+    },
+    {
+     "role": "user",
+     "content": "  yeah it's hers.\nher husband built it  "
+    }
+   ],
+   "tools": true,
+   "thinking": false,
+   "prompt": "<|turn>system\nYou're the friend a writer talks to.\n\nWhat the app shows you of the writer's pages (for reference):\n“Dolores”: Runs the Regent.\n  - Age: 61<|tool>declaration:search_pages{description:<|\"|>Searches the writer's own pages, and what they told you in earlier conversations, for a name or a few words. Returns the matching passages in their words; the name of one of their pages returns that page. For their world only: it knows nothing about the real world.<|\"|>,parameters:{properties:{query:{description:<|\"|>A name from their pages, or a few of their words to look for<|\"|>,type:<|\"|>STRING<|\"|>}},type:<|\"|>OBJECT<|\"|>}}<tool|><turn|>\n<|turn>user\n(I've just opened this page.)<turn|>\n<|turn>model\nDolores runs the Regent. Does “runs” mean it's hers?<turn|>\n<|turn>user\nyeah it's hers.\nher husband built it<turn|>\n<|turn>model\n"
+  },
+  {
+   "name": "filing",
+   "system": "Read what the message states.",
+   "messages": [
+    {
+     "role": "user",
+     "content": "Dolores is 61."
+    }
+   ],
+   "tools": false,
+   "thinking": false,
+   "prompt": "<|turn>system\nRead what the message states.<turn|>\n<|turn>user\nDolores is 61.<turn|>\n<|turn>model\n"
+  }
+ ]
+}

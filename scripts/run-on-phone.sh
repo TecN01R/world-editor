@@ -14,7 +14,7 @@ git pull --ff-only --quiet || echo "(couldn't pull; building what's here)"
 if [[ -z "${USBMUXD_SOCKET_ADDRESS:-}" ]] && pgrep -u "$USER" -f "netmuxd .*-p 27099" >/dev/null; then
     export USBMUXD_SOCKET_ADDRESS=127.0.0.1:27099
 fi
-scripts/fetch-turbo-fieldfare.sh   # the companion's engine, which Package.swift builds
+scripts/fetch-llama.sh   # the companion's engine, llama.cpp's framework, which Package.swift links
 # Stops at once when the phone can't be reached (not on this network, not plugged
 # in): xtool would otherwise wait for it indefinitely (Kevin, 2026-11-24, away from home).
 reachable() {

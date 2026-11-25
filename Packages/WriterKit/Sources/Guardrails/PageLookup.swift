@@ -533,6 +533,31 @@ public struct PageLookup: Sendable {
     }
 }
 
+// MARK: - Searching within a reply
+
+extension PageLookup {
+    /// SearchPages): it never fails. A call without a query gets `needsQuery`; past
+    /// `searchesPerReply` searches, `lastSearch`; a tool it doesn't have, that it isn't there.
+    public struct Searches: Sendable {
+        private let lookup: PageLookup
+        /// What it searched for, in order.
+        public private(set) var queries: [String] = []
+
+        public init(_ lookup: PageLookup) {
+            self.lookup = lookup
+        }
+
+        /// The answer to the model's call of `tool` with `query`.
+        public mutating func answer(_ tool: String, query: String?) -> String {
+            guard tool == PageLookup.toolName else { return "Tool not found: \(tool)" }
+            let query = (query ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !query.isEmpty else { return PageLookup.needsQuery }
+            queries.append(query)
+            return queries.count > PageLookup.searchesPerReply ? PageLookup.lastSearch : lookup.results(for: query)
+        }
+    }
+}
+
 // MARK: - The lexical index
 
 extension PageLookup {

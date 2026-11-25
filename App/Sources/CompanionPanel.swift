@@ -419,7 +419,7 @@ struct CompanionPanel: View {
         return writing
     }
 
-    /// While the model reads its prompt before writing (tens of seconds on the 26B): how
+    /// While the model reads its prompt before writing (seconds, more on a long one): how
     /// far it has got, so it doesn't look stuck (Kevin, 2026-11-24). Having already written
     /// some, it's going on from there after the author left the app.
     private func reading(_ fraction: Double) -> some View {

@@ -1,7 +1,7 @@
 # The companion: how it's prompted, and why
 
-The companion is a language model running on the phone (Gemma 4 26B-A4B since
-2026-11-24; `docs/models.md`). What it says is decided by three things: which
+The companion is a language model running on the phone (NVIDIA's Nemotron 3.5
+Bolt E4B since 2026-11-25, Gemma 4 26B-A4B before; `docs/models.md`). What it says is decided by three things: which
 model it is, the text it's given before the conversation (its prompt), and how
 its output is sampled. This page records what those are, the reasons, and the
 measurements behind them, so the next change starts from evidence.
@@ -67,19 +67,23 @@ The conversation follows as real turns. It begins with the writer's
 "(I've just opened this page.)", because the companion speaks first and a chat
 model's conversation has to begin with the other side. It does so only while
 the companion is open, and not while the phone is hot or in Low Power Mode,
-when the author begins instead (on the 26B a reply is minutes of the GPU's work).
+when the author begins instead (a reply is seconds of the GPU's work).
 
-Sampling is Google's for Gemma 4: temperature 1.0, top-p 0.95, top-k 64, no
-repetition penalty. It doesn't think before replying, and there's no switch for
-it (Kevin, 2026-11-24: "remove the thinking switch, trigger as necessary"): on
-the 26B, Gemma's thinking (`<|think|>`) drafted each reply four or five times at
-the phone's 7 tokens a second, minutes before the first word (on E2B it had
-been 4 to 8 seconds). A reply that needs thinking turns it on (`Companion.thinks`):
-without it. Earlier thinking is never sent back to it. The app renders Gemma's
-chat format itself (`TurboModel.chat`) and reads its thought channel, so when
-it thinks, the thinking shows, collapsed, as it comes. Anything in the writer's
-text that Gemma would read as one of its control tokens is defused first
-(`Reasoned.gemmaPlain`).
+Sampling is NVIDIA's (and Google's for Gemma 4): temperature 1.0, top-p 0.95,
+top-k 64, no repetition penalty. It thinks before each reply, briefly, and
+there's no switch for it (Kevin, 2026-11-24: "remove the thinking switch"):
+NVIDIA runs the model thinking, and without it it wrote a fifth of its searches
+64 cut it off mid-plan and unlimited ran half again as long for no better
+replies (2026-11-25). On the 26B, Gemma's thinking had drafted each reply four
+or five times at the phone's 7 tokens a second, so replies there didn't think.
+It looks things up in the writer's pages with `search_pages` (the prompt's
+tools mode: the open page, the pages most like it, the rest by name), and what
+it searched for shows in its collapsed thinking. Earlier thinking is never
+sent back to it. The app renders the model file's own chat template itself
+(`GemmaChat`, tested against llama.cpp's rendering) and reads its thought
+channel, so the thinking shows, collapsed, as it comes. Anything in the
+writer's text that Gemma would read as one of its control tokens is defused
+first (`Reasoned.gemmaPlain`).
 
 ## Why it's shaped this way
 
@@ -353,8 +357,7 @@ the companion is filed, never the page's writing.
   JSON as the example shows, and `Filings.parse` reads each list on its own.
   Not constrained decoding: AnyLanguageModel's took a minute on the phone and
   looped (Kevin's first try, 2026-11-24); plain JSON took 2 to 3 seconds there
-  on E4B. Not yet measured on the 26B, which reads the whole filing prompt
-  afresh each time, and after it the companion's prompt too (`docs/models.md`).
+  of stated facts, without thinking, where Gemma 4 E4B filed 89%).
 - **What code guarantees** (`Filer`, tested in WriterKit): every value, new
   page title and new page text is found in the message, in a sentence that
   isn't a question or hedged ("maybe", "might", "what if", "either"); a
@@ -454,6 +457,7 @@ page's own writing isn't read.
    builds, so what was measured is what ships.
 
 `phone` rendering (AnyLanguageModel's, as the app sent E4B its prompt) or the
-model file's own template. Since the 26B the app renders the prompt itself
-(`TurboModel.chat`: no tools, and with thinking off its thought channel comes
-(`gemma_format.render_turbo`); measurements of the 26B use that.
+model file's own template. On the 26B the app rendered the prompt itself
+(`TurboModel.chat`: no tools, and with thinking off its thought channel came
+(`gemma_format.render_turbo`); measurements of the 26B use that. Since
+Nemotron the app renders the model file's own template (`GemmaChat`), which is

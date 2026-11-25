@@ -14,10 +14,9 @@ research when a question is asked, and image and text upload and analysis.
   They never become a way for it to add to the writer's world.
 - **Frictionless.** Nothing to set up before writing. Looking something up is
   something the companion does when asked a question, not a mode to switch on.
-- **Stock parts.** Gemma 4's own tool-call format through TurboFieldfare's
-  tool path (`GFTokenizer.encodeToolChat` renders the tools with the model's
-  chat template; `StructuredAssistantDecoder` reads its calls), `PhotosPicker`,
-  `fileImporter`, PDFKit.
+- **Stock parts.** The model's own tool-call format, as its chat template
+  renders it (`GemmaChat`, tested against llama.cpp's rendering; `search_pages`
+  runs this way since 2026-11-25), `PhotosPicker`, `fileImporter`, PDFKit.
 
 ## 1. Looking things up, starting with Wikipedia
 
@@ -35,15 +34,12 @@ shows where they came from.
   what a worldbuilder asks (history, ships, climate, how things work). Kevin
   agreed to start here.
 - **How:** one tool (`name`, `description`, one `query` argument) declared
-  through TurboFieldfare's tool path (`GFTokenizer.encodeToolChat`, a
-  `FunctionDefinition`); `StructuredAssistantDecoder` turns the model's output
-  into text and tool calls as it comes, and `TurboModel` runs the call, shows
-  "Looking up …" meanwhile, and goes on with its output in the model's turn.
-  One search per reply to begin with, results trimmed to about 1,500 tokens,
-  and the tool's output cleaned the same way the writer's text is
-  (`Reasoned.gemmaPlain`), since it comes from outside. TurboFieldfare's tool
-  `search` run): if the 26B does too, a reply that may search has to think
-  (`docs/companion.md`), so it needs a rendering that can.
+  beside `search_pages` in the model's chat format (`GemmaChat`);
+  `LlamaModel` runs the call as it runs `search_pages`, shows "Looking up …"
+  meanwhile, and goes on with its output in the model's turn. One search per
+  reply to begin with, results trimmed to about 1,500 tokens, and the tool's
+  output cleaned the same way the writer's text is (`Reasoned.gemmaPlain`),
+  since it comes from outside. Replies think first (capped), which searching
 - **What the writer sees:** under the reply, a chip: *Searched Wikipedia for
   "trireme crew size"*, opening the sources. The exact words sent are always
   visible. The first time, one sheet says what looking up means and offers to
@@ -101,10 +97,10 @@ shows where they came from.
 ## 4. Images
 
 - **Bringing it in:** `PhotosPicker`, the camera, paste.
-- **Seeing it:** TurboFieldfare reads images through an optional image pack
-  beside the model (about 1.1 GB more to download, fetched the first time an
-  image is added; its makers name an M2 or newer Mac for it, so whether the
-  Duo runs it is unknown). The image is scaled down first, placed before the
+- **Seeing it:** the companion's model reads images through its vision
+  projector (NVIDIA publishes one beside the model, about 1 GB more to
+  download, fetched the first time an image is added; llama.cpp's `mtmd`
+  runs it; whether the Duo holds both is to be measured). The image is scaled down first, placed before the
   words in the turn, and described once; later turns carry the description,
   not the image, to save room.
 - **What it's for:** a map, a sketch, a reference photo, a page of handwritten
@@ -132,9 +128,9 @@ conversation in place of dropping its oldest turns. Same gates.
 5. Page tools and conversation summary.
 
 Speed between turns also needs work before any of this adds to the prompt:
-the model re-reads its whole prompt for most replies. TurboFieldfare keeps what
-it has read (its KV cache) and reads only what's new when a prompt adds to the
-last one (`Loaded.start` in `TurboModel`), but the companion's prompt changes
+the model re-reads its whole prompt for most replies. llama.cpp keeps what
+it has read (its KV cache) and reads only from where a prompt differs from the
+last one (`Loaded.start` in `LlamaModel`), but the companion's prompt changes
 near its start with each message (the background), and filing reads a prompt of
 its own in between. Keeping the background fixed through a conversation, and
 filing without losing the reply's cache, has to be tried on the phone.

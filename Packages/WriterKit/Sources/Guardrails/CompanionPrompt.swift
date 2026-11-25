@@ -18,6 +18,11 @@ public struct CompanionPrompt: Equatable, Sendable {
     public struct Turn: Equatable, Sendable {
         public var speaker: Speaker
         public var text: String
+
+        public init(speaker: Speaker, text: String) {
+            self.speaker = speaker
+            self.text = text
+        }
     }
 
     /// A page as the companion is shown it: the open one, or another in the world.

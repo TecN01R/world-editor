@@ -454,4 +454,17 @@ final class PageLookupTests: XCTestCase {
         XCTAssertEqual(lines.first, "- Page 1")
         XCTAssertEqual(PageLookup.directory(many, focus: "", maxCharacters: 5), "")
     }
+
+    // MARK: Searches within a reply
+
+    func testAReplysSearchesAnswerUpToItsBudgetThenSayItsTheLast() {
+        var searches = PageLookup.Searches(world().lookup)
+        XCTAssertTrue(searches.answer("search_pages", query: "Kestrel").contains("Twenty oars a side"))
+        XCTAssertEqual(searches.answer("search_pages", query: "  "), PageLookup.needsQuery)
+        XCTAssertEqual(searches.answer("search_pages", query: nil), PageLookup.needsQuery)
+        XCTAssertFalse(searches.answer("search_pages", query: "Port Vell").isEmpty)
+        XCTAssertEqual(searches.answer("search_pages", query: "Ilsa"), PageLookup.lastSearch)
+        XCTAssertEqual(searches.answer("look_up", query: "Ilsa"), "Tool not found: look_up")
+        XCTAssertEqual(searches.queries, ["Kestrel", "Port Vell", "Ilsa"])
+    }
 }

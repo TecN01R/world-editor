@@ -9,12 +9,15 @@ protocol CompanionModel: Sendable {
     /// Why it can't run here, or nil if it can.
     var unavailableReason: String? { get async }
     /// The reply so far, growing as the model writes it, with any reasoning
-    /// before it; the last is the whole reply. `thinking`: reason first, if the
+    /// before it; the last is the whole reply. `lookup`: the author's pages, which it
+    /// searches with search_pages (if it `canSearch`); `thinking`: reason first, if the
     /// model can. Throws `PromptTooLong` when the prompt doesn't fit the model.
-    func stream(_ prompt: CompanionPrompt, thinking: Bool) -> AsyncThrowingStream<ReplySoFar, Error>
+    func stream(_ prompt: CompanionPrompt, lookup: PageLookup?, thinking: Bool) -> AsyncThrowingStream<ReplySoFar, Error>
     // Declared here, not only defaulted below, so a model's own versions are the
     // ones called through `any CompanionModel` (a default that isn't a
     // requirement is always the one used, whatever the model).
+    /// It can look things up in the author's pages (search_pages): its prompt says so.
+    var canSearch: Bool { get }
     var isInstalled: Bool { get }
     func downloadSize() async -> Int64?
     /// Downloads the model if it isn't on the phone yet; nothing else.
@@ -26,6 +29,7 @@ protocol CompanionModel: Sendable {
 }
 
 extension CompanionModel {
+    var canSearch: Bool { false }
     /// The model is on the phone (or part of iOS): it can reply without downloading anything.
     var isInstalled: Bool { true }
     /// How much the model's download is, if it has one; asked whenever the download is offered.
@@ -56,8 +60,7 @@ struct Download: Equatable, Sendable {
 
 /// A reply as far as the model has got: what it has written (with any reasoning)
 /// and, while it reads its prompt before writing more, how much of the prompt it has
-/// read (0 to 1): on the 26B that's tens of seconds, shown rather than left to look
-/// stuck (Kevin, 2026-11-24).
+/// read (0 to 1): seconds, shown rather than left to look stuck (Kevin, 2026-11-24).
 struct ReplySoFar: Sendable {
     var reply: Reasoned
     var reading: Double? = nil
@@ -76,8 +79,7 @@ func streaming(_ body: @escaping @Sendable (AsyncThrowingStream<ReplySoFar, Erro
 }
 
 /// Apple's on-device model (never its server ones: `SystemLanguageModel.default`).
-/// Used only where TurboFieldfare isn't (the simulator); otherwise kept for comparing it
-/// with the companion's model on the phone.
+/// Used only where llama.cpp isn't (the simulator).
 struct AppleModel: CompanionModel {
     var unavailableReason: String? {
         get async {
@@ -94,8 +96,8 @@ struct AppleModel: CompanionModel {
         }
     }
 
-    func stream(_ prompt: CompanionPrompt, thinking: Bool) -> AsyncThrowingStream<ReplySoFar, Error> {
-        streaming { continuation in   // Apple's model has no thinking step
+    func stream(_ prompt: CompanionPrompt, lookup: PageLookup?, thinking: Bool) -> AsyncThrowingStream<ReplySoFar, Error> {
+        streaming { continuation in   // Apple's model has no thinking step, nor search
             #if canImport(FoundationModels)
             let session = LanguageModelSession(model: .default, instructions: prompt.system)
             for try await snapshot in session.streamResponse(to: prompt.flattened, options: GenerationOptions(temperature: 0.7)) {

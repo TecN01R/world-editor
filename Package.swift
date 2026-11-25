@@ -12,13 +12,6 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "Packages/WriterKit"),
-        // The companion's model, Gemma 4 26B-A4B, runs on TurboFieldfare (Swift and
-        // Metal, Apache-2.0), which keeps the model in the phone's storage and reads
-        // only the experts each token needs. scripts/fetch-turbo-fieldfare.sh puts it
-        // here at a pinned commit, with its installer (it downloads and repacks the
-        // model on the phone) made a library: upstream builds that only into its own
-        // tools. Its server's swift-nio and Mac app's SwiftMath are fetched, not built.
-        .package(path: "Vendor/turbo-fieldfare"),
     ],
     targets: [
         .target(
@@ -28,12 +21,13 @@ let package = Package(
                 .product(name: "FocusLayout", package: "WriterKit"),
                 .product(name: "Provenance", package: "WriterKit"),
                 .product(name: "Guardrails", package: "WriterKit"),
-                .product(name: "TurboFieldfare", package: "turbo-fieldfare"),
-                .product(name: "TurboFieldfareRepackCore", package: "turbo-fieldfare"),
+                "llama",
             ],
             path: "App/Sources",
             // Each file sees only the modules it imports (SE-0444).
             swiftSettings: [.swiftLanguageMode(.v5), .enableUpcomingFeature("MemberImportVisibility")]
         ),
+        // The companion's model runs on llama.cpp (MIT): its prebuilt Apple framework, the
+        .binaryTarget(name: "llama", path: "Vendor/llama.xcframework"),
     ]
 )

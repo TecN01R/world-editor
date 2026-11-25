@@ -1,7 +1,7 @@
 // swift-tools-version: 6.2
 // WriterKit: platform-independent logic. Foundation only, so it builds and
 // tests on Linux CI as well as Apple platforms. Anything that needs UIKit,
-// Core ML, Foundation Models or TurboFieldfare lives in the app target instead.
+// Core ML, Foundation Models or llama.cpp lives in the app target instead.
 import PackageDescription
 
 let package = Package(
@@ -24,7 +24,8 @@ let package = Package(
         .testTarget(name: "WriterCoreTests", dependencies: ["WriterCore"]),
         .testTarget(name: "FocusLayoutTests", dependencies: ["FocusLayout"]),
         .testTarget(name: "ProvenanceTests", dependencies: ["Provenance", "WriterCore"]),
-        .testTarget(name: "GuardrailsTests", dependencies: ["Guardrails", "Provenance", "WriterCore"]),
+        .testTarget(name: "GuardrailsTests", dependencies: ["Guardrails", "Provenance", "WriterCore"],
+                    resources: [.copy("Fixtures")]),
         .testTarget(name: "ModelCatalogTests", dependencies: ["ModelCatalog"]),
     ],
     swiftLanguageModes: [.v6]

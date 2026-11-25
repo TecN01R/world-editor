@@ -80,9 +80,9 @@ jobs:
       - name: Check the xtool package layout builds
         if: steps.ui.outputs.layout == 'true'
         # Without the generated .xcodeproj, so xcodebuild builds Package.swift;
-        # for a device, as xtool does (TurboFieldfare isn't built for the simulator).
+        # for a device, as xtool does (llama.cpp's framework has no simulator build).
         run: |
-          scripts/fetch-turbo-fieldfare.sh
+          scripts/fetch-llama.sh
           rm -rf WorldEditor.xcodeproj
           xcodebuild build -scheme WorldEditor -destination 'generic/platform=iOS' \
             -derivedDataPath build-spm -skipPackagePluginValidation -skipMacroValidation \

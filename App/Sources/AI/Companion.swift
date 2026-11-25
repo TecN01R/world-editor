@@ -25,7 +25,7 @@ final class Companion {
     /// What it's thinking, while it thinks before replying.
     private(set) var reasoning: String?
     /// How much of its prompt the model has read (0 to 1), while it reads before writing:
-    /// tens of seconds on the 26B, shown so it doesn't look stuck (Kevin, 2026-11-24).
+    /// shown so it doesn't look stuck (Kevin, 2026-11-24).
     private(set) var reading: Double?
     /// What it thought before each of its replies (by the reply, so each tried
     /// version keeps its own), for this session only: shown collapsed, never saved
@@ -51,11 +51,9 @@ final class Companion {
     /// When the model on the phone was downloaded, for the menu.
     private(set) var modelVersion: String?
 
-    /// Replies don't think first, and there's no switch for it (Kevin, 2026-11-24:
-    /// "remove the thinking switch, trigger as necessary"): on the 26B its thinking
-    /// drafted the reply four or five times at the phone's 7 tokens a second, minutes
-    /// were. A reply that needs it turns it on: search, once it's in the app, if the
-    private let thinks = false
+    /// Replies think first, briefly, and there's no switch for it (Kevin, 2026-11-24:
+    /// "remove the thinking switch"): the companion's model is made to think (NVIDIA runs
+    private let thinks = true
 
     /// TRIAL (Kevin, 2026-11-24): the model with none of the app's instructions,
     /// examples or pages, only the conversation (`CompanionPrompt.plain`), to see
@@ -72,12 +70,12 @@ final class Companion {
     private(set) var worldConversations: [Conversation] = []
 
     // The one model the companion uses (Kevin: one model, no choosing, as when it
-    // ships): Gemma 4 26B, set in `init`, wherever TurboFieldfare is; Apple's
+    // ships): Nemotron 3.5 Bolt, set in `init`, wherever llama.cpp is; Apple's
     // model elsewhere.
-    #if canImport(TurboFieldfare)
-    static let modelName = TurboModel.name
+    #if canImport(llama)
+    static let modelName = LlamaModel.name
     #else
-    static let modelName = "Apple's on-device model"   // the simulator: no TurboFieldfare there
+    static let modelName = "Apple's on-device model"   // the simulator: llama.cpp's framework has no build for it
     #endif
     /// The model isn't on the phone, and the author hasn't asked for it yet:
     /// the companion offers the download and does nothing else until then.
@@ -112,12 +110,12 @@ final class Companion {
     private static let log = Logger(subsystem: "com.tecn01r.worldeditor", category: "companion")
 
     init() {
-        #if canImport(TurboFieldfare)
+        #if canImport(llama)
         // The download's progress, in the order it comes (only the latest matters): one report
         // each in a task of its own could come out of order, and a late one after the end
         // started the Live Activity again.
         let (progress, report) = AsyncStream<Download?>.makeStream(bufferingPolicy: .bufferingNewest(1))
-        model = TurboModel { report.yield($0) }
+        model = LlamaModel { report.yield($0) }
         Task { [weak self] in
             for await download in progress {
                 self?.download = download
@@ -192,9 +190,9 @@ final class Companion {
     }
 
     /// Prepares the open page's reply after `pause`, if one is due, only while the
-    /// companion is open: on this model a reply is minutes of the GPU's work, too much
-    /// to spend on every page passed through with it closed. Not while the phone is hot
-    /// or in Low Power Mode either: the author begins instead.
+    /// companion is open: a reply is seconds of the GPU's work, too much to spend on
+    /// every page passed through with it closed. Not while the phone is hot or in Low
+    /// Power Mode either: the author begins instead.
     private func prepareSoon(after pause: Duration = .zero) {
         let phone = ProcessInfo.processInfo
         guard isOpen, download == nil, state == .idle, let opened,
@@ -309,12 +307,17 @@ final class Companion {
         guard !Task.isCancelled else { return }
         let page = library.pages.first { $0.id == page.id } ?? page   // as it is now, not when it opened
         let others = library.pages.filter { $0.id != page.id }
-        let earlier = (store?.all() ?? []).filter { $0.page != page.id }.map { talk in
+        let talks = (store?.all() ?? []).filter { $0.page != page.id }
+        let earlier = talks.map { talk in
             var talk = talk
             talk.aboutWorld = Self.isAboutWorld(talk, in: library)   // memory words it as such
             return (page: talk.aboutWorld ? "" : others.first { $0.id == talk.page }?.heading ?? "", conversation: talk)
         }
         let isWorld = conversation.aboutWorld   // a conversation about the whole world: no page open
+        // What it can search with search_pages: every page, with its type and fields, and
+        // what the author said in their other conversations (this one's words are in the
+        let pageLookup = model.canSearch ? PageLookup(pages: library.pages, schema: library.schema, conversations: talks) : nil
+        let lookup = pageLookup.map { CompanionPrompt.Lookup(pages: $0, open: isWorld ? nil : page.id, retrieving: false, searching: true) }
         var reply = Reasoned(reply: "")
         do {
             // Unusual text takes more of the model's context than its length
@@ -326,12 +329,12 @@ final class Companion {
                 } else if isWorld {
                     prompt = CompanionPrompt(world: library.world.name, pages: others.map { library.companionPage($0, fields: true) },
                                              earlier: earlier, conversation: conversation,
-                                             maxCharacters: 6000 / room, maxTurnCharacters: 6000 / room)
+                                             maxCharacters: 6000 / room, maxTurnCharacters: 6000 / room, lookup: lookup)
                 } else {
                     prompt = CompanionPrompt(page: library.companionPage(page, open: true),
                                              others: others.map { library.companionPage($0) },
                                              earlier: earlier, conversation: conversation,
-                                             maxCharacters: 6000 / room, maxTurnCharacters: 6000 / room)
+                                             maxCharacters: 6000 / room, maxTurnCharacters: 6000 / room, lookup: lookup)
                 }
                 // Its background as last read, while what it rests on is unchanged. Not before
                 // its first reply, whose background has "Right now…" for its opening only.
@@ -352,7 +355,7 @@ final class Companion {
                     }
                 }
                 do {
-                    for try await partial in model.stream(prompt, thinking: thinks) {
+                    for try await partial in model.stream(prompt, lookup: plain ? nil : pageLookup, thinking: thinks) {
                         guard !Task.isCancelled else { break }
                         reply = partial.reply
                         self.reasoning = reply.reasoning
@@ -377,7 +380,7 @@ final class Companion {
         trialLog("REPLY\(plain ? " (plain)" : "") \(page.title): \(reply.reply)")   // TRIAL
         guard !reply.reply.isEmpty else { restoreRetracted(); state = .failed; return }   // ran out of room while thinking
         if modelVersion == nil { modelVersion = model.version }   // just downloaded
-        conversation.ask(reply.reply, after: retracted)
+        conversation.ask(reply.reply, after: retracted, searches: reply.searches)
         retracted = nil
         if !reply.reasoning.isEmpty { thoughts[reply.reply] = reply.reasoning }
         save()
