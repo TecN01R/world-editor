@@ -24,7 +24,6 @@ it's on the phone and checked, or answered; git history keeps what's done.
 
 ## A companion for 8 GB+ phones, not just the Duo (Kevin, 2026-11-24; plan approved)
 - One model, for every iPhone from the 15 Pro on (≈6 GB app budget, whatever the RAM) and Android phones with 12 GB+; 8 GB Androids get no companion (Kevin, 2026-11-24). Budget: ≤4–4.5 GB of the app's own memory, ≤5–5.5 GB resident with the weights
-- [ ] 1 Research report: models, engines (iOS and Android), phone memory and speed (running)
 - [ ] 3 Benchmark mode on the Duo, held to an 8 GB phone's memory
 - [ ] 4 iOS: the one model, offered where the phone's memory allows it
 - [ ] Speed floor for the weakest phone: Kevin to set, from the report's numbers
