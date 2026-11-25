@@ -60,13 +60,22 @@ public enum GemmaChat {
         }
     }
 
+    /// Whose chat template: Nemotron's file, the companion's (as llama.cpp renders it), or
+    /// Google's own Gemma 4 template, which the 26B's files carry (TRIAL, Kevin, 2026-11-25: the
+    /// 26B again, on the phone's higher memory limit). They differ only in where the model's
+    /// turn is left: Google's opens an empty thought when it isn't to think, and after a call
+    /// leaves it at the call's answer, for the model to go on from as it chooses. (Words said
+    /// before a call stay before it, as the model wrote them, where Google's would move them
+    /// after the call's answer and end the turn there.)
+    public enum Template: Sendable { case nemotron, gemma4 }
+
     /// The prompt, from after `<bos>` (the tokenizer adds it): the system turn when there's
     /// one (`system`, thinking or tools), the turns, and the model's turn opened; within it,
     /// the calls (`searches`) made so far, after which the model goes on thinking
     /// (`thinking`) or writing.
     /// - Parameter tools: the tools declared, in order.
     public static func prompt(system: String, turns: [CompanionPrompt.Turn], searches: [Search] = [],
-                              tools: [Tool], thinking: Bool) -> String {
+                              tools: [Tool], thinking: Bool, template: Template = .nemotron) -> String {
         var text = ""
         let system = system.trimmingCharacters(in: .whitespacesAndNewlines)
         if thinking || !tools.isEmpty || !system.isEmpty {
@@ -80,12 +89,15 @@ public enum GemmaChat {
             }
         }
         text += "<|turn>model\n"
-        guard let last = searches.last else { return text }
+        guard let last = searches.last else {
+            return text + (template == .gemma4 && !thinking ? thoughtOpened + "<channel|>" : "")
+        }
         for search in searches {
             if !search.thought.isEmpty { text += "<|channel>thought\n" + search.thought + "\n<channel|>" }
             text += withoutThoughts(search.said) + call(search.tool, search.query)
                 + "<|tool_response>response:\(search.tool){value:" + quoted(search.found) + "}<tool_response|>"
         }
+        if template == .gemma4 { return text }
         // The template ends the model's turn after a call only when it said something before
         // it, and opens its thought channel again after any call (as it was measured).
         if !trimmed(last.said).isEmpty { text += "<turn|>\n" }

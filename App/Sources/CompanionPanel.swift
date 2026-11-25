@@ -574,7 +574,7 @@ struct CompanionPanel: View {
     /// The menu's items: in the bar's menu, and in the one beside the message field. What
     /// it's running heads them, as a menu's own title (a line to read; a menu has no plain text).
     @ViewBuilder private var moreItems: some View {
-        Section([Companion.modelName, companion.modelVersion, Self.appVersion].compactMap { $0 }.joined(separator: " · ")) {
+        Section([companion.modelName, companion.modelVersion, Self.appVersion].compactMap { $0 }.joined(separator: " · ")) {
             items
         }
     }
@@ -599,6 +599,14 @@ struct CompanionPanel: View {
             Label("Plain Model", systemImage: "cube")
             Text("Only the conversation, the page’s name and the tools")
         }
+        #if canImport(TurboFieldfare)
+        // TRIAL (Kevin, 2026-11-25): the 26B again, on the phone's higher memory limit.
+        Toggle(isOn: Binding { companion.tries26B } set: { companion.tries26B = $0 }) {
+            Label("Gemma 4 26B", systemImage: "square.stack.3d.up")
+            Text("In place of Nemotron, to compare them (its own 14.6 GB download)")
+        }
+        .disabled(companion.download != nil)
+        #endif
         #endif
     }
 
@@ -618,7 +626,7 @@ struct CompanionPanel: View {
         } else {
             title = library.document.title.isEmpty ? "Untitled page" : library.document.title
         }
-        let header = "World Editor companion on “\(title)” (\(Companion.modelName)" + (companion.plain ? ", plain model" : "") + ")"
+        let header = "World Editor companion on “\(title)” (\(companion.modelName)" + (companion.plain ? ", plain model" : "") + ")"
         let turns = companion.conversation.turns.flatMap { turn in
             (turn.question.isEmpty ? [] : ["Companion: \(turn.question)"]) + (turn.answer.map { ["Me: \($0)"] } ?? [])
         }

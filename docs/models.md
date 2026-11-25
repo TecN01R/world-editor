@@ -48,6 +48,20 @@ is.
 TurboFieldfare, which streamed its experts from storage). It scored best in the
 (30 s for 1,650 tokens), and an iPhone 15 Pro would be slower still.
 
+**Trial: the 26B again, on the higher memory limit** (Kevin, 2026-11-25, debug
+builds only). With the patched xtool the app gets about 5.8 GB on the Duo
+instead of 3.4, so the 26B can keep 32 of its experts a layer in memory instead
+of 16 (1.65 GB more; TurboFieldfare's own replays found a fifth more of the
+experts each token picks already in memory), and the memory warnings that
+unloaded it between replies should stop. "Gemma 4 26B" in the companion's menu
+puts it in Nemotron's place (`TurboModel`, its own 14.6 GB download, kept apart
+from Nemotron's). It replies as Nemotron does: thinking capped at 128 tokens,
+search_pages and look_up, through the same loop (`replyWithTools`), but in
+Google's own chat template (`GemmaChat.Template.gemma4`, checked against the
+26B's `chat_template.jinja`), which leaves the model's turn at a call's answer
+rather than opening its thought. The SPEED and LOAD lines in the log compare
+the two. It goes once the comparison is done.
+
 **Nemotron 3.5 Bolt E4B is the companion's model** (Kevin, 2026-11-25: "Yes",
 after the shortlist for 8 GB+ iPhones). NVIDIA post-trained it from Gemma 4
 conversations, today's instructions and search_pages) it scored 5.57 out of
