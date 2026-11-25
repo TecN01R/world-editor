@@ -32,12 +32,14 @@ deviation.
 | **World conversations in the pages list's place**, with a "Pages" button back | A navigation stack in the sidebar (real Back, swipe back) | Not yet tried: a stack of its own in the page's side hid its toolbar (2026-11-24). To do, carefully. |
 | **Type and Recently Deleted rows** that filter the list in place | Notes' folders push a filtered list | Same as above. |
 | **The companion as two presentations** (iOS's inspector unfolded, a sheet folded) | One inspector, which iOS turns into a sheet when folded | Its sheet form merged the companion's bar into the page's (Kevin, 2026-11-24, "weird companion header"); a toolbar in its column crashed UIKit while folding (2026-11-23). |
+| **The companion's column opens at half the screen's width**, unfolded | iOS's default inspector width | Kevin, 2026-11-24. Only where it opens: iOS keeps its own limits for dragging it. |
 | **Pasting and dropping as plain text** | Rich paste | Other apps' fonts and colours (black text, unreadable in dark mode) never get in. Through iOS's paste delegate. |
 
 ## Made stock on 2026-11-24 (the audit)
 
 - The split view and the companion: iOS lays them out; the app no longer moves the
-  pages list while the Duo rotates, folds or unfolds. iOS's default companion width.
+  pages list while the Duo rotates, folds or unfolds. The companion's column is dragged
+  within iOS's own limits (the app's 320–640 points were dropped, 2026-11-24).
 - Back and the sidebar button never disappear while typing.
 - Bold and Italic through iOS's own commands (with Undo).
 - Paste and drop through iOS's paste delegate.

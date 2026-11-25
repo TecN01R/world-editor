@@ -642,8 +642,14 @@ final class PageTextView: PlainPasteTextView {
         super.init(frame: frame, textContainer: textContainer)
         keyboardLayoutGuide.followsUndockedKeyboard = true
         _ = Self.clearButtons
+        // Leaving the app, iOS lays the page out for the app switcher's snapshots, at full
+        // width as if the companion were closed, and coming back it kept those margins beside
+        // the companion (Kevin, 2026-11-24): back in front, it's laid out at its real width.
+        NotificationCenter.default.addObserver(self, selector: #selector(layOutAgain),
+                                               name: UIApplication.didBecomeActiveNotification, object: nil)
     }
     required init?(coder: NSCoder) { fatalError() }
+    @objc private func layOutAgain() { setNeedsLayout() }
 
     /// ⇧⌘F steps into Focus mode while writing (listed when ⌘ is held).
     var onFocus: (() -> Void)?
