@@ -47,14 +47,17 @@ public enum WebLookup {
     /// word of the language (a real place's name, say; the phone's dictionary). The model is
     /// places now and then (2026-11-25): this makes sure they stay on the phone.
     public static func theirNames(pages: PageLookup?, said: [String] = [], known: (String) -> Bool = { _ in false }) -> [String] {
-        let headings = pages?.pages.map(\.heading).filter { !$0.isEmpty } ?? []
-        let texts = (pages?.pages.flatMap { $0.fields + $0.paragraphs.map(\.text) } ?? [])
-            + (pages?.answers.map(\.text) ?? []) + said
+        let all: [PageLookup.Page] = pages?.pages ?? []
+        let headings: [String] = all.map(\.heading).filter { !$0.isEmpty }
+        var texts: [String] = said
+        for page in all { texts += page.fields + page.paragraphs.map { $0.text } }
+        for answer in pages?.answers ?? [] { texts.append(answer.text) }
+        let edges: CharacterSet = CharacterSet.punctuationCharacters.union(CharacterSet.symbols)
         var named = Set<String>()
         for text in texts {
             var sentenceStart = true
-            for token in text.split(whereSeparator: \.isWhitespace) {
-                let word = token.trimmingCharacters(in: .punctuationCharacters.union(.symbols))
+            for token in text.split(whereSeparator: { $0.isWhitespace }) {
+                let word: String = token.trimmingCharacters(in: edges)
                 if !sentenceStart, let first = word.first, first.isUppercase, word.count >= 3, !known(word) { named.insert(word) }
                 sentenceStart = token.last.map { ".!?:\u{2026}".contains($0) } ?? false
             }
