@@ -284,11 +284,14 @@ final class Companion {
         await model.warmUp(prompt(about: page, in: library), tools: tools(for: page, in: library), thinking: thinks)
     }
 
-    /// The reply's prompt: the conversation (`kept`: the most of each turn it keeps), which
-    /// page is open, and the author's instructions.
+    /// The reply's prompt: the conversation (`kept`: the most of it, in characters, that it keeps),
+    /// the open page as it is now, and the author's instructions.
     private func prompt(about page: WriterCore.Document, in library: Library, kept: Int = .max) -> CompanionPrompt {
         let isWorld = conversation.aboutWorld   // a conversation about the whole world: no page open
-        return CompanionPrompt.plain(conversation, page: isWorld ? nil : page.title, world: isWorld ? library.world.name : nil,
+        let open = isWorld ? nil : CompanionPrompt.Page(page, schema: library.schema) { id in
+            library.pages.first { $0.id == id }?.heading
+        }
+        return CompanionPrompt.plain(conversation, page: open, world: isWorld ? library.world.name : nil,
                                      instructions: instructions, pictures: model.seesPictures ? pictures : nil,
                                      maxTurnCharacters: kept)
     }

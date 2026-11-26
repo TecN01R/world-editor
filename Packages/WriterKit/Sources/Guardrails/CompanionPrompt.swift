@@ -47,6 +47,16 @@ public struct CompanionPrompt: Equatable, Sendable {
             self.fields = fields
             self.writing = writing
         }
+
+        /// `document` as the companion is shown it: its title, its type and filled fields
+        /// from `schema` (a field naming a page shows that page's name, `pageName`), and its writing.
+        public init(_ document: Document, schema: Schema, pageName: (UUID) -> String?) {
+            let type = schema.type(document.type)
+            self.init(name: document.title.trimmingCharacters(in: .whitespaces), type: type?.name,
+                      fields: document.fieldText(schema.fields(of: type), pageName: pageName),
+                      writing: document.paragraphs.map(\.text).joined(separator: "\n")
+                          .trimmingCharacters(in: .whitespacesAndNewlines))
+        }
     }
 
     /// Who it is, the examples and the background, as one system turn. What
@@ -346,27 +356,56 @@ public struct CompanionPrompt: Equatable, Sendable {
 
     /// The model on its own (Kevin's trial, 2026-11-24: "remove all your rules and context and
     /// prompts so I can see how this actually works as a model"): none of the full prompt's
-    /// instructions, examples or pages, only the conversation, and since 2026-11-25 one line on
-    /// which page is open (`page`, its title), or, about the whole world, which world (`world`),
+    /// instructions or examples, only the conversation, and since 2026-11-25 one line on
+    /// which page is open (`page`), or, about the whole world, which world (`world`),
     /// then the writer's standing `instructions`, if they have any (`Instructions`; none at first).
+    /// Since 2026-11-26 the open page itself, as it is now (Kevin: "obviously the companion should
+    /// get the open page's text"), goes with the writer's latest message, as a document they
+    /// attached does (`shown`): the turns before it stay as the model last read them, so a page
+    /// changed between messages costs reading only the page and the last exchange again, not
+    /// the whole conversation.
     /// The whole conversation, unless `maxTurns` or `maxTurnCharacters` (in all) say less: only
     /// when it outgrows the model's context (Kevin, 2026-11-25: "you WILL lift the limits").
     /// The opening line stays only before its first reply, which has to answer something.
     /// `pictures`: the folder the conversation's pictures are in (`ConversationStore.pictures`).
-    public static func plain(_ conversation: Conversation, page: String? = nil, world: String? = nil, instructions: String? = nil,
+    public static func plain(_ conversation: Conversation, page: Page? = nil, world: String? = nil, instructions: String? = nil,
                              pictures: URL? = nil, maxTurns: Int = .max, maxTurnCharacters: Int = .max) -> CompanionPrompt {
-        let turns = recent(conversation, pictures: pictures, maxTurns: maxTurns, maxTurnCharacters: maxTurnCharacters)
+        var turns = recent(conversation, pictures: pictures, maxTurns: maxTurns, maxTurnCharacters: maxTurnCharacters)
+        if turns.isEmpty { turns = [Turn(speaker: .author, text: opened)] }
+        if let page, let last = turns.lastIndex(where: { $0.speaker == .author }) {
+            turns[last].text += "\n\n" + shown(page, maxCharacters: min(pageCharacters, maxTurnCharacters / 2))
+        }
         let open: String?
         if let page {
-            open = page.isEmpty ? "The writer has an untitled page open."
-                                : "The writer has their page \u{201C}\(oneLine(page, maxCharacters: 80))\u{201D} open."
+            open = page.name.isEmpty ? "The writer has an untitled page open."
+                                     : "The writer has their page \u{201C}\(oneLine(page.name, maxCharacters: 80))\u{201D} open."
         } else if let world {
             open = "The writer is talking about their world \u{201C}\(oneLine(world, maxCharacters: 80))\u{201D} as a whole."
         } else {
             open = nil
         }
         let system = [open, Instructions.shown(instructions)].compactMap { $0 }.joined(separator: "\n\n")
-        return CompanionPrompt(system: system, turns: turns.isEmpty ? [Turn(speaker: .author, text: opened)] : turns)
+        return CompanionPrompt(system: system, turns: turns)
+    }
+
+    /// Up to this long, the open page goes to the model whole (about 3,000 tokens).
+    static let pageCharacters = 12000
+
+    /// The open page as `plain` shows it: its title and type, its filled fields and its
+    /// writing; past `maxCharacters`, how the writing opens and its latest part, where they're working.
+    static func shown(_ page: Page, maxCharacters: Int) -> String {
+        let name = page.name.isEmpty ? "untitled" : "\u{201C}\(oneLine(page.name, maxCharacters: 80))\u{201D}"
+        var parts = ["[The open page, as it is now: \(name)" + (page.type.map { " (\($0))" } ?? "") + "]"]
+        if !page.fields.isEmpty { parts.append(Reasoned.gemmaPlain(page.fields)) }
+        let writing = Reasoned.gemmaPlain(page.writing)
+        if let excerpt = excerpt(writing, maxCharacters: max(0, maxCharacters - page.fields.count)) {
+            parts.append("(It's long: this is how it opens and, after [\u{2026}], its latest part.)\n" + excerpt)
+        } else if !writing.isEmpty {
+            parts.append(writing)
+        } else if page.fields.isEmpty {
+            parts.append("Nothing is on it yet.")
+        }
+        return parts.joined(separator: "\n\n")
     }
 
     private init(system: String, turns: [Turn]) {

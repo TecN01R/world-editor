@@ -453,17 +453,69 @@ final class ConversationTests: XCTestCase {
         XCTAssertEqual(CompanionPrompt.instructions(searching: false), CompanionPrompt.instructions(lookup: nil))
     }
 
-    func testThePlainModelIsToldOnlyWhichPageIsOpen() {
+    func testThePlainModelIsToldWhichPageIsOpen() {
         let talk = Conversation(page: UUID())
+        let ilsa = CompanionPrompt.Page(name: "Ilsa", writing: ""), untitled = CompanionPrompt.Page(name: "", writing: "")
         XCTAssertEqual(CompanionPrompt.plain(talk).system, "")
-        XCTAssertEqual(CompanionPrompt.plain(talk, page: "Ilsa").system, "The writer has their page \u{201C}Ilsa\u{201D} open.")
-        XCTAssertEqual(CompanionPrompt.plain(talk, page: "").system, "The writer has an untitled page open.")
+        XCTAssertEqual(CompanionPrompt.plain(talk, page: ilsa).system, "The writer has their page \u{201C}Ilsa\u{201D} open.")
+        XCTAssertEqual(CompanionPrompt.plain(talk, page: untitled).system, "The writer has an untitled page open.")
         XCTAssertEqual(CompanionPrompt.plain(talk, world: "Tidewater").system,
                        "The writer is talking about their world \u{201C}Tidewater\u{201D} as a whole.")
         // The writer's instructions, if any, after the line on what's open; alone when nothing is.
-        XCTAssertEqual(CompanionPrompt.plain(talk, page: "Ilsa", instructions: "Be brief.").system,
+        XCTAssertEqual(CompanionPrompt.plain(talk, page: ilsa, instructions: "Be brief.").system,
                        "The writer has their page \u{201C}Ilsa\u{201D} open.\n\nThe writer's instructions for you:\nBe brief.")
         XCTAssertEqual(CompanionPrompt.plain(talk, instructions: " Be brief.\n").system, "The writer's instructions for you:\nBe brief.")
-        XCTAssertEqual(CompanionPrompt.plain(talk, page: "Ilsa", instructions: " ").system, "The writer has their page \u{201C}Ilsa\u{201D} open.")
+        XCTAssertEqual(CompanionPrompt.plain(talk, page: ilsa, instructions: " ").system, "The writer has their page \u{201C}Ilsa\u{201D} open.")
+    }
+
+    func testTheOpenPageGoesWithTheWritersLatestMessage() {
+        let mara = CompanionPrompt.Page(name: "Mara", type: "Character", fields: "Species: Selkie\nAge: 61", writing: "Keeps the lighthouse.")
+        func talk(_ turns: (String, String)...) -> Conversation {
+            var talk = Conversation(page: UUID())
+            for (question, answer) in turns { talk.ask(question); talk.answer(answer) }
+            return talk
+        }
+        let shown = "[The open page, as it is now: \u{201C}Mara\u{201D} (Character)]\n\nSpecies: Selkie\nAge: 61\n\nKeeps the lighthouse."
+        // Before anything is said, with the companion's opening turn.
+        XCTAssertEqual(CompanionPrompt.plain(talk(), page: mara).turns.map(\.text),
+                       [CompanionPrompt.opened + "\n\n" + shown])
+        // Only the latest of the writer's turns carries it, so the earlier ones read as before.
+        let prompt = CompanionPrompt.plain(talk(("Who is she?", "a selkie"), ("Why the lighthouse?", "she waits")), page: mara)
+        XCTAssertEqual(prompt.turns.map(\.text), ["Who is she?", "a selkie", "Why the lighthouse?", "she waits\n\n" + shown])
+        // Waiting for the writer (the companion spoke last): with their last message.
+        var asked = talk(("Who is she?", "a selkie"))
+        asked.ask("And her family?")
+        XCTAssertEqual(CompanionPrompt.plain(asked, page: mara).turns.map(\.text),
+                       ["Who is she?", "a selkie\n\n" + shown, "And her family?"])
+        XCTAssertEqual(CompanionPrompt.shown(CompanionPrompt.Page(name: "", writing: ""), maxCharacters: 100),
+                       "[The open page, as it is now: untitled]\n\nNothing is on it yet.")
+    }
+
+    func testALongOpenPageShowsHowItOpensAndItsLatestPart() {
+        let long = CompanionPrompt.Page(name: "Ledger", writing: "First tolls. " + String(repeating: "Tolls paid at the lamp. ", count: 40) + "Last toll.")
+        let shown = CompanionPrompt.shown(long, maxCharacters: 300)
+        XCTAssertTrue(shown.contains("First tolls."))
+        XCTAssertTrue(shown.hasSuffix("Last toll."))
+        XCTAssertTrue(shown.contains("[\u{2026}]"))
+        XCTAssertLessThan(shown.count, 450)
+        // Cut to fit only a conversation that has outgrown the model's context.
+        XCTAssertFalse(CompanionPrompt.plain(Conversation(page: UUID()), page: long).turns[0].text.contains("[\u{2026}]"))
+    }
+
+    func testAPageIsShownWithItsTypeFieldsAndWriting() {
+        let species = FieldDefinition(name: "Species", kind: .text), home = FieldDefinition(name: "Home", kind: .page)
+        let character = PageType(name: "Character", fields: [species.id, home.id])
+        let lighthouse = UUID()
+        var page = Document(title: " Mara ", paragraphs: [Paragraph(text: "Keeps the light."), Paragraph(text: "Sings.")],
+                            type: character.id)
+        page.values[species.id] = .text("Selkie")
+        page.values[home.id] = .page(lighthouse)
+        let shown = CompanionPrompt.Page(page, schema: Schema(fields: [species, home], types: [character])) {
+            $0 == lighthouse ? "The Lighthouse" : nil
+        }
+        XCTAssertEqual(shown.name, "Mara")
+        XCTAssertEqual(shown.type, "Character")
+        XCTAssertEqual(shown.fields, "Species: Selkie\nHome: The Lighthouse")
+        XCTAssertEqual(shown.writing, "Keeps the light.\nSings.")
     }
 }

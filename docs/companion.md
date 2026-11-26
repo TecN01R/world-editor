@@ -36,9 +36,17 @@ instruction on content of its own, he chose none ("fully stock"). The system
 turn is one line saying which page is open (its title), or which world, about
 the whole world; then the conversation, with `list_pages`, `search_pages` and
 `look_up` declared in the model's own chat format (`CompanionPrompt.plain`,
-built in `Companion.ask`). No instructions, no examples, no pages in the
-prompt: it finds them with its tools. Sampling and the thinking cap are the
-model maker's (`docs/models.md`).
+built in `Companion.ask`). No instructions, no examples. Sampling and the
+thinking cap are the model maker's (`docs/models.md`).
+
+**Since 2026-11-26: the open page itself.** Kevin: "obviously the companion
+should get the open page's text". The page as it is at that moment (title,
+type, filled fields, writing) goes with the writer's latest message, as an
+attached document does (`CompanionPrompt.shown`); a page past 12,000 characters
+goes as its opening and its latest part. It goes with the latest message, not
+in the system turn, so the earlier turns stay as the model last read them: a
+page edited between messages costs re-reading the page and the last exchange,
+not the whole conversation. The other pages it still finds with its tools.
 
 **Instructions grow from the author** (Kevin, 2026-11-25: "keep the prompting
 but keep it blank and the user can fill in instructions over time and the model
@@ -236,7 +244,8 @@ the model gets only the conversation, no instructions, examples or pages
 declarations describe them (Kevin: "Can the plain model at least have access to
 the tools and how those work? Otherwise it's kind of useless"), and one line
 saying which page is open (its title), or which world, about the whole world:
-it can search the pages and look up the real world, but is told nothing else.
+it can search the pages and look up the real world, but is told nothing else
+(since 2026-11-26 it's also given the open page, above).
 Since it isn't shown their pages, it also has `list_pages` (their pages by name,
 type and opening, or one type's), without which "what can you tell me about my
 world?" gave its search nothing to look for (Kevin: "I don't think the tools are
