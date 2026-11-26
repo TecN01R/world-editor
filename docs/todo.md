@@ -37,6 +37,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] 2 The model: Nemotron 3.5 Bolt E4B chosen (Kevin, 2026-11-25), thinking capped at NVIDIA's 128 tokens, with search_pages. Built in (llama.cpp), bartowski's Q4_K_M file; filing without thinking, which is faster
 - [ ] 3 Benchmark mode on the Duo, held to an 8 GB phone's memory
 - [ ] 4 iOS: the one model, offered where the phone's memory allows it
+- [ ] DFlash, NVIDIA's helper for faster writing (researched 2026-11-26, docs/models.md): waiting for Kevin, after he's tried the warm-up. A trial on the Duo would be about a day's work and 737 MB more to download; kept only if it writes at least 1.5 times faster there
 - [ ] Speed floor (Kevin, 2026-11-24): about reading speed once it starts writing, ~6 tokens/s, on the weakest phone (the iPhone 15 Pro); no saved cache ("I'm not taking more space"), so reading the prompt has to be fast too. Nemotron on the Duo, first reply (2026-11-25): writes 23 tokens/s, reads 1,400 tokens/s, first words 7.4 s with the load (3.3 s); memory 3.1 GB left to the app. The 15 Pro is still to measure
 - [ ] Android app: later, its own native project
 

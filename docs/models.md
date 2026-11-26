@@ -66,6 +66,18 @@ memory warning unloads it only when the app has less than 1 GB left or is in the
 background: iOS warns when the phone as a whole is short, and unloading on every
 warning made 11 of 13 replies load the model again (2 to 3 s each).
 
+**NVIDIA's DFlash drafter** (looked at 2026-11-26, not built): a 360M-parameter helper
+(`nvidia/NVIDIA-Nemotron-3.5-Bolt-E4B-4GB-DFlash`, one BF16 GGUF, 737 MB) that guesses
+up to 7 tokens at a time for the model to check. NVIDIA measures 3.4 to 3.9 tokens
+accepted per step, on a desktop GPU only; on a phone's GPU each guess costs a larger
+share of a token, so perhaps 1.3 to 2 times faster writing (an estimate). llama.cpp
+b12633 supports it, but its driver is in llama.cpp's `common` library, which the Apple
+framework leaves out: the app would carry its own port (some 300 to 500 lines). Its
+GGUF names NVIDIA's evaluation licence while the model card says OpenMDW-1.1, to be
+settled before it ships. Google's Gemma 4 E4B helper (99 MB) was trained on Gemma, not
+Bolt. Guessing from earlier text (n-gram lookup) needs no helper but rarely helps
+free-flowing thought.
+
 How it runs (`LlamaModel`): llama.cpp's prebuilt Apple framework, release
 b12633 (`scripts/fetch-llama.sh`, checksum checked), on the GPU through Metal.
 The model is bartowski's 4-bit file
