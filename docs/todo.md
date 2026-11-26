@@ -53,7 +53,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Image generation on the phone (Kevin, 2026-11-25): one model that does tools and images, or a separate image model to download; research running
 - [ ] Remove the old full prompt (CompanionPrompt's instructions, examples, background) once the stock one has settled; unused by the app until then
 - [ ] Spotlight finds every world's pages
-- [ ] Replies keep running in the background (continued processing with the GPU)
+- [ ] Replies keep running in the background (Kevin, 2026-11-26: "absolutely yes"): iOS's continued processing with the GPU, which Apple has said no iPhone offers (only M3 iPads). The app's LOAD line now says whether the Duo does; built only if it does
 - [ ] Download keeps its speed when the app isn't in front
 - [ ] Images in the companion (documents are built). The whole web needs a search provider and key
 - [ ] VoiceOver pass over the page title and fields

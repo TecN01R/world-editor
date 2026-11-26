@@ -1,4 +1,5 @@
 #if canImport(llama)
+import BackgroundTasks
 import CryptoKit
 import Foundation
 import Guardrails
@@ -671,7 +672,8 @@ private final class Engine: @unchecked Sendable {
         }
         trialLog("LOAD \(LlamaModel.name): model \(gigabytes(llama_model_size(model))) in \(opened - began), context "
                  + "\(loaded.maxContext) in \(clock.now - opened); memory left \(gigabytes(before)) before, "
-                 + "\(gigabytes(os_proc_available_memory())) after")   // TRIAL
+                 + "\(gigabytes(os_proc_available_memory())) after; the GPU after leaving the app "
+                 + (BGTaskScheduler.supportedResources.contains(.gpu) ? "offered" : "not offered"))   // TRIAL
         return loaded
     }
 
