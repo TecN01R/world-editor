@@ -50,7 +50,7 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         ITSAppUsesNonExemptEncryption: false
-        NSCameraUsageDescription: To scan pages for the companion to read.
+        NSCameraUsageDescription: To scan pages and take photos for the companion.
         # The companion's model download, and its replies, continue in the background.
         BGTaskSchedulerPermittedIdentifiers:
           - $(PRODUCT_BUNDLE_IDENTIFIER).companion-download

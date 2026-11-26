@@ -52,6 +52,16 @@ final class Companion {
     /// When the model on the phone was downloaded, for the menu.
     private(set) var modelVersion: String?
 
+    /// It can see the pictures the author attaches: what it needs for them is on the phone
+    /// (Kevin, 2026-11-26: "do pictures"); until then, attaching one offers that download.
+    private(set) var seesPictures = false
+    /// That download, while it runs; it goes on beside the conversation, not over it.
+    private(set) var picturesDownload: Download?
+    /// Why it couldn't go ahead or stopped, shown where it ran.
+    private(set) var picturesNote: String?
+    /// How much it is (nil: the model can't see pictures at all).
+    var picturesDownloadSize: Int64? { model.picturesDownloadSize }
+
     /// Replies think first, briefly, and there's no switch for it (Kevin, 2026-11-24:
     /// "remove the thinking switch"): the companion's model is made to think (NVIDIA runs
     /// it so). Its thought is capped at NVIDIA's setting (`LlamaModel.thinkingBudget`).
@@ -137,6 +147,7 @@ final class Companion {
         // where it got to, and Download goes on from there.
         BackgroundDownload.onCancel = { [weak self] in self?.downloading?.cancel() }
         if !model.isInstalled { offerDownload() }
+        seesPictures = model.seesPictures
     }
 
     /// The author asked for the model: download it, then reply about the page open
@@ -172,6 +183,46 @@ final class Companion {
             }
         }
     }
+
+    /// The author asked for what it needs to see pictures: downloaded beside the conversation,
+    /// over Wi-Fi, resuming where it stopped if tried again.
+    func downloadPictures() {
+        guard picturesDownload == nil, !seesPictures, let size = model.picturesDownloadSize else { return }
+        picturesDownload = Download(done: 0, total: size, detail: "Starting…")
+        picturesNote = nil
+        Task {
+            // Its progress, in the order it comes (as the model's own download reports it).
+            let (progress, report) = AsyncStream<Download?>.makeStream(bufferingPolicy: .bufferingNewest(1))
+            let showing = Task {
+                for await download in progress {
+                    picturesDownload = download
+                    BackgroundDownload.update(download)   // keeps going if the author leaves the app
+                }
+            }
+            do {
+                try await model.preparePictures { report.yield($0) }
+            } catch let blocked as DownloadBlocked {
+                picturesNote = blocked.reason
+            } catch {
+                Self.log.error("Pictures' download failed: \(String(describing: error), privacy: .public)")
+                picturesNote = "The download stopped. Attach a picture to go on from where it got to."
+            }
+            report.finish()
+            await showing.value
+            picturesDownload = nil
+            seesPictures = model.seesPictures
+        }
+    }
+
+    /// Keeps a picture the author attached (JPEG `data`) with the world's conversations, and
+    /// returns it as attached; nil if it couldn't be kept.
+    func keepPicture(_ data: Data, named name: String) -> Conversation.Attached? {
+        guard let file = try? store?.keepPicture(data, type: "jpg") else { return nil }
+        return Conversation.Attached(name: name, picture: file)
+    }
+
+    /// Where the pictures attached in this world's conversations are.
+    var pictures: URL? { store?.pictures }
 
     /// The open page changed: load its conversation and, after a pause, prepare a
     /// reply quietly (`prepareSoon`).
@@ -238,7 +289,8 @@ final class Companion {
     private func prompt(about page: WriterCore.Document, in library: Library, kept: Int = .max) -> CompanionPrompt {
         let isWorld = conversation.aboutWorld   // a conversation about the whole world: no page open
         return CompanionPrompt.plain(conversation, page: isWorld ? nil : page.title, world: isWorld ? library.world.name : nil,
-                                     instructions: instructions, maxTurnCharacters: kept)
+                                     instructions: instructions, pictures: model.seesPictures ? pictures : nil,
+                                     maxTurnCharacters: kept)
     }
 
     /// What the reply's tools reach: every page, with its type and fields, and what the author
@@ -342,6 +394,7 @@ final class Companion {
     private func ask(about page: WriterCore.Document, in library: Library) async {
         guard replyDue, conversation.page == page.id, !needsDownload else { return }
         if let reason = await model.unavailableReason { state = .unavailable(reason); return }
+        seesPictures = model.seesPictures   // a damaged file is removed, and its download offered again
         state = .thinking
         // The reply as it's written is this ask's until a newer one takes over: an ask
         // dropped for another (asking again, another page) leaves the newer one's alone.

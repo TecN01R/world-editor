@@ -85,7 +85,10 @@ public enum GemmaChat {
         }
         for turn in turns {
             switch turn.speaker {
-            case .author: text += "<|turn>user\n" + trimmed(turn.text) + "<turn|>\n"
+            case .author:
+                // Its pictures first, each where llama.cpp's mtmd puts it (`pictureMarker`).
+                text += "<|turn>user\n" + String(repeating: pictureMarker + "\n", count: turn.pictures.count)
+                    + trimmed(turn.text) + "<turn|>\n"
             case .companion: text += "<|turn>model\n" + withoutThoughts(turn.text) + "<turn|>\n"
             }
         }
@@ -102,6 +105,11 @@ public enum GemmaChat {
         if !trimmed(last.said).isEmpty { text += "<turn|>\n" }
         return text + (thinking ? thoughtOpened : "")
     }
+
+    /// Where a picture goes in the prompt: llama.cpp's media marker, which its mtmd replaces
+    /// with the picture as the model sees it. The author's own words never hold it
+    /// (`Reasoned.gemmaPlain`).
+    public static let pictureMarker = "<__media__>"
 
     /// The model's thought channel opened: the end of a prompt where it goes on thinking.
     public static let thoughtOpened = "<|channel>thought\n"

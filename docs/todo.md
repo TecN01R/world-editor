@@ -9,6 +9,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Swift 6 (Kevin, 2026-11-25: "everything should be using the latest tech stack"): the whole app in Swift 6 mode, and CI's actions on their latest versions. Nothing should look different: typing, Undo and Redo, a text size change in Settings, the keyboard in the title and fields, search and the companion's replies all work as before
 - [ ] Documents (Kevin, 2026-11-25): the paperclip beside the message field, a PDF or text file; ask about it; a long one is searched ("Searched your documents for …" in its thinking)
 - [ ] Scans and pictures of pages (Kevin, 2026-11-26: "do pictures and document upload next"): the paperclip is a menu now. Scan Documents opens iOS's own scanner (as in Notes; the camera's permission is asked once); Choose File also takes scanned PDFs, photos and screenshots of pages (read by iOS's own text recognition, on the phone), rich text and web pages. "Reading …" shows while it reads
+- [ ] Pictures (Kevin, 2026-11-26: "do pictures"): the paperclip's Photo Library or Take Photo. The first time, it offers a one-time 990 MB download (Gemma 4's vision projector for Nemotron, over Wi-Fi, shown under the message field while the conversation stays usable); after that, pick again and send. The picture shows in your bubble, and the companion sees it. NVIDIA trained Nemotron on words only: how well it sees is yours to judge. The log's EYES line shows the load
 - [ ] Limits lifted (Kevin, 2026-11-25: "you WILL lift the limits"): the whole conversation (16K context), no per-tool budgets (only a 10-call runaway guard), 4x larger Wikipedia and page-search results, all three articles read
 - [ ] The companion is the model stock now, with its tools (Kevin, 2026-11-25). Instructions… in its menu, blank at first: write your own, or tell it how to reply from now on and it adds one ("Added to Instructions: …" under the reply opens them)
 - [ ] More memory for the app (Kevin, 2026-11-25: "Yes" to the patched xtool): installed from d7a1eed on; the companion's next LOAD line should show about 5.8 GB left instead of 3.4
@@ -56,7 +57,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Spotlight finds every world's pages
 - [ ] Replies keep running in the background (Kevin, 2026-11-26: "absolutely yes"): built (`BackgroundReply`). The Duo offers the GPU to a background task, but Apple gives the Background GPU Access capability only to paid Apple Developer Program teams: it refused the free team ("does not have a program membership that is eligible for this feature"). Waiting on Kevin: join the program ($99 a year; signing then also lasts a year instead of 7 days), or leave it
 - [ ] Download keeps its speed when the app isn't in front
-- [ ] Images in the companion (documents are built). The whole web needs a search provider and key
+- [ ] The whole web, beyond Wikipedia, needs a search provider and key
 - [ ] VoiceOver pass over the page title and fields
 - [ ] Paragraph IDs drifting when paragraphs are edited (`reconcile`)
 - [ ] World calendar date picker

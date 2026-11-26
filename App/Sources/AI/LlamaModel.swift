@@ -19,21 +19,38 @@ import UIKit
 final class LlamaModel: CompanionModel, @unchecked Sendable {
     static let name = "Nemotron 3.5 Bolt"
 
-    /// One checked revision of the file, on Hugging Face: bartowski's Q4_K_M of NVIDIA's model.
-    private enum Source {
-        static let url = URL(string: "https://huggingface.co/bartowski/NVIDIA-Nemotron-3.5-Bolt-E4B-GGUF/resolve/"
-                             + "7a243bc11b80212594a71d2ecddde5798a43e265/NVIDIA-Nemotron-3.5-Bolt-E4B-Q4_K_M.gguf")!
-        static let bytes: Int64 = 5_162_292_576
-        static let sha256 = "5f0f982d11bc1408783d13e4440b06e6c1e989024ac26f9a2999cb4c496bedcc"
+    /// A file the companion downloads: one checked revision, on Hugging Face.
+    fileprivate struct ModelFile: Sendable {
+        let url: URL
+        let bytes: Int64
+        let sha256: String
+        /// Its name once whole and checked: named by its checksum, so another file is never taken for it.
+        let name: String
+
+        var file: URL { LlamaModel.folder.appending(path: name) }
+        /// The download so far, which a later try goes on from.
+        var partial: URL { LlamaModel.folder.appending(path: name + ".partial") }
+        var isInstalled: Bool { FileManager.default.fileExists(atPath: file.path) }
     }
+
+    /// bartowski's Q4_K_M of NVIDIA's model.
+    fileprivate static let model = ModelFile(
+        url: URL(string: "https://huggingface.co/bartowski/NVIDIA-Nemotron-3.5-Bolt-E4B-GGUF/resolve/"
+                 + "7a243bc11b80212594a71d2ecddde5798a43e265/NVIDIA-Nemotron-3.5-Bolt-E4B-Q4_K_M.gguf")!,
+        bytes: 5_162_292_576, sha256: "5f0f982d11bc1408783d13e4440b06e6c1e989024ac26f9a2999cb4c496bedcc",
+        name: "nemotron-3.5-bolt-e4b-5f0f982d.gguf")
+
+    /// What lets it see pictures (Kevin, 2026-11-26: "do pictures"): Gemma 4 E4B's vision
+    /// projector, as bartowski ships it beside the model, at 16 bits (990 MB). NVIDIA trained
+    /// the model on text only, so how well it sees is for Kevin to judge by using it.
+    fileprivate static let eyes = ModelFile(
+        url: URL(string: "https://huggingface.co/bartowski/NVIDIA-Nemotron-3.5-Bolt-E4B-GGUF/resolve/"
+                 + "7a243bc11b80212594a71d2ecddde5798a43e265/mmproj-NVIDIA-Nemotron-3.5-Bolt-E4B-f16.gguf")!,
+        bytes: 990_373_664, sha256: "64c6e621ee6a791765ad251f808b3981da5a1722c52b0ed473f0e4156617e6e2",
+        name: "nemotron-3.5-bolt-e4b-pictures-64c6e621.gguf")
 
     /// Application Support (which iOS never clears), out of iCloud backups.
     private static let folder = URL.applicationSupportDirectory.appending(path: "Models", directoryHint: .isDirectory)
-    /// Renamed to this only once whole and checked; named by its checksum, so another file
-    /// of the model is never taken for it.
-    fileprivate static let file = folder.appending(path: "nemotron-3.5-bolt-e4b-5f0f982d.gguf")
-    /// The download so far, which a later try goes on from.
-    private static let partial = folder.appending(path: "nemotron-3.5-bolt-e4b-5f0f982d.gguf.partial")
 
     /// Thinking before each reply is capped at this many tokens, NVIDIA's setting for the model.
     static let thinkingBudget = 128
@@ -59,18 +76,25 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
 
     var unavailableReason: String? { get async { nil } }
     var canSearch: Bool { true }
-    var isInstalled: Bool { FileManager.default.fileExists(atPath: Self.file.path) }
-    func downloadSize() async -> Int64? { Source.bytes }
+    var isInstalled: Bool { Self.model.isInstalled }
+    func downloadSize() async -> Int64? { Self.model.bytes }
+    var seesPictures: Bool { Self.eyes.isInstalled }
+    var picturesDownloadSize: Int64? { Self.eyes.bytes }
 
     var version: String? {
-        guard let installed = (try? FileManager.default.attributesOfItem(atPath: Self.file.path))?[.creationDate] as? Date
+        guard let installed = (try? FileManager.default.attributesOfItem(atPath: Self.model.file.path))?[.creationDate] as? Date
         else { return nil }
         return "Downloaded \(installed.formatted(date: .abbreviated, time: .omitted))"
     }
 
     func prepare() async throws {
         guard !isInstalled else { return }
-        try await install()
+        try await install(Self.model, report: onProgress)
+    }
+
+    func preparePictures(progress: @escaping @Sendable (Download?) -> Void) async throws {
+        guard !seesPictures else { return }
+        try await install(Self.eyes, report: progress)
     }
 
     // MARK: - Replies
@@ -85,9 +109,15 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
     func warmUp(_ prompt: CompanionPrompt, tools: ReplyTools, thinking: Bool) async {
         let text = GemmaChat.prompt(system: prompt.system, turns: prompt.turns, searches: [], tools: tools.offered, thinking: thinking)
         let began = ContinuousClock.now
-        guard let run = try? await engine.generate(text, written: [], sampling: nil, budget: nil, inThought: false,
-                                                   room: 0, maxNew: 0, onEvent: { _ in }) else { return }
+        guard let run = try? await engine.generate(text, pictures: pictures(prompt), written: [], sampling: nil, budget: nil,
+                                                   inThought: false, room: 0, maxNew: 0, onEvent: { _ in }) else { return }
         trialLog("WARM-UP took \(ContinuousClock.now - began) (\(run.summary))")   // TRIAL
+    }
+
+    /// The pictures in `prompt`, in the order its text has them (`GemmaChat.pictureMarker`);
+    /// none when it can't see them yet.
+    private func pictures(_ prompt: CompanionPrompt) -> [URL] {
+        seesPictures ? prompt.turns.flatMap(\.pictures) : []
     }
 
     /// A reply with its tools (`replyWithTools`), each pass of the model on llama.cpp.
@@ -102,9 +132,9 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
                 // No length limit of its own (Kevin, 2026-11-25: he never wanted one): it writes
                 // until it ends its turn or calls a tool, or the context is full.
                 let run = try await Self.again(pass) {
-                    try await self.engine.generate(text, written: pass.tokens, sampling: Self.replying,
-                                                   budget: thinking ? Self.thinkingBudget : nil, inThought: inThought,
-                                                   room: thinking ? 1000 : 300, maxNew: .max) { event in
+                    try await self.engine.generate(text, pictures: self.pictures(prompt), written: pass.tokens,
+                                                   sampling: Self.replying, budget: thinking ? Self.thinkingBudget : nil,
+                                                   inThought: inThought, room: thinking ? 1000 : 300, maxNew: .max) { event in
                         switch event {
                         case .reading(let done, let total):
                             show(pass.output(inThought), Double(done) / Double(max(total, 1)))
@@ -156,40 +186,37 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
 
     // MARK: - Installing
 
-    /// Downloads the model from Hugging Face (5.2 GB, one checked revision), then checks it.
-    /// 5.2 GB is for Wi-Fi: on cellular, a hotspot or Wi-Fi in Low Data Mode it waits, saying
-    /// why, and goes on from where it was once it's back on Wi-Fi. It stops only when the
+    /// Downloads `item` from Hugging Face (the model, 5.2 GB, or its eyes, 990 MB; one checked
+    /// revision), then checks it. That much is for Wi-Fi: on cellular, a hotspot or Wi-Fi in
+    /// Low Data Mode it waits, saying why, and goes on from where it was once it's back on Wi-Fi. It stops only when the
     /// connection keeps failing (Download Paused, to resume from where it got to), or when
     /// there isn't room for it (the download offered again, with how much is needed).
-    private func install() async throws {
-        defer { onProgress(nil) }
+    private func install(_ item: ModelFile, report: @escaping @Sendable (Download?) -> Void) async throws {
+        defer { report(nil) }
         var folder = Self.folder
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         var values = URLResourceValues()
         values.isExcludedFromBackup = true
         try folder.setResourceValues(values)
         // Another file of the model, part or whole (NVIDIA's, briefly downloaded), makes room.
-        for item in (try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
-        where item.lastPathComponent.contains(".gguf") && item.lastPathComponent != Self.partial.lastPathComponent {
-            try? FileManager.default.removeItem(at: item)
-        }
-        let progress = InstallProgress(report: onProgress, total: Source.bytes)
+        Self.removeRetired()
+        let progress = InstallProgress(report: report, total: item.bytes)
         progress.waiting("Starting…")
         var failures = 0
         while true {
-            if Self.downloaded > Source.bytes { try? FileManager.default.removeItem(at: Self.partial) }   // not this file
-            let had = Self.downloaded
-            try Self.checkSpace(have: had)
+            if Self.downloaded(item) > item.bytes { try? FileManager.default.removeItem(at: item.partial) }   // not this file
+            let had = Self.downloaded(item)
+            try Self.checkSpace(item, have: had)
             try await Self.wifi(progress)
             do {
-                try await Self.downloadOnWiFi(progress)
+                try await Self.downloadOnWiFi(item, progress)
                 break
             } catch is LeftWiFi {
                 continue
             } catch let error as URLError where error.code != .cancelled {
                 // The connection, or Hugging Face, failing: again in a minute, up to three
                 // times in a row without getting further.
-                failures = Self.downloaded > had ? 1 : failures + 1
+                failures = Self.downloaded(item) > had ? 1 : failures + 1
                 guard failures < 3 else { throw URLError(.networkConnectionLost) }
                 progress.waiting("Trying again in a minute…")
                 try await Task.sleep(for: .seconds(60))
@@ -197,21 +224,21 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
                 throw URLError(.networkConnectionLost)   // shown as Download Paused, to go on from here
             }
         }
-        try await Self.check(progress)
-        try FileManager.default.moveItem(at: Self.partial, to: Self.file)
+        try await Self.check(item, progress)
+        try FileManager.default.moveItem(at: item.partial, to: item.file)
     }
 
-    /// How much of the download is here.
-    private static var downloaded: Int64 {
-        ((try? FileManager.default.attributesOfItem(atPath: partial.path))?[.size] as? NSNumber)?.int64Value ?? 0
+    /// How much of `item`'s download is here.
+    private static func downloaded(_ item: ModelFile) -> Int64 {
+        ((try? FileManager.default.attributesOfItem(atPath: item.partial.path))?[.size] as? NSNumber)?.int64Value ?? 0
     }
 
     /// Downloads the rest of the file while the phone stays on Wi-Fi: moving to a metered
     /// network ends it (`LeftWiFi`), to go on once back.
-    private static func downloadOnWiFi(_ progress: InstallProgress) async throws {
+    private static func downloadOnWiFi(_ item: ModelFile, _ progress: InstallProgress) async throws {
         progress.newRun()
         try await withThrowingTaskGroup(of: Void.self) { group in
-            group.addTask { try await RangeDownload.run(Source.url, to: partial, total: Source.bytes) { progress.downloaded($0) } }
+            group.addTask { try await RangeDownload.run(item.url, to: item.partial, total: item.bytes) { progress.downloaded($0) } }
             group.addTask {
                 for await path in network() {
                     if path.status != .satisfied {
@@ -231,9 +258,9 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
 
     /// Checks the whole file against its published checksum; a damaged one is removed and
     /// the download offered again.
-    private static func check(_ progress: InstallProgress) async throws {
+    private static func check(_ item: ModelFile, _ progress: InstallProgress) async throws {
         let whole = try await Task.detached(priority: .userInitiated) { () -> Bool in
-            let handle = try FileHandle(forReadingFrom: partial)
+            let handle = try FileHandle(forReadingFrom: item.partial)
             defer { try? handle.close() }
             var hash = SHA256(), done: Int64 = 0
             // Each piece read is given back as soon as it's hashed: read without a pool of its
@@ -247,10 +274,10 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
                 progress.checking(done)
                 return true
             }) {}
-            return done == Source.bytes && hash.finalize().map { String(format: "%02x", $0) }.joined() == Source.sha256
+            return done == item.bytes && hash.finalize().map { String(format: "%02x", $0) }.joined() == item.sha256
         }.value
         guard whole else {
-            try? FileManager.default.removeItem(at: partial)
+            try? FileManager.default.removeItem(at: item.partial)
             throw DownloadBlocked(reason: "The download was damaged on the way. Download it again.")
         }
     }
@@ -283,8 +310,8 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
 
     /// Room for the rest of the download, by what iOS counts as free for something the author
     /// asked for (space it can clear included), with half a gigabyte to spare.
-    private static func checkSpace(have: Int64) throws {
-        let needed = Source.bytes - have + 500_000_000
+    private static func checkSpace(_ item: ModelFile, have: Int64) throws {
+        let needed = item.bytes - have + 500_000_000
         let free = try folder.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
             .volumeAvailableCapacityForImportantUsage
         guard let free, free < needed else { return }
@@ -292,13 +319,15 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
             + "\(max(free, 0).formatted(.byteCount(style: .file))) is free. Free up space in Settings › General › iPhone Storage.")
     }
 
-    /// Frees what the models before it left on the phone, once it runs: Gemma 4 26B's files
-    /// (14.3 GB, TurboFieldfare's folder and its install in progress) beside it in Models,
-    /// and Gemma 4 E4B and E2B in Hugging Face's cache. One model on the phone (Kevin, 2026-11-24).
+    /// Frees what the models before it left on the phone, once it runs or before a download:
+    /// everything in Models but its own two files (Gemma 4 26B's 14.3 GB, TurboFieldfare's
+    /// folder, NVIDIA's file briefly downloaded), and Gemma 4 E4B and E2B in Hugging Face's
+    /// cache. One model on the phone (Kevin, 2026-11-24).
     fileprivate static func removeRetired() {
         let fm = FileManager.default
+        let kept = Set([model, eyes].flatMap { [$0.file.lastPathComponent, $0.partial.lastPathComponent] })
         for item in (try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
-        where item.lastPathComponent != file.lastPathComponent && item.lastPathComponent != partial.lastPathComponent {
+        where !kept.contains(item.lastPathComponent) {
             try? fm.removeItem(at: item)
         }
         let cache = URL.cachesDirectory.appending(path: "huggingface/hub")
@@ -394,6 +423,9 @@ private final class Loaded: @unchecked Sendable {
     let callStart: [llama_token]
     let thoughtOpened: [llama_token]
     var cached: [llama_token] = []
+    /// What sees pictures (llama.cpp's mtmd, with `LlamaModel.eyes`), loaded with the first
+    /// prompt that has one.
+    private var eyes: OpaquePointer?
 
     init(model: OpaquePointer, context: OpaquePointer, maxContext: Int, batchSize: Int) throws {
         self.model = model
@@ -413,6 +445,7 @@ private final class Loaded: @unchecked Sendable {
     }
 
     deinit {
+        if let eyes { mtmd_free(eyes) }
         llama_batch_ext_free(batch)
         llama_free(context)
         llama_model_free(model)
@@ -459,12 +492,16 @@ private final class Loaded: @unchecked Sendable {
 
     /// Where reading `ids` can start: after the beginning it shares with what the cache holds
     /// (a prompt that only adds to the last reads only what's new), short of its last token,
-    /// which is read again to write from. Going back further than that, the cache's
+    /// which is read again to write from, and never inside one of its `pictures`, which is
+    /// seen whole. Going back further than that, the cache's
     /// sliding-window layers keep only their last positions (a window and a batch), so it can
     /// go back only as far as they still cover what follows; otherwise it reads from the start
     /// (llama.cpp's server checks the same).
-    func start(for ids: [llama_token]) -> Int {
-        let common = min(zip(cached, ids).prefix { $0.0 == $0.1 }.count, ids.count - 1)
+    func start(for ids: [llama_token], pictures: [Range<Int>]) -> Int {
+        var common = min(zip(cached, ids).prefix { $0.0 == $0.1 }.count, ids.count - 1)
+        if let picture = pictures.first(where: { $0.lowerBound < common && common < $0.upperBound }) {
+            common = picture.lowerBound
+        }
         let memory = llama_get_memory(context)
         if common < cached.count {
             let covered = common == 0 || llama_memory_seq_pos_min(memory, 0) <= max(0, llama_pos(common) - window)
@@ -477,11 +514,99 @@ private final class Loaded: @unchecked Sendable {
         return common
     }
 
+    /// `prompt` as the model reads it: its tokens, and in their place each of `pictures`, in the
+    /// order of its markers (`GemmaChat.pictureMarker`), as mtmd makes it of the picture. Each
+    /// picture stands in `ids` as tokens of its own, made from its file's name, so the cache
+    /// sees the same picture again as the same, and another as another.
+    func prompt(_ prompt: String, pictures: [URL]) throws -> ReadPrompt {
+        guard !pictures.isEmpty else { return ReadPrompt(ids: tokens(prompt, bos: true)) }
+        let eyes = try loadEyes()
+        var bitmaps: [OpaquePointer?] = []
+        defer { for bitmap in bitmaps { mtmd_bitmap_free(bitmap) } }
+        for url in pictures {
+            guard let bitmap = mtmd_helper_bitmap_init_from_file(eyes, url.path, false, mtmd_helper_init_opt_default()).bitmap
+            else { throw LlamaFailed(what: "the picture \(url.lastPathComponent) didn't open") }
+            bitmaps.append(bitmap)
+        }
+        guard let chunks = mtmd_input_chunks_init() else { throw LlamaFailed(what: "no chunks") }
+        let read = ReadPrompt(chunks: chunks)
+        let status = prompt.withCString { text in
+            var input = mtmd_input_text(text: text, text_len: strlen(text), add_special: true, parse_special: true)
+            return bitmaps.withUnsafeBufferPointer { mtmd_tokenize(eyes, chunks, &input, $0.baseAddress, $0.count) }
+        }
+        guard status == 0 else { throw LlamaFailed(what: "the prompt's pictures returned \(status)") }
+        var seen = 0
+        for i in 0..<mtmd_input_chunks_size(chunks) {
+            guard let chunk = mtmd_input_chunks_get(chunks, i) else { continue }
+            if mtmd_input_chunk_get_type(chunk) == MTMD_INPUT_CHUNK_TYPE_TEXT {
+                var count = 0
+                if let tokens = mtmd_input_chunk_get_tokens_text(chunk, &count) {
+                    read.ids += UnsafeBufferPointer(start: tokens, count: count)
+                }
+            } else {
+                // One position a token, as Gemma's pictures have (not M-RoPE's).
+                let count = Int(mtmd_input_chunk_get_n_tokens(chunk))
+                guard Int(mtmd_input_chunk_get_n_pos(chunk)) == count else { throw LlamaFailed(what: "a picture's positions") }
+                // Its stand-in, from its file's name (each picture is a file of its own), in the
+                // order the prompt has them.
+                guard seen < pictures.count else { throw LlamaFailed(what: "more pictures than files") }
+                let stand = -1 - llama_token(truncatingIfNeeded: pictures[seen].lastPathComponent.hashValue & 0x3fff_ffff)
+                seen += 1
+                read.pictures.append((read.ids.count..<read.ids.count + count, chunk))
+                read.ids += repeatElement(stand, count: count)
+            }
+        }
+        return read
+    }
+
+    /// Sees the picture `chunk` at position `start`: mtmd encodes it and reads it into the cache.
+    func see(_ chunk: OpaquePointer, at start: Int) throws {
+        guard let eyes else { throw LlamaFailed(what: "no eyes") }
+        var past: llama_pos = 0
+        let status = mtmd_helper_eval_chunk_single(eyes, context, chunk, llama_pos(start), 0, Int32(batchSize), false, &past)
+        guard status == 0 else { throw LlamaFailed(what: "seeing a picture returned \(status)") }
+    }
+
+    /// Loads what sees pictures, once. A file that won't load is damaged: removed, so its
+    /// download is offered again.
+    private func loadEyes() throws -> OpaquePointer {
+        if let eyes { return eyes }
+        let clock = ContinuousClock(), began = clock.now
+        var params = mtmd_context_params_default()
+        params.use_gpu = true
+        params.print_timings = false
+        params.warmup = false
+        // Gemma 4's own default budget for a picture, so one is always seen whole in a batch.
+        params.image_max_tokens = 280
+        guard let eyes = mtmd_init_from_file(LlamaModel.eyes.file.path, model, params) else {
+            try? FileManager.default.removeItem(at: LlamaModel.eyes.file)
+            throw LlamaFailed(what: "the eyes didn't load")
+        }
+        trialLog("EYES loaded in \(clock.now - began); memory left \(String(format: "%.2f GB", Double(os_proc_available_memory()) / 1e9))")   // TRIAL
+        self.eyes = eyes
+        return eyes
+    }
+
     /// Forgets what the cache holds (after a failure, when it's no longer known).
     func forget() {
         llama_memory_clear(llama_get_memory(context), true)
         cached = []
     }
+}
+
+/// A prompt as the model reads it (`Loaded.prompt`): its tokens, with each picture's place in
+/// them and its piece from mtmd, kept while the prompt is read.
+private final class ReadPrompt {
+    var ids: [llama_token]
+    var pictures: [(range: Range<Int>, chunk: OpaquePointer)] = []
+    private let chunks: OpaquePointer?
+
+    init(ids: [llama_token] = [], chunks: OpaquePointer? = nil) {
+        self.ids = ids
+        self.chunks = chunks
+    }
+
+    deinit { if let chunks { mtmd_input_chunks_free(chunks) } }
 }
 
 /// Runs the model: one job at a time, as the phone has one GPU and the model one KV cache.
@@ -506,8 +631,8 @@ private final class Engine: @unchecked Sendable {
     /// `inThought`: the prompt opened its thought. Throws `PromptTooLong` when fewer than
     /// `room` tokens would be left for its output, and `Interrupted` when the author leaves
     /// the app meanwhile.
-    func generate(_ prompt: String, written: [llama_token], sampling: Sampling?, budget: Int?, inThought: Bool,
-                  room: Int, maxNew: Int, onEvent: @escaping @Sendable (Event) -> Void) async throws -> Run {
+    func generate(_ prompt: String, pictures: [URL] = [], written: [llama_token], sampling: Sampling?, budget: Int?,
+                  inThought: Bool, room: Int, maxNew: Int, onEvent: @escaping @Sendable (Event) -> Void) async throws -> Run {
         // iOS gives a background app no GPU, unless a reply's background task holds it
         // (`BackgroundReply`): a job asked for while the author is away (filing as they leave,
         // the first reply once the download finishes in the background) waits for them,
@@ -545,8 +670,9 @@ private final class Engine: @unchecked Sendable {
                 LlamaModel.removeRetired()
             }
             let job = Task(executorPreference: Self.thread) {
-                try Self.run(model, prompt: prompt, written: written, sampling: sampling, budget: budget, inThought: inThought,
-                             room: room, maxNew: maxNew, stop: { stop() || Task.isCancelled }, onEvent: onEvent)
+                try Self.run(model, prompt: prompt, pictures: pictures, written: written, sampling: sampling, budget: budget,
+                             inThought: inThought, room: room, maxNew: maxNew, stop: { stop() || Task.isCancelled },
+                             onEvent: onEvent)
             }
             do {
                 return try await withTaskCancellationHandler { try await job.value } onCancel: { job.cancel() }
@@ -557,10 +683,11 @@ private final class Engine: @unchecked Sendable {
     }
 
     /// The pass itself, on the model's thread.
-    private static func run(_ model: Loaded, prompt: String, written: [llama_token], sampling: Sampling?, budget limit: Int?,
-                            inThought: Bool, room: Int, maxNew: Int, stop: () -> Bool,
+    private static func run(_ model: Loaded, prompt text: String, pictures: [URL], written: [llama_token], sampling: Sampling?,
+                            budget limit: Int?, inThought: Bool, room: Int, maxNew: Int, stop: () -> Bool,
                             onEvent: (Event) -> Void) throws -> Run {
-        let ids = model.tokens(prompt, bos: true) + written
+        let prompt = try model.prompt(text, pictures: pictures)
+        let ids = prompt.ids + written
         let left = model.maxContext - ids.count
         guard left >= max(100, room - written.count) else { throw PromptTooLong() }
         var run = Run(promptTokens: ids.count)
@@ -575,15 +702,22 @@ private final class Engine: @unchecked Sendable {
         do {
             // Reading the prompt: what the cache doesn't hold, a batch at a time.
             let clock = ContinuousClock()
-            var at = model.start(for: ids)
+            var at = model.start(for: ids, pictures: prompt.pictures.map(\.range))
             run.cachedTokens = at
             let reading = clock.now
             while at < ids.count {
                 guard !stop() else { throw Interrupted() }
-                let end = min(at + model.batchSize, ids.count)
-                try model.read(ids[at..<end], at: at)
-                model.cached += ids[at..<end]
-                at = end
+                if let picture = prompt.pictures.first(where: { $0.range.lowerBound == at }) {
+                    try model.see(picture.chunk, at: at)   // a picture, seen whole
+                    model.cached += ids[picture.range]
+                    at = picture.range.upperBound
+                } else {
+                    let next = prompt.pictures.first { $0.range.lowerBound > at }?.range.lowerBound ?? ids.count
+                    let end = min(at + model.batchSize, next)
+                    try model.read(ids[at..<end], at: at)
+                    model.cached += ids[at..<end]
+                    at = end
+                }
                 onEvent(.reading(done: at - run.cachedTokens, total: ids.count - run.cachedTokens))
             }
             run.readSeconds = (clock.now - reading).seconds
@@ -645,10 +779,10 @@ private final class Engine: @unchecked Sendable {
         params.n_gpu_layers = 999
         params.load_mode = LLAMA_LOAD_MODE_MMAP
         params.lazy_mode = LLAMA_LAZY_MODE_ON
-        guard let model = llama_model_load_from_file(LlamaModel.file.path, params) else {
+        guard let model = llama_model_load_from_file(LlamaModel.model.file.path, params) else {
             // A file that won't load is damaged: removed, so the download is offered again.
             trialLog("LOAD failed: removed, to download again")   // TRIAL
-            try? FileManager.default.removeItem(at: LlamaModel.file)
+            try? FileManager.default.removeItem(at: LlamaModel.model.file)
             throw LlamaFailed(what: "the model didn't load")
         }
         let opened = clock.now

@@ -28,6 +28,12 @@ protocol CompanionModel: Sendable {
     func downloadSize() async -> Int64?
     /// Downloads the model if it isn't on the phone yet; nothing else.
     func prepare() async throws
+    /// It can see pictures: what it needs for them is on the phone.
+    var seesPictures: Bool { get }
+    /// How much that is to download, if it can see pictures at all.
+    var picturesDownloadSize: Int64? { get }
+    /// Downloads what it needs to see pictures, if that isn't on the phone yet, saying how far it's got.
+    func preparePictures(progress: @escaping @Sendable (Download?) -> Void) async throws
     var version: String? { get }
     /// What the author's message states, read out for filing (types, fields,
     /// new pages); `Filer` then keeps only what's in their words.
@@ -41,6 +47,9 @@ extension CompanionModel {
     /// How much the model's download is, if it has one; asked whenever the download is offered.
     func downloadSize() async -> Int64? { nil }
     func prepare() async throws {}
+    var seesPictures: Bool { false }
+    var picturesDownloadSize: Int64? { nil }
+    func preparePictures(progress: @escaping @Sendable (Download?) -> Void) async throws {}
     func warmUp(_ prompt: CompanionPrompt, tools: ReplyTools, thinking: Bool) async {}
     /// When the model on the phone was downloaded, in words; nil if it hasn't been, or it's part of iOS.
     var version: String? { nil }

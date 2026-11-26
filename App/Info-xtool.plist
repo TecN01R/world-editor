@@ -5,7 +5,7 @@
 <plist version="1.0">
 <dict>
 	<key>NSCameraUsageDescription</key>
-	<string>To scan pages for the companion to read.</string>
+	<string>To scan pages and take photos for the companion.</string>
 	<!-- The companion's model download, and its replies, continue in the background
 	     (continued processing tasks, named after the bundle ID: xtool's signing
 	     prefixes it with the team ID on the phone). -->

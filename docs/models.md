@@ -66,6 +66,15 @@ memory warning unloads it only when the app has less than 1 GB left or is in the
 background: iOS warns when the phone as a whole is short, and unloading on every
 warning made 11 of 13 replies load the model again (2 to 3 s each).
 
+**Pictures** (Kevin, 2026-11-26: "do pictures"): Gemma 4 E4B's vision projector, as
+bartowski ships it beside the model (`mmproj-NVIDIA-Nemotron-3.5-Bolt-E4B-f16.gguf`,
+990 MB, pinned revision and SHA-256), downloaded the first time the author attaches a
+picture, and run by llama.cpp's mtmd (`Loaded.prompt`, `Loaded.see`), at most 280 tokens a
+picture (Gemma 4's own default budget). NVIDIA's card says text in, text out: the
+projector was trained with Gemma, not with Nemotron's post-training, so how well it sees
+is judged by using it. Pictures are kept as JPEGs (at most 1,536 pixels on the longer
+side) in the world's conversations folder, `Pictures/`.
+
 **NVIDIA's DFlash drafter** (looked at 2026-11-26, not built): a 360M-parameter helper
 (`nvidia/NVIDIA-Nemotron-3.5-Bolt-E4B-4GB-DFlash`, one BF16 GGUF, 737 MB) that guesses
 up to 7 tokens at a time for the model to check. NVIDIA measures 3.4 to 3.9 tokens

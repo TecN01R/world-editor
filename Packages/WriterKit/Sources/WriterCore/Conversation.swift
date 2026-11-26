@@ -38,8 +38,8 @@ public struct Conversation: Codable, Hashable, Sendable {
         /// The instructions it added to the writer's (Instructions…) while writing each of its
         /// replies here, as `searches` is kept, for the "Added to Instructions: …" line.
         public var instructions: [String: [String]]?
-        /// The documents the author attached to their answer (a PDF's or text file's text), for
-        /// the companion to read and answer from: not their words, so never filed.
+        /// The documents and pictures the author attached to their answer, for the companion to
+        /// read or look at and answer from: not their words, so never filed.
         public var attached: [Attached]?
 
         public init(id: UUID = UUID(), question: String, answer: String? = nil, asked: Date = Date(),
@@ -240,14 +240,18 @@ public struct Conversation: Codable, Hashable, Sendable {
         if !attached.isEmpty { turns[i].attached = attached }
     }
 
-    /// A document the author attached: its file's name and its text.
+    /// A document the author attached (its file's name and its text), or a picture (a name for
+    /// it, and its file in the world's `ConversationStore.pictures`; no text).
     public struct Attached: Codable, Hashable, Sendable {
         public var name: String
         public var text: String
+        /// A picture's file name, in `ConversationStore.pictures`.
+        public var picture: String?
 
-        public init(name: String, text: String) {
+        public init(name: String, text: String = "", picture: String? = nil) {
             self.name = name
             self.text = text
+            self.picture = picture
         }
     }
 
@@ -314,9 +318,23 @@ public final class ConversationStore: @unchecked Sendable {
         (try? load(page)).map { !$0.authorText.isEmpty } ?? true
     }
 
-    /// Deletes the page's conversation, unless this version can't read it.
+    /// Deletes the page's conversation, unless this version can't read it, and the pictures in it.
     public func delete(_ page: UUID) {
+        let names = (try? load(page))?.turns.flatMap { $0.attached ?? [] }.compactMap(\.picture) ?? []
         try? file(page).delete()
+        for name in names { try? FileManager.default.removeItem(at: pictures.appendingPathComponent(name)) }
+    }
+
+    /// The pictures attached in this world's conversations, a file each.
+    public var pictures: URL { directory.appendingPathComponent("Pictures", isDirectory: true) }
+
+    /// Keeps a picture (`data`, a file of type `type`, such as "jpg") for a conversation, and
+    /// returns its file's name in `pictures`.
+    public func keepPicture(_ data: Data, type: String) throws -> String {
+        try FileManager.default.createDirectory(at: pictures, withIntermediateDirectories: true)
+        let name = UUID().uuidString + "." + type
+        try data.write(to: pictures.appendingPathComponent(name), options: .atomic)
+        return name
     }
 }
 

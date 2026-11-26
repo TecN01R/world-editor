@@ -23,10 +23,13 @@ public struct CompanionPrompt: Equatable, Sendable {
     public struct Turn: Equatable, Sendable {
         public var speaker: Speaker
         public var text: String
+        /// The pictures the author attached to this turn, as files, for a model that sees them.
+        public var pictures: [URL]
 
-        public init(speaker: Speaker, text: String) {
+        public init(speaker: Speaker, text: String, pictures: [URL] = []) {
             self.speaker = speaker
             self.text = text
+            self.pictures = pictures
         }
     }
 
@@ -349,9 +352,10 @@ public struct CompanionPrompt: Equatable, Sendable {
     /// The whole conversation, unless `maxTurns` or `maxTurnCharacters` (in all) say less: only
     /// when it outgrows the model's context (Kevin, 2026-11-25: "you WILL lift the limits").
     /// The opening line stays only before its first reply, which has to answer something.
+    /// `pictures`: the folder the conversation's pictures are in (`ConversationStore.pictures`).
     public static func plain(_ conversation: Conversation, page: String? = nil, world: String? = nil, instructions: String? = nil,
-                             maxTurns: Int = .max, maxTurnCharacters: Int = .max) -> CompanionPrompt {
-        let turns = recent(conversation, maxTurns: maxTurns, maxTurnCharacters: maxTurnCharacters)
+                             pictures: URL? = nil, maxTurns: Int = .max, maxTurnCharacters: Int = .max) -> CompanionPrompt {
+        let turns = recent(conversation, pictures: pictures, maxTurns: maxTurns, maxTurnCharacters: maxTurnCharacters)
         let open: String?
         if let page {
             open = page.isEmpty ? "The writer has an untitled page open."
@@ -371,7 +375,8 @@ public struct CompanionPrompt: Equatable, Sendable {
     }
 
     /// The newest exchanges that fit; the last one always, cut down if it alone is too long.
-    private static func recent(_ conversation: Conversation, maxTurns: Int, maxTurnCharacters: Int) -> [Turn] {
+    private static func recent(_ conversation: Conversation, pictures folder: URL? = nil, maxTurns: Int,
+                               maxTurnCharacters: Int) -> [Turn] {
         var recent: [Conversation.Turn] = [], length = 0
         // The author's turn as the model reads it: their words and what they attached.
         func said(_ turn: Conversation.Turn) -> String? { turn.answer.map { Documents.turn($0, turn.attached ?? []) } }
@@ -382,9 +387,14 @@ public struct CompanionPrompt: Equatable, Sendable {
         }
         // Words that read as the model's control tokens stay words (`Reasoned.gemmaPlain`).
         func fitted(_ text: String) -> String { Reasoned.gemmaPlain(excerpt(text, maxCharacters: maxTurnCharacters) ?? text) }
+        // The pictures they attached, as files; none for a model that can't see them (no `folder`).
+        func pictures(_ turn: Conversation.Turn) -> [URL] {
+            guard let folder else { return [] }
+            return (turn.attached ?? []).compactMap(\.picture).map { folder.appendingPathComponent($0) }
+        }
         return recent.flatMap { turn in
             (turn.question.isEmpty ? [] : [Turn(speaker: .companion, text: fitted(turn.question))])   // the author began
-                + (said(turn).map { [Turn(speaker: .author, text: fitted($0))] } ?? [])
+                + (said(turn).map { [Turn(speaker: .author, text: fitted($0), pictures: pictures(turn))] } ?? [])
         }
     }
 

@@ -29,10 +29,11 @@ public enum Documents {
     }
 
     /// The author's turn as the model reads it: their words, then each document they attached,
-    /// whole or, past `wholeCharacters`, its opening and how to read the rest.
+    /// whole or, past `wholeCharacters`, its opening and how to read the rest. Pictures go to
+    /// the model as pictures (`CompanionPrompt.Turn.pictures`), not here.
     public static func turn(_ message: String, _ attached: [Conversation.Attached]) -> String {
         var parts = message.isEmpty ? [] : [message]
-        for document in attached {
+        for document in attached where document.picture == nil {
             let text = document.text.trimmingCharacters(in: .whitespacesAndNewlines)
             if text.count <= wholeCharacters {
                 parts.append("[Attached: \(document.name)]\n" + text)

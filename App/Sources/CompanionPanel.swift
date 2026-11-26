@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 import UIKit
 import WriterCore
@@ -17,6 +18,12 @@ struct CompanionPanel: View {
     @State private var attached: [Conversation.Attached] = []
     @State private var attaching = false
     @State private var scanning = false
+    /// Pictures for it to see (Kevin, 2026-11-26): from Photos, or the camera; and, until it
+    /// can see them, the offer of what it needs.
+    @State private var choosingPhotos = false
+    @State private var photos: [PhotosPickerItem] = []
+    @State private var takingPhoto = false
+    @State private var offeringEyes = false
     /// Files being read (a picture of a page takes a moment), by name.
     @State private var beingRead: [String] = []
     @State private var unreadable: String?
@@ -263,9 +270,13 @@ struct CompanionPanel: View {
     private func mine(_ text: String, attached: [Conversation.Attached]) -> some View {
         VStack(alignment: .trailing, spacing: 6) {
             ForEach(Array(attached.enumerated()), id: \.offset) { _, document in
-                Label(document.name, systemImage: "doc.text")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                if let picture = document.picture {
+                    PictureThumbnail(url: companion.pictures?.appendingPathComponent(picture))
+                } else {
+                    Label(document.name, systemImage: "doc.text")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
             if !text.isEmpty {
                 Text(text)
@@ -282,6 +293,17 @@ struct CompanionPanel: View {
 
     /// The files waiting to go with the next message, each with a way to take it off.
     @ViewBuilder private var waitingFiles: some View {
+        if let download = companion.picturesDownload {
+            // What it needs to see pictures, coming beside the conversation.
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Downloading what the companion needs to see pictures")
+                ProgressView(value: Double(download.done), total: Double(max(download.total, 1)))
+                Text(download.detail).monospacedDigit().foregroundStyle(.secondary)
+            }
+            .font(.footnote)
+        } else if let note = companion.picturesNote {
+            Text(note).font(.footnote).foregroundStyle(.secondary)
+        }
         if !attached.isEmpty || !beingRead.isEmpty {
             ScrollView(.horizontal) {
                 HStack(spacing: 8) {
@@ -297,9 +319,13 @@ struct CompanionPanel: View {
                     }
                     ForEach(Array(attached.enumerated()), id: \.offset) { i, document in
                         HStack(spacing: 4) {
-                            Label(document.name, systemImage: "doc.text")
-                                .lineLimit(1)
-                            Button("Remove \(document.name)", systemImage: "xmark.circle.fill") { attached.remove(at: i) }
+                            if let picture = document.picture {
+                                PictureThumbnail(url: companion.pictures?.appendingPathComponent(picture), height: 28)
+                            } else {
+                                Label(document.name, systemImage: "doc.text")
+                                    .lineLimit(1)
+                            }
+                            Button("Remove \(document.name)", systemImage: "xmark.circle.fill") { remove(at: i) }
                                 .labelStyle(.iconOnly)
                                 .foregroundStyle(.secondary)
                         }
@@ -312,6 +338,39 @@ struct CompanionPanel: View {
             }
             .scrollIndicators(.hidden)
         }
+    }
+
+    /// Takes a waiting file off; a picture's own file goes too, as nothing else has it.
+    private func remove(at i: Int) {
+        if let picture = attached[i].picture, let folder = companion.pictures {
+            try? FileManager.default.removeItem(at: folder.appendingPathComponent(picture))
+        }
+        attached.remove(at: i)
+    }
+
+    /// Photos or the camera, once it can see pictures; until then, the offer of what it needs.
+    private func pickPictures(_ show: Binding<Bool>) {
+        if companion.seesPictures { show.wrappedValue = true } else { offeringEyes = true }
+    }
+
+    /// Pictures chosen in Photos, kept to go with the next message.
+    private func attachPhotos(_ items: [PhotosPickerItem]) {
+        guard !items.isEmpty else { return }
+        photos = []
+        for item in items {
+            read("Photo") {
+                guard let data = try await item.loadTransferable(type: Data.self), let image = UIImage(data: data)
+                else { throw AttachedFile.Unreadable(name: "Photo") }
+                return try keep(image, named: "Photo")
+            }
+        }
+    }
+
+    /// `image` kept as a picture to go with the next message.
+    private func keep(_ image: UIImage, named name: String) throws -> Conversation.Attached {
+        guard let jpeg = AttachedPicture.jpeg(image), let picture = companion.keepPicture(jpeg, named: name)
+        else { throw AttachedFile.Unreadable(name: name) }
+        return picture
     }
 
     /// The files the picker returned, read into text; one that can't be read is said why.
@@ -629,9 +688,16 @@ struct CompanionPanel: View {
                         .glassEffect(.regular.interactive(), in: .circle)
                         .tint(.primary)   // a menu's label takes the tint, not a foreground style
                     }
-                    // Something for it to read (Kevin, 2026-11-25; 2026-11-26: scans and pictures
-                    // of pages too): pages scanned with iOS's own scanner, or a file from iOS's picker.
+                    // Something for it to see or read (Kevin, 2026-11-25; 2026-11-26: pictures,
+                    // scans and pictures of pages too): pictures from Photos or the camera, pages
+                    // scanned with iOS's own scanner, or a file from iOS's picker.
                     Menu {
+                        if companion.picturesDownloadSize != nil {
+                            Button("Photo Library", systemImage: "photo.on.rectangle") { pickPictures($choosingPhotos) }
+                            if CameraPicker.isAvailable {
+                                Button("Take Photo", systemImage: "camera") { pickPictures($takingPhoto) }
+                            }
+                        }
                         if DocumentScanner.isSupported {
                             Button("Scan Documents", systemImage: "doc.viewfinder") { scanning = true }
                         }
@@ -653,6 +719,23 @@ struct CompanionPanel: View {
                             attachScan(pages)
                         }
                         .ignoresSafeArea()
+                    }
+                    .photosPicker(isPresented: $choosingPhotos, selection: $photos, maxSelectionCount: 5, matching: .images)
+                    .onChange(of: photos) { attachPhotos(photos) }
+                    .fullScreenCover(isPresented: $takingPhoto) {
+                        CameraPicker { image in
+                            takingPhoto = false
+                            if let image { read("Photo") { try keep(image, named: "Photo") } }
+                        }
+                        .ignoresSafeArea()
+                    }
+                    .alert("See Pictures?", isPresented: $offeringEyes) {
+                        Button("Download") { companion.downloadPictures() }
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("To see pictures, the companion needs a one-time download of "
+                             + "\((companion.picturesDownloadSize ?? 0).formatted(.byteCount(style: .file))), over Wi\u{2011}Fi. "
+                             + "Its model was trained on words, so how well it sees is for you to judge.")
                     }
                     // What they type is theirs (New York); the placeholder is the app's.
                     TextField("Message", text: $message, prompt: Text("Message").font(.body), axis: .vertical)
