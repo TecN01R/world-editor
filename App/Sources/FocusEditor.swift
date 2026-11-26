@@ -263,8 +263,8 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         // Return (or a multi-line paste) splits the paragraph into pages.
         var caret = (index: index, offset: 0)
         library.update { doc in
-            doc.setText(tv.text, runs: RichText.runs(in: tv.attributedText),
-                        links: RichText.links(in: tv.attributedText), at: index)
+            doc.setText(tv.text, runs: RichText.runs(in: tv.attributedText), links: RichText.links(in: tv.attributedText),
+                        placed: RichText.placed(in: tv.attributedText), at: index)
             caret = doc.replace(range.location..<(range.location + range.length), in: index, with: text)
         }
         show(caret.index, caret: .offset(caret.offset), direction: 1)
@@ -273,15 +273,15 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
 
     func textViewDidChange(_ tv: UITextView) {
         if controlsVisible { onControlsChange?(false) }   // writing again: out of the way
-        library.update { $0.setText(tv.text, runs: RichText.runs(in: tv.attributedText),
-                                                 links: RichText.links(in: tv.attributedText), at: index) }
+        library.update { $0.setText(tv.text, runs: RichText.runs(in: tv.attributedText), links: RichText.links(in: tv.attributedText),
+                                    placed: RichText.placed(in: tv.attributedText), at: index) }
         shown = library.document.paragraphs
         fit(animated: true)
         updateRail()
     }
 
     func textViewDidChangeSelection(_ tv: UITextView) {
-        tv.typingAttributes[.link] = nil   // typing beside a link never extends it
+        RichText.typeAsTheAuthor(tv)
         library.cursor = (index, tv.selectedRange.location)
     }
 

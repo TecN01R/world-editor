@@ -21,8 +21,9 @@ enum RichText {
         return style
     }
 
-    /// `text` with `attributes`, its fonts adjusted for each run and its `@` links marked.
-    static func attributed(_ text: String, runs: [StyleRun], links: [PageLink] = [],
+    /// `text` with `attributes`, its fonts adjusted for each run, its `@` links marked, and
+    /// the words placed from the author's messages marked and highlighted.
+    static func attributed(_ text: String, runs: [StyleRun], links: [PageLink] = [], placed: [PlacedRun] = [],
                            attributes: [NSAttributedString.Key: Any]) -> NSMutableAttributedString {
         let s = NSMutableAttributedString(string: text, attributes: attributes)
         if let base = attributes[.font] as? UIFont {
@@ -33,12 +34,27 @@ enum RichText {
         for link in links where link.location + link.length <= s.length {
             s.addAttribute(.link, value: url(link.page), range: NSRange(location: link.location, length: link.length))
         }
+        for run in placed where run.location + run.length <= s.length {
+            s.addAttributes([.placed: run.placement.uuidString,
+                             .textHighlightStyle: NSAttributedString.TextHighlightStyle.default,
+                             .textHighlightColorScheme: NSAttributedString.TextHighlightColorScheme.default],
+                            range: NSRange(location: run.location, length: run.length))
+        }
         return s
+    }
+
+    /// What typing never continues: a link, or the mark and highlight of placed words
+    /// (what the author types is theirs).
+    static let notContinued: [NSAttributedString.Key] = [.link, .placed, .textHighlightStyle, .textHighlightColorScheme]
+
+    /// Typing beside a link or placed words never extends them.
+    @MainActor static func typeAsTheAuthor(_ tv: UITextView) {
+        for key in notContinued { tv.typingAttributes[key] = nil }
     }
 
     /// The paragraph as the text views show it.
     static func attributed(_ p: Paragraph, attributes: [NSAttributedString.Key: Any]) -> NSMutableAttributedString {
-        attributed(p.text, runs: p.runs, links: p.links, attributes: attributes)
+        attributed(p.text, runs: p.runs, links: p.links, placed: p.placed, attributes: attributes)
     }
 
     // MARK: Edit menu
@@ -114,7 +130,7 @@ enum RichText {
                 && !(range.location <= link.location && NSMaxRange(range) >= NSMaxRange(link))
         guard touches else { return false }
         var plain = s.attributes(at: link.location, effectiveRange: nil)
-        plain[.link] = nil
+        for key in notContinued { plain[key] = nil }
         // The link's words, plain, with their "@" back: typed like any text, so Undo takes
         // it back too. (Replacing the whole link isn't an edit inside one, so this returns.)
         let words = (s.string as NSString).substring(with: link)
@@ -142,6 +158,18 @@ enum RichText {
             }
         }
         return links
+    }
+
+    /// Words placed from the author's messages in `range`, relative to its start.
+    static func placed(in s: NSAttributedString, range: NSRange? = nil) -> [PlacedRun] {
+        let range = range ?? NSRange(location: 0, length: s.length)
+        var placed: [PlacedRun] = []
+        s.enumerateAttribute(.placed, in: range) { value, r, _ in
+            if let id = (value as? String).flatMap(UUID.init) {
+                placed.append(PlacedRun(location: r.location - range.location, length: r.length, placement: id))
+            }
+        }
+        return placed
     }
 
     /// Style runs of `range`, relative to its start.
@@ -193,9 +221,15 @@ enum RichText {
                 kind = trailingKind   // empty final line
             }
             result.append(Paragraph(text: ns.substring(with: range), kind: kind,
-                                    runs: runs(in: s, range: range), links: links(in: s, range: range)))
+                                    runs: runs(in: s, range: range), links: links(in: s, range: range),
+                                    placed: placed(in: s, range: range)))
             guard end != NSNotFound else { return result }
             location = end + 1
         }
     }
+}
+
+extension NSAttributedString.Key {
+    /// Words the companion placed from one of the author's messages: the `Placement`'s id.
+    static let placed = NSAttributedString.Key("app.world-editor.placed")
 }

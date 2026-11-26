@@ -67,9 +67,10 @@ The model is bartowski's 4-bit file
 its SHA-256, rather than NVIDIA's own 4-bit file (6.2 GB, its embeddings at 8 bits).
 Its per-layer embeddings (1.9 GB) stay in storage and are read a row at a time
 (llama.cpp's lazy reading), so about 2.3 GB of weights are in memory, plus
-about 0.3 GB for the conversation (8,192 tokens; its sliding-window layers keep
-only their window, and room is made for one token's output at a time), about
-2.6 GB in all: the Duo gives the app about 3.4 GB. A follow-up reads only from
+the conversation's (16,384 tokens, the whole conversation since the limits were
+lifted, 2026-11-25; its sliding-window layers keep only their window). With the
+increased-memory-limit entitlement (the patched xtool) the Duo gives the app
+about 6.4 GB. A follow-up reads only from
 where its prompt differs from the last, unless that's further back than the
 window still covers, when it reads from the start (as llama.cpp's server does).
 
@@ -77,13 +78,14 @@ The prompt is the model file's own chat template, rendered by the app
 (`GemmaChat`, tested against what llama.cpp's server renders from that
 template). The model thinks before each reply; once its thought has run
 128 tokens, the end of its thought is forced, as llama.cpp's server does with
-`--reasoning-budget 128` (`ThinkingBudget`), and each thought after a search
-gets its own 128. It looks things up with `search_pages` (two searches a
-reply, then "that's the last search"; three calls at most, after which, or if
-it says nothing, it is asked once more without the tool). What it searched
-for shows in its collapsed thinking. Sampling is NVIDIA's (temperature 1,
-top-p 0.95, top-k 64 as the file says, a new seed each reply); filing is
-greedy without thinking, which is faster.
+`--reasoning-budget 128` (`ThinkingBudget`), and each thought after a tool call
+gets its own 128. Its tools: `list_pages` and `search_pages` (the world's pages),
+`look_up` (Wikipedia), `add_instruction` (the writer's Instructions…) and
+`search_document` (a long attached document). There's no budget per tool, only
+a guard against a runaway loop (ten calls; then, or if it says nothing, it is
+asked once more without the tools). What it looked up shows in its collapsed
+thinking. Sampling is NVIDIA's (temperature 1, top-p 0.95, a new seed each
+reply); filing is greedy without thinking, which is faster.
 
 The download goes over Wi-Fi only, in one file with HTTP range requests, so
 it resumes from where it stopped, even after the app is closed; on cellular,

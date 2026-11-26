@@ -251,7 +251,7 @@ struct PageEditor: UIViewRepresentable {
         }
 
         func textViewDidChangeSelection(_ tv: UITextView) {
-            tv.typingAttributes[.link] = nil   // typing beside a link never extends it
+            RichText.typeAsTheAuthor(tv)
             guard !isRendering else { return }
             let (i, offset) = library.document.locate(tv.selectedRange.location)
             library.cursor = (i, offset)

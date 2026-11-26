@@ -94,7 +94,7 @@ struct CompanionPanel: View {
                     // reply, as the companion's doing, in the order it happens: filing runs after
                     // the reply, once the conversation pauses (Kevin, 2026-11-24).
                     if i > 0, let record = turns[i - 1].filed, !record.isEmpty { filed(record, from: turns[i - 1].id) }
-                    if let answer = turn.answer { mine(answer, attached: turn.attached ?? []) }
+                    if let answer = turn.answer { mine(answer, attached: turn.attached ?? [], in: turn) }
                     // No reply after it (being tried again): under the message meanwhile.
                     if i == turns.count - 1, let record = turn.filed, !record.isEmpty { filed(record, from: turn.id) }
                 }
@@ -257,7 +257,7 @@ struct CompanionPanel: View {
     /// The author's words: a bubble on the right, in New York, under the files they attached
     /// to it (Kevin, 2026-11-25: "pdf or text analysis"). A plain fill, not glass: Apple keeps
     /// Liquid Glass for controls, off content.
-    private func mine(_ text: String, attached: [Conversation.Attached]) -> some View {
+    private func mine(_ text: String, attached: [Conversation.Attached], in turn: Conversation.Turn) -> some View {
         VStack(alignment: .trailing, spacing: 6) {
             ForEach(Array(attached.enumerated()), id: \.offset) { _, document in
                 Label(document.name, systemImage: "doc.text")
@@ -270,11 +270,34 @@ struct CompanionPanel: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(.fill.secondary, in: .rect(cornerRadius: 20))
-                    .contextMenu { copy(text) }
+                    .contextMenu {
+                        copy(text)
+                        // Their words into the page, as they wrote them (Kevin, 2026-11-24).
+                        if companion.canPlace(in: library) {
+                            Button("Add to Page", systemImage: "text.append") { companion.addToPage(turn.id, in: library) }
+                        }
+                    }
             }
+            ForEach(turn.placed ?? []) { placement in placed(placement, from: turn.id) }
         }
         .padding(.leading, 48)
         .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    /// Where this message went into a page (Add to Page), with its Undo: under the message,
+    /// as the author's doing.
+    private func placed(_ placement: Placement, from turn: UUID) -> some View {
+        let name = library.filedName(placement.page)
+        let page = Text(name).font(.authored(.footnote))
+        let line = library.holds(placement) ? Text("Added to \(page)") : Text("Added to \(page) · changed since")
+        return HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Label { line } icon: { Image(systemName: "text.append") }
+            Button("Undo", systemImage: "arrow.uturn.backward") { companion.takeBack(placement, from: turn, in: library) }
+                .labelStyle(.iconOnly)
+                .accessibilityLabel(Text("Undo: added to \(name)"))
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
     }
 
     /// The files waiting to go with the next message, each with a way to take it off.

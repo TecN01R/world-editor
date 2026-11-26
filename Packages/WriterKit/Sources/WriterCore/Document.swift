@@ -46,6 +46,23 @@ public struct PageLink: Codable, Hashable, Sendable {
     }
 }
 
+/// A stretch of a paragraph the companion placed there from one of the author's
+/// messages (`Placement`): their words, marked so they can see what was placed and
+/// take it back. Offsets are UTF-16 units, like `StyleRun`. What they type is never
+/// marked, so typing inside placed words makes those letters plainly theirs.
+public struct PlacedRun: Codable, Hashable, Sendable {
+    public var location: Int
+    public var length: Int
+    /// The `Placement` it came from.
+    public var placement: UUID
+
+    public init(location: Int, length: Int, placement: UUID) {
+        self.location = location
+        self.length = length
+        self.placement = placement
+    }
+}
+
 /// A paragraph is the unit both editors share: Edit mode shows them together,
 /// Focus mode shows one per page. Identity is stable across edits so that
 /// extracted facts can point back at the paragraph they came from.
@@ -57,21 +74,24 @@ public struct Paragraph: Identifiable, Hashable, Sendable {
     public private(set) var runs: [StyleRun]
     /// Sorted, non-overlapping `@` links.
     public private(set) var links: [PageLink]
+    /// Sorted, non-overlapping stretches placed from the author's messages.
+    public private(set) var placed: [PlacedRun]
 
     public init(id: UUID = UUID(), text: String = "", kind: ParagraphKind = .body,
-                runs: [StyleRun] = [], links: [PageLink] = []) {
+                runs: [StyleRun] = [], links: [PageLink] = [], placed: [PlacedRun] = []) {
         self.id = id
         self.text = text
         self.kind = kind
         self.runs = []
         self.links = []
-        setText(text, runs: runs, links: links)
+        self.placed = []
+        setText(text, runs: runs, links: links, placed: placed)
     }
 
     public var length: Int { text.utf16.count }
 
-    /// Replaces the text with its styling and links; both are clamped and merged.
-    public mutating func setText(_ text: String, runs: [StyleRun] = [], links: [PageLink] = []) {
+    /// Replaces the text with its styling, links and placed stretches, each clamped and merged.
+    public mutating func setText(_ text: String, runs: [StyleRun] = [], links: [PageLink] = [], placed: [PlacedRun] = []) {
         self.text = text
         let count = text.utf16.count
         var styles = [InlineStyle](repeating: [], count: count)
@@ -84,8 +104,14 @@ public struct Paragraph: Identifiable, Hashable, Sendable {
             let lo = max(0, link.location), hi = min(count, link.location + link.length)
             if lo < hi { for i in lo..<hi { targets[i] = link.page } }
         }
+        var sources = [UUID?](repeating: nil, count: count)
+        for run in placed {
+            let lo = max(0, run.location), hi = min(count, run.location + run.length)
+            if lo < hi { for i in lo..<hi { sources[i] = run.placement } }
+        }
         self.runs = Self.runs(from: styles)
         self.links = Self.links(from: targets)
+        self.placed = Self.placed(from: sources)
     }
 
     /// The page linked at each UTF-16 unit.
@@ -93,6 +119,13 @@ public struct Paragraph: Identifiable, Hashable, Sendable {
         var targets = [UUID?](repeating: nil, count: length)
         for link in links { for i in link.location..<(link.location + link.length) { targets[i] = link.page } }
         return targets
+    }
+
+    /// The placement each UTF-16 unit came from.
+    var sources: [UUID?] {
+        var sources = [UUID?](repeating: nil, count: length)
+        for run in placed { for i in run.location..<(run.location + run.length) { sources[i] = run.placement } }
+        return sources
     }
 
     /// The link around `offset`, if the caret is inside one or just after it.
@@ -114,17 +147,19 @@ public struct Paragraph: Identifiable, Hashable, Sendable {
     }
 
     /// Replaces a UTF-16 range with `string`, which takes on `style`. Typed
-    /// text never extends a link.
+    /// text never extends a link, and is never marked as placed.
     public mutating func replace(_ range: Range<Int>, with string: String, style: InlineStyle) {
-        var units = Array(text.utf16), styles = self.styles, targets = self.targets
+        var units = Array(text.utf16), styles = self.styles, targets = self.targets, sources = self.sources
         let lo = max(0, min(range.lowerBound, units.count)), hi = max(lo, min(range.upperBound, units.count))
         let inserted = Array(string.utf16)
         units.replaceSubrange(lo..<hi, with: inserted)
         styles.replaceSubrange(lo..<hi, with: Array(repeating: style, count: inserted.count))
         targets.replaceSubrange(lo..<hi, with: Array(repeating: nil, count: inserted.count))
+        sources.replaceSubrange(lo..<hi, with: Array(repeating: nil, count: inserted.count))
         text = String(decoding: units, as: UTF16.self)
         runs = Self.runs(from: styles)
         links = Self.links(from: targets)
+        placed = Self.placed(from: sources)
     }
 
     /// Sets or clears `style` over a UTF-16 range.
@@ -140,7 +175,7 @@ public struct Paragraph: Identifiable, Hashable, Sendable {
     /// link's styling. Returns whether anything changed.
     @discardableResult
     public mutating func retitleLinks(to page: UUID, as title: String) -> Bool {
-        var units = Array(text.utf16), styles = self.styles, targets = self.targets
+        var units = Array(text.utf16), styles = self.styles, targets = self.targets, sources = self.sources
         let new = Array(title.utf16)
         var changed = false
         for link in links.reversed() where link.page == page {
@@ -149,21 +184,24 @@ public struct Paragraph: Identifiable, Hashable, Sendable {
             units.replaceSubrange(r, with: new)
             styles.replaceSubrange(r, with: Array(repeating: styles[link.location], count: new.count))
             targets.replaceSubrange(r, with: Array(repeating: page, count: new.count))
+            sources.replaceSubrange(r, with: Array(repeating: sources[link.location], count: new.count))
             changed = true
         }
         guard changed else { return false }
         text = String(decoding: units, as: UTF16.self)
         runs = Self.runs(from: styles)
         links = Self.links(from: targets)
+        placed = Self.placed(from: sources)
         return true
     }
 
-    /// The text, styling and links from `range`, as a new paragraph of the same kind.
+    /// The text, styling, links and placed stretches from `range`, as a new paragraph of the same kind.
     func slice(_ range: Range<Int>, id: UUID = UUID()) -> Paragraph {
-        let units = Array(text.utf16), styles = self.styles, targets = self.targets
+        let units = Array(text.utf16), styles = self.styles, targets = self.targets, sources = self.sources
         let r = range.clamped(to: 0..<units.count)
         return Paragraph(id: id, text: String(decoding: units[r], as: UTF16.self), kind: kind,
-                         runs: Self.runs(from: Array(styles[r])), links: Self.links(from: Array(targets[r])))
+                         runs: Self.runs(from: Array(styles[r])), links: Self.links(from: Array(targets[r])),
+                         placed: Self.placed(from: Array(sources[r])))
     }
 
     static func links(from targets: [UUID?]) -> [PageLink] {
@@ -177,6 +215,19 @@ public struct Paragraph: Identifiable, Hashable, Sendable {
             }
         }
         return links
+    }
+
+    static func placed(from sources: [UUID?]) -> [PlacedRun] {
+        var placed: [PlacedRun] = []
+        for (i, source) in sources.enumerated() {
+            guard let source else { continue }
+            if let last = placed.last, last.placement == source, last.location + last.length == i {
+                placed[placed.count - 1].length += 1
+            } else {
+                placed.append(PlacedRun(location: i, length: 1, placement: source))
+            }
+        }
+        return placed
     }
 
     static func runs(from styles: [InlineStyle]) -> [StyleRun] {
@@ -193,7 +244,7 @@ public struct Paragraph: Identifiable, Hashable, Sendable {
 }
 
 extension Paragraph: Codable {
-    private enum CodingKeys: String, CodingKey { case id, text, kind, runs, links }
+    private enum CodingKeys: String, CodingKey { case id, text, kind, runs, links, placed }
 
     // Older pages have only id and text; plain paragraphs are written that way too.
     public init(from decoder: Decoder) throws {
@@ -202,7 +253,8 @@ extension Paragraph: Codable {
                   text: try c.decode(String.self, forKey: .text),
                   kind: try c.decodeIfPresent(ParagraphKind.self, forKey: .kind) ?? .body,
                   runs: try c.decodeIfPresent([StyleRun].self, forKey: .runs) ?? [],
-                  links: try c.decodeIfPresent([PageLink].self, forKey: .links) ?? [])
+                  links: try c.decodeIfPresent([PageLink].self, forKey: .links) ?? [],
+                  placed: try c.decodeIfPresent([PlacedRun].self, forKey: .placed) ?? [])
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -212,6 +264,7 @@ extension Paragraph: Codable {
         if kind != .body { try c.encode(kind, forKey: .kind) }
         if !runs.isEmpty { try c.encode(runs, forKey: .runs) }
         if !links.isEmpty { try c.encode(links, forKey: .links) }
+        if !placed.isEmpty { try c.encode(placed, forKey: .placed) }
     }
 }
 
@@ -361,10 +414,18 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
         modified = Date()
     }
 
-    /// Replaces one paragraph's text, styling and links, keeping its identity and kind.
-    public mutating func setText(_ text: String, runs: [StyleRun] = [], links: [PageLink] = [], at index: Int) {
+    /// Replaces the whole content with `new` as it is, identities included (placing the
+    /// author's words and taking them back know which paragraphs are which).
+    mutating func setParagraphsAsIs(_ new: [Paragraph]) {
+        paragraphs = new.isEmpty ? [Paragraph()] : new
+        modified = Date()
+    }
+
+    /// Replaces one paragraph's text, styling, links and placed stretches, keeping its identity and kind.
+    public mutating func setText(_ text: String, runs: [StyleRun] = [], links: [PageLink] = [], placed: [PlacedRun] = [],
+                                 at index: Int) {
         guard paragraphs.indices.contains(index) else { return }
-        paragraphs[index].setText(text, runs: runs, links: links)
+        paragraphs[index].setText(text, runs: runs, links: links, placed: placed)
         modified = Date()
     }
 
@@ -391,7 +452,9 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
         let joinAt = first.length
         let runs = second.runs.map { StyleRun(location: $0.location + joinAt, length: $0.length, style: $0.style) }
         let links = second.links.map { PageLink(location: $0.location + joinAt, length: $0.length, page: $0.page) }
-        paragraphs[index - 1].setText(first.text + second.text, runs: first.runs + runs, links: first.links + links)
+        let placed = second.placed.map { PlacedRun(location: $0.location + joinAt, length: $0.length, placement: $0.placement) }
+        paragraphs[index - 1].setText(first.text + second.text, runs: first.runs + runs, links: first.links + links,
+                                      placed: first.placed + placed)
         paragraphs.remove(at: index)
         modified = Date()
         return joinAt

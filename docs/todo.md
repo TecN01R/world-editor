@@ -9,6 +9,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Rotation crash: check it's gone
 
 ## Check on the phone
+- [ ] Add to Page (Kevin, 2026-11-26: "go and implement it"): hold one of your messages in a page's conversation, Add to Page; it goes at the end of the page, case and punctuation tidied, highlighted as iOS highlights text; "Added to …" under the message with Undo. Typing inside placed words makes them yours (no highlight); Undo takes back only paragraphs still as placed
 - [ ] Swift 6 (Kevin, 2026-11-25: "everything should be using the latest tech stack"): the whole app in Swift 6 mode, and CI's actions on their latest versions. Nothing should look different: typing, Undo and Redo, a text size change in Settings, the keyboard in the title and fields, search and the companion's replies all work as before
 - [ ] Documents (Kevin, 2026-11-25): the paperclip beside the message field, a PDF or text file; ask about it; a long one is searched ("Searched your documents for …" in its thinking)
 - [ ] Limits lifted (Kevin, 2026-11-25: "you WILL lift the limits"): the whole conversation (16K context), no per-tool budgets (only a 10-call runaway guard), 4x larger Wikipedia and page-search results, all three articles read
@@ -45,8 +46,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Android app: later, its own native project
 
 ## Your words into your pages (design: claude.ai/artifact/4GgWK8rCVJUdjwsTrVW9QT)
-- [ ] Placement with authorship marks and per-placement Undo, once the design is approved
-- [ ] Amend CLAUDE.md and docs/ai-charter.md to the new rule when it ships
+- [ ] Automatic placement: the companion picks which of your sentences go where, by number, through filing's tools; never retyped (after filing through tools)
 
 ## Companion
 - [ ] Choose a test suite for the companion from an open standard, built around how the app is used (Kevin, 2026-11-25: he judges by using it)
@@ -74,8 +74,6 @@ it's on the phone and checked, or answered; git history keeps what's done.
       remove that code and reword the charter to what actually guards it, or keep it?
 - [ ] Done in Focus mode: keep, or let Exit Focus also close the keyboard?
 - [ ] The one-time wobble of the pages list: folded or unfolded, once per launch or per install? A screen recording would settle it
-- [ ] Approve the his-words design, and three answers: fix spelling? turn "she" into the
-      page's name? place words that contradict the page?
 - [ ] Folded companion sheet resting as a strip at the bottom, as in Maps?
 - [ ] Names from your world in tracked files: scrub from now on, rewrite history, or make the
       repo private?

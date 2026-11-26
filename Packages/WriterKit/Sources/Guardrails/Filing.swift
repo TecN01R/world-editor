@@ -348,7 +348,7 @@ public enum Filer {
             // only when the sentence saying the new value corrects something.
             let was = pages[i].values[field.id]
             guard let value = value(words, linked: linked, for: field), value != was,
-                  was.map { hit.corrects && replaceable(pages[i].id, field.id, $0) } ?? true,
+                  was.map({ hit.corrects && replaceable(pages[i].id, field.id, $0) }) ?? true,
                   !filled.contains([pages[i].id, field.id]) else { continue }
             filled.insert([pages[i].id, field.id])
             if known == nil {
