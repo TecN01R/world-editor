@@ -74,9 +74,3 @@ it's on the phone and checked, or answered; git history keeps what's done.
       knowledge base, model catalogue's checksum rule, creative-request and illustration guards):
       remove that code and reword the charter to what actually guards it, or keep it?
 - [ ] Done in Focus mode: keep, or let Exit Focus also close the keyboard?
-- [ ] The one-time wobble of the pages list: folded or unfolded, once per launch or per install? A screen recording would settle it
-- [ ] Folded companion sheet resting as a strip at the bottom, as in Maps?
-- [ ] Names from your world in tracked files: scrub from now on, rewrite history, or make the
-      repo private?
-- [ ] Check on the phone: Changes timeline (test world "Test: Changes Timeline"), Mentions
-      sheet layout
