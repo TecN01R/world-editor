@@ -373,11 +373,13 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
         return changed   // not an edit of this page, so `modified` stays
     }
 
-    /// Filing gives a page with no writing the author's description of it as its text
-    /// (`FilingRecord.Entry.described`), or takes it back (""): filing's doing, not the
-    /// author's edit, so `modified` stays.
-    public mutating func fileDescription(_ text: String) {
-        paragraphs = [Paragraph(text: text)]
+    /// Takes back the description filing once gave the page (`FilingRecord.Entry.described`),
+    /// if its writing still begins with it as given; what was written or placed after it
+    /// stays. Filing's doing, not the author's edit, so `modified` stays.
+    public mutating func takeBackDescription(_ text: String) {
+        guard paragraphs.first?.text == text else { return }
+        paragraphs.removeFirst()
+        if paragraphs.isEmpty { paragraphs = [Paragraph()] }
     }
 
     /// Whether any `@` link or page field on this page points at `page` (backlinks).
@@ -415,10 +417,10 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
     }
 
     /// Replaces the whole content with `new` as it is, identities included (placing the
-    /// author's words and taking them back know which paragraphs are which).
+    /// author's words and taking them back know which paragraphs are which). Filing's doing,
+    /// not the author's edit, so `modified` stays.
     mutating func setParagraphsAsIs(_ new: [Paragraph]) {
         paragraphs = new.isEmpty ? [Paragraph()] : new
-        modified = Date()
     }
 
     /// Replaces one paragraph's text, styling, links and placed stretches, keeping its identity and kind.

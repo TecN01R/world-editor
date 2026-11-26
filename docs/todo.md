@@ -9,7 +9,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Rotation crash: check it's gone
 
 ## Check on the phone
-- [ ] Add to Page (Kevin, 2026-11-26: "go and implement it"): hold one of your messages in a page's conversation, Add to Page; it goes at the end of the page, case and punctuation tidied, highlighted as iOS highlights text; "Added to …" under the message with Undo. Typing inside placed words makes them yours (no highlight); Undo takes back only paragraphs still as placed
+- [ ] Your words into your pages, automatically (Kevin, 2026-11-26: "fill in the description based on things I said automatically"): tell the companion something about a page ("she trained at the Iron Abbey") and, once filing runs after the reply, your sentence is at the end of that page, case and punctuation tidied, highlighted as iOS highlights text; it's listed under the reply with the filed fields, each with Undo. Questions and "maybe"s stay out; typing inside placed words makes them yours; Undo takes back only what's still as placed
 - [ ] Swift 6 (Kevin, 2026-11-25: "everything should be using the latest tech stack"): the whole app in Swift 6 mode, and CI's actions on their latest versions. Nothing should look different: typing, Undo and Redo, a text size change in Settings, the keyboard in the title and fields, search and the companion's replies all work as before
 - [ ] Documents (Kevin, 2026-11-25): the paperclip beside the message field, a PDF or text file; ask about it; a long one is searched ("Searched your documents for …" in its thinking)
 - [ ] Limits lifted (Kevin, 2026-11-25: "you WILL lift the limits"): the whole conversation (16K context), no per-tool budgets (only a 10-call runaway guard), 4x larger Wikipedia and page-search results, all three articles read
@@ -46,7 +46,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Android app: later, its own native project
 
 ## Your words into your pages (design: claude.ai/artifact/4GgWK8rCVJUdjwsTrVW9QT)
-- [ ] Automatic placement: the companion picks which of your sentences go where, by number, through filing's tools; never retyped (after filing through tools)
+- [ ] Placing a sentence where it fits in the page, not only at the end
 
 ## Companion
 - [ ] Choose a test suite for the companion from an open standard, built around how the app is used (Kevin, 2026-11-25: he judges by using it)

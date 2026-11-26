@@ -325,6 +325,10 @@ private struct Change {
             symbol = "text.alignleft"
             detail = Text("Page text: \(authored(text))")
             spoken = Text("\(page), \(detail)")
+        case .placed(let placement):
+            symbol = "text.append"
+            detail = Text("Added to the page: \(authored(placement.texts.joined(separator: " ")))")
+            spoken = Text("\(page), \(detail)")
         case .value(_, let fieldID, let new), .replaced(_, let fieldID, _, let new):
             let field = library.schema.fields.first { $0.id == fieldID }?.name ?? "Deleted field"
             if let was = action.was {

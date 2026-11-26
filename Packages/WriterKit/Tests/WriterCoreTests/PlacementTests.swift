@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 @testable import WriterCore
 
-/// The author's words placed into a page (Add to Page): marked as placed, kept through
+/// The author's words placed into a page by filing: marked as placed, kept through
 /// editing, and taken back only where still as placed.
 final class PlacementTests: XCTestCase {
     func testPlacedWordsGoAtTheEndMarkedAndAnEmptyLastLineTakesTheFirst() {
@@ -34,7 +34,6 @@ final class PlacementTests: XCTestCase {
         let id = UUID()
         let texts = ["She rows.", "She is free."]
         let placement = Placement(id: id, page: doc.id, paragraphs: doc.place(texts, as: id), texts: texts)
-        XCTAssertTrue(doc.holds(placement))
         doc.replace(0..<0, in: 2, with: "Yes, ")   // the author wrote in the second
         XCTAssertTrue(doc.takeBack(placement))
         XCTAssertEqual(doc.paragraphs.map(\.text), ["Mine.", "Yes, She is free."])
@@ -47,7 +46,6 @@ final class PlacementTests: XCTestCase {
         let placement = Placement(id: id, page: doc.id, paragraphs: doc.place(["Hello."], as: id), texts: ["Hello."])
         XCTAssertTrue(doc.takeBack(placement))
         XCTAssertEqual(doc.paragraphs.map(\.text), [""])
-        XCTAssertFalse(doc.holds(placement))
     }
 
     func testMarksAreSavedAndPagesWithoutThemStillLoad() throws {

@@ -13,6 +13,18 @@ final class FilingTests: XCTestCase {
         Filer.file(filings, message: message, open: casperica.id, pages: &pages, schema: &schema)
     }
 
+    /// What it filed in fields, types and pages, leaving out the sentences it placed in the
+    /// pages' writing (`PlacedSentencesTests`).
+    private func filed(_ record: FilingRecord) -> [FilingRecord.Entry] {
+        record.actions.filter { if case .placed = $0 { false } else { true } }
+    }
+
+    /// Undoes everything left in `record`, oldest first.
+    private func undoAll(_ record: FilingRecord, pages: inout [Document], schema: inout Schema) {
+        var record = record
+        while let action = record.actions.first { _ = record.undo(action, pages: &pages, schema: &schema) }
+    }
+
     /// Kevin's example: a type for her, a new Place page in his words, and a linked Origin field.
     func testTheMyriddeaExample() throws {
         var pages = [casperica], schema = Schema()
@@ -30,7 +42,8 @@ final class FilingTests: XCTestCase {
         XCTAssertEqual(origin.pageType, nation.type)
         XCTAssertEqual(her.values[origin.id], .page(nation.id))
         XCTAssertTrue(her.mentions(nation.id))   // so Myriddea's Mentions shows her
-        XCTAssertEqual(record.actions.count, 3)   // her type, the new page, her Origin
+        XCTAssertEqual(record.actions.count, 4)   // her type, the new page, her Origin, her sentence
+        XCTAssertEqual(her.paragraphs.map(\.text), ["A sailor.", "She's from a thalassocratic nation called Myriddea."])
     }
 
     /// Each thing it did is undone on its own; undoing them all leaves nothing behind.
@@ -51,7 +64,7 @@ final class FilingTests: XCTestCase {
         XCTAssertEqual(pages.map(\.title), ["Casperica"])
         XCTAssertEqual(schema.types.map(\.name), ["Character"])   // Place went with it
 
-        XCTAssertNil(record.undo(record.actions[0], pages: &pages, schema: &schema))
+        while let action = record.actions.first { XCTAssertNil(record.undo(action, pages: &pages, schema: &schema)) }
         XCTAssertEqual(pages, [casperica])
         XCTAssertEqual(schema, Schema())
         XCTAssertTrue(record.isEmpty)
@@ -63,7 +76,7 @@ final class FilingTests: XCTestCase {
         let page = try XCTUnwrap(record.actions.first { if case .created = $0 { true } else { false } })
         _ = record.undo(page, pages: &pages, schema: &schema)
         XCTAssertTrue(pages[0].values.isEmpty)
-        XCTAssertEqual(record.actions.count, 1)   // only her type is left to undo
+        XCTAssertEqual(record.actions.count, 2)   // her type and her sentence are left to undo
     }
 
     func testUndoKeepsWhatTheAuthorChangedSince() throws {
@@ -130,7 +143,7 @@ final class FilingTests: XCTestCase {
                                   pages: [.init(title: "Casperica", type: "Character")]),
                           "She lives with her grandmother.", pages: &pages, schema: &schema)
         XCTAssertEqual(schema.fields.map(\.name), ["Lives with"])
-        XCTAssertEqual(record.actions.count, 2)   // her type, and Lives with
+        XCTAssertEqual(record.actions.count, 3)   // her type, Lives with, and her sentence
     }
 
     func testExistingPagesTypesAndFieldsAreReused() {
@@ -159,22 +172,21 @@ final class FilingTests: XCTestCase {
         her.type = character.id
         her.values[vessel.id] = .text("trireme")
         var pages = [her]
-        var record = file(Filings(facts: [.init(page: "Casperica", field: "vessel", value: "bireme"),
+        let record = file(Filings(facts: [.init(page: "Casperica", field: "vessel", value: "bireme"),
                                           .init(page: "Casperica", field: "vessel", value: "trireme")],
                                   pages: [.init(title: "Casperica", type: "Pirate")]),
                           "Actually it's a bireme, not a trireme", pages: &pages, schema: &schema)
-        XCTAssertEqual(record.actions, [.replaced(page: her.id, field: vessel.id, was: .text("trireme"), value: .text("bireme"))])
+        XCTAssertEqual(filed(record), [.replaced(page: her.id, field: vessel.id, was: .text("trireme"), value: .text("bireme"))])
         XCTAssertEqual(pages[0].type, character.id)
 
-        _ = record.undo(try XCTUnwrap(record.actions.first), pages: &pages, schema: &schema)
+        undoAll(record, pages: &pages, schema: &schema)
         XCTAssertEqual(pages, [her])
 
         // A polite correction is one; a guess isn't.
         let polite = file(Filings(facts: [.init(page: "she", field: "Vessel", value: "bireme")]),
                           "I think it was actually a bireme", pages: &pages, schema: &schema)
         XCTAssertEqual(pages[0].values[vessel.id], .text("bireme"))
-        var undone = polite
-        _ = undone.undo(try XCTUnwrap(polite.actions.first), pages: &pages, schema: &schema)
+        undoAll(polite, pages: &pages, schema: &schema)
         XCTAssertEqual(pages, [her])
         for guess in ["I think it was a bireme", "I'm not actually sure, I think it was a bireme",
                       "I don't actually know, a bireme"] {
@@ -183,9 +195,8 @@ final class FilingTests: XCTestCase {
         }
         let before = file(Filings(facts: [.init(page: "she", field: "Vessel", value: "bireme")]),
                           "Actually, I think it was a bireme", pages: &pages, schema: &schema)
-        XCTAssertFalse(before.isEmpty)
-        var back = before
-        _ = back.undo(try XCTUnwrap(before.actions.first), pages: &pages, schema: &schema)
+        XCTAssertFalse(filed(before).isEmpty)
+        undoAll(before, pages: &pages, schema: &schema)
         XCTAssertEqual(pages, [her])
 
         // Read again (Try Again): a value the author changed since the first reading stays.
@@ -195,14 +206,18 @@ final class FilingTests: XCTestCase {
                                 message: "Actually it's a bireme", open: her.id, pages: &pages, schema: &schema) {
             page, field, was in page == her.id && seen[field] == was
         }
-        XCTAssertTrue(reread.isEmpty)
+        XCTAssertTrue(filed(reread).isEmpty)
         XCTAssertEqual(pages[0].values[vessel.id], .text("galley"))
+        undoAll(reread, pages: &pages, schema: &schema)
         pages[0].values[vessel.id] = .text("trireme")
 
-        // What was true once isn't a correction.
+        // What was true once isn't a correction, but it's still hers to have on the page.
         let then = file(Filings(facts: [.init(page: "she", field: "Vessel", value: "galley")]),
                         "She rowed on a galley when she was sixteen.", pages: &pages, schema: &schema)
-        XCTAssertTrue(then.isEmpty)
+        XCTAssertTrue(filed(then).isEmpty)
+        XCTAssertEqual(pages[0].values, her.values)
+        XCTAssertEqual(pages[0].paragraphs.last?.text, "She rowed on a galley when she was sixteen.")
+        undoAll(then, pages: &pages, schema: &schema)
         XCTAssertEqual(pages, [her])
     }
 
@@ -222,8 +237,9 @@ final class FilingTests: XCTestCase {
         XCTAssertNotEqual(pages.first { $0.id == her.id }?.values[origin.id], .page(verran.id))
 
         _ = record.undo(made, pages: &pages, schema: &schema)
+        XCTAssertEqual(pages.first { $0.id == her.id }?.values, her.values)
+        undoAll(record, pages: &pages, schema: &schema)   // her sentence
         XCTAssertEqual(pages.first { $0.id == her.id }, her)
-        XCTAssertTrue(record.isEmpty)
     }
 
     func testTheAuthorsSpellingAndAnUntitledOpenPage() throws {
@@ -305,8 +321,51 @@ final class FilingTests: XCTestCase {
         var pages = [her, mara]
         let record = file(Filings(facts: [.init(page: "she", field: "Age", value: "twenty")]),
                           "She's twenty.", pages: &pages, schema: &schema)
-        XCTAssertTrue(record.isEmpty)
+        XCTAssertTrue(filed(record).isEmpty)
         XCTAssertTrue(schema.types[0].fields.isEmpty)
         XCTAssertNil(pages[0].values[age.id])
+    }
+}
+
+/// The sentences filed facts came from go into their pages' writing, as the author wrote them,
+/// marked as placed, each message's with its own Undo (Kevin, 2026-11-26: "fill in the
+/// description based on things I said automatically").
+final class PlacedSentencesTests: XCTestCase {
+    let bram = Document(title: "Bram", paragraphs: [Paragraph(text: "A monk.")])
+
+    private func placed(_ record: FilingRecord) -> [FilingRecord.Entry] {
+        record.actions.filter { if case .placed = $0 { true } else { false } }
+    }
+
+    func testEachPageGetsTheSentencesAboutItAndNothingElse() throws {
+        var pages = [bram], schema = Schema()
+        let message = "he trained at the Iron Abbey. is he a monk? Maybe he's twenty. The Iron Abbey burned in 1102. I love him."
+        let record = Filer.file(Filings(facts: [.init(page: "Bram", field: "Trained at", value: "Iron Abbey"),
+                                                .init(page: "Bram", field: "Age", value: "twenty"),
+                                                .init(page: "Iron Abbey", field: "Burned", value: "1102")],
+                                        pages: [.init(title: "Bram", type: "Character"),
+                                                .init(title: "Iron Abbey", type: "Place")]),
+                                message: message, open: bram.id, pages: &pages, schema: &schema)
+        let him = try XCTUnwrap(pages.first { $0.id == bram.id })
+        let abbey = try XCTUnwrap(pages.first { $0.title == "Iron Abbey" })
+        // Hedged and asked sentences, and what no fact came from, stay out.
+        XCTAssertEqual(him.paragraphs.map(\.text), ["A monk.", "He trained at the Iron Abbey."])
+        XCTAssertEqual(him.paragraphs[1].placed.map(\.length), [him.paragraphs[1].length])
+        XCTAssertEqual(abbey.paragraphs.map(\.text), ["The Iron Abbey burned in 1102."])   // took its empty line
+        XCTAssertEqual(placed(record).count, 2)
+    }
+
+    func testWhatsOnThePageAlreadyIsntPlacedAgainAndUndoKeepsTheAuthorsEdits() throws {
+        var pages = [bram], schema = Schema()
+        let filings = Filings(facts: [.init(page: "Bram", field: "Comes from", value: "Holm")])
+        var record = Filer.file(filings, message: "He comes from Holm.", open: bram.id, pages: &pages, schema: &schema)
+        let again = Filer.file(filings, message: "he comes from holm", open: bram.id, pages: &pages, schema: &schema)
+        XCTAssertTrue(placed(again).isEmpty)
+        XCTAssertEqual(pages[0].paragraphs.map(\.text), ["A monk.", "He comes from Holm."])
+
+        let sentence = try XCTUnwrap(placed(record).first)
+        pages[0].replace(0..<0, in: 1, with: "Yes. ")   // the author writes in it
+        _ = record.undo(sentence, pages: &pages, schema: &schema)
+        XCTAssertEqual(pages[0].paragraphs.map(\.text), ["A monk.", "Yes. He comes from Holm."])
     }
 }

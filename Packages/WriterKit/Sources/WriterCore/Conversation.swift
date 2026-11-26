@@ -41,8 +41,6 @@ public struct Conversation: Codable, Hashable, Sendable {
         /// The documents the author attached to their answer (a PDF's or text file's text), for
         /// the companion to read and answer from: not their words, so never filed.
         public var attached: [Attached]?
-        /// Where the author put their answer into a page (Add to Page), each until taken back.
-        public var placed: [Placement]?
 
         public init(id: UUID = UUID(), question: String, answer: String? = nil, asked: Date = Date(),
                     filed: FilingRecord? = nil) {

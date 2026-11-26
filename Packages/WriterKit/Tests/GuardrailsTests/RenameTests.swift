@@ -116,37 +116,38 @@ final class RenameTests: XCTestCase {
     }
 }
 
-/// A description filed as a "Type" or "Description" field is the page's text when it has none
-/// (Kevin, 2026-11-24: "Put that in the page content, not the type").
+/// A description filed as a "Type" or "Description" field is never a field: the sentence
+/// saying it goes into the page's writing (Kevin, 2026-11-24: "Put that in the page content,
+/// not the type"; 2026-11-26: "fill in the description based on things I said automatically").
 final class DescribedTests: XCTestCase {
-    func testADescriptionBecomesAnEmptyPagesText() throws {
+    func testADescriptionsSentenceGoesIntoThePage() throws {
         let place = PageType(name: "Place")
-        var isles = Document(title: "The Isles", paragraphs: [Paragraph(text: "")])
-        isles.type = place.id
-        var pages = [isles], schema = Schema(types: [place])
-        var record = Filer.file(Filings(facts: [.init(page: "The Isles", field: "Type", value: "island republic of glassblowers")],
-                                        pages: [.init(title: "The Isles", type: "Place")]),
-                                message: "It's a island republic of glassblowers", open: isles.id,
-                                pages: &pages, schema: &schema)
-        XCTAssertEqual(pages[0].paragraphs.map(\.text), ["Island republic of glassblowers"])
-        XCTAssertTrue(schema.fields.isEmpty)   // no "Type" field
-        _ = record.undo(try XCTUnwrap(record.actions.first), pages: &pages, schema: &schema)
-        XCTAssertEqual(pages[0].paragraphs.map(\.text), [""])
-    }
-
-    /// A page with writing keeps it, and no description field is made; one word is a type, not a description.
-    func testWritingIsKeptAndOneWordIsntADescription() {
-        let place = PageType(name: "Place")
-        for (writing, field, value, message) in [("Islands of salt.", "Description", "an island republic", "It's an island republic"),
-                                                 ("", "Kind", "nation", "It's a nation")] {
+        for (writing, field, value, message, after) in [
+            ("", "Type", "island republic of glassblowers", "it's a island republic of glassblowers",
+             ["It's a island republic of glassblowers."]),
+            ("Islands of salt.", "Description", "an island republic", "It's an island republic",
+             ["Islands of salt.", "It's an island republic."]),
+        ] {
             var isles = Document(title: "The Isles", paragraphs: [Paragraph(text: writing)])
             isles.type = place.id
             var pages = [isles], schema = Schema(types: [place])
-            let record = Filer.file(Filings(facts: [.init(page: "The Isles", field: field, value: value)]),
+            var record = Filer.file(Filings(facts: [.init(page: "The Isles", field: field, value: value)]),
                                     message: message, open: isles.id, pages: &pages, schema: &schema)
-            XCTAssertTrue(record.isEmpty, field)
+            XCTAssertEqual(pages[0].paragraphs.map(\.text), after, field)
+            XCTAssertTrue(schema.fields.isEmpty, field)   // no "Type" field
+            _ = record.undo(try XCTUnwrap(record.actions.first), pages: &pages, schema: &schema)
             XCTAssertEqual(pages[0].paragraphs.map(\.text), [writing], field)
-            XCTAssertTrue(schema.fields.isEmpty, field)
         }
+    }
+
+    /// Descriptions filed before sentences were placed still undo, keeping what came after them.
+    func testAnOlderDescriptionStillUndoes() {
+        var isles = Document(title: "The Isles", paragraphs: [Paragraph(text: "Island republic"), Paragraph(text: "Mine.")])
+        var pages = [isles], schema = Schema()
+        var record = FilingRecord(entries: [.described(page: isles.id, text: "Island republic")])
+        _ = record.undo(record.actions[0], pages: &pages, schema: &schema)
+        isles.takeBackDescription("Island republic")
+        XCTAssertEqual(pages[0].paragraphs.map(\.text), ["Mine."])
+        XCTAssertEqual(pages, [isles])
     }
 }

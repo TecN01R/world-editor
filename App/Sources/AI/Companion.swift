@@ -482,31 +482,6 @@ final class Companion {
         for filed in chain { undoFiling(filed.action, from: filed.turn, in: library) }
     }
 
-    /// Whether the author's messages here can go into a page: this conversation's own page.
-    func canPlace(in library: Library) -> Bool {
-        !conversation.aboutWorld && library.pages.contains { $0.id == conversation.page }
-    }
-
-    /// Add to Page: puts the author's message in `turn` at the end of this conversation's page,
-    /// in their words, with an Undo kept on the turn.
-    func addToPage(_ turn: UUID, in library: Library) {
-        guard canPlace(in: library), let i = conversation.turns.firstIndex(where: { $0.id == turn }),
-              let message = conversation.turns[i].answer,
-              let placement = library.place(message, on: conversation.page) else { return }
-        conversation.turns[i].placed = (conversation.turns[i].placed ?? []) + [placement]
-        save()
-    }
-
-    /// Takes `placement` back off its page (what the author has written in since stays) and
-    /// off `turn`.
-    func takeBack(_ placement: Placement, from turn: UUID, in library: Library) {
-        library.takeBack(placement)
-        guard let i = conversation.turns.firstIndex(where: { $0.id == turn }) else { return }
-        conversation.turns[i].placed?.removeAll { $0.id == placement.id }
-        if conversation.turns[i].placed?.isEmpty == true { conversation.turns[i].placed = nil }
-        save()
-    }
-
     /// Asking again failed or was dropped: the reply it would have replaced comes back.
     private func restoreRetracted() {
         guard let old = retracted else { return }   // cleared when another page opens

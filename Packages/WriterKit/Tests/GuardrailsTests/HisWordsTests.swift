@@ -19,14 +19,9 @@ final class HisWordsTests: XCTestCase {
         XCTAssertEqual(HisWords.tidied("olfnark teh glassblower"), "Olfnark teh glassblower.")
     }
 
-    func testEachLineIsAParagraphAndBlankLinesGo() {
-        XCTAssertEqual(HisWords.paragraphs("she rows\n\nshe is free\n"), ["She rows.", "She is free."])
-        XCTAssertEqual(HisWords.paragraphs("  \n"), [])
-    }
-
     func testTheCheckAcceptsTidyingAndRefusesAnyOtherWord() {
         let message = "no, she's free. she's a professional rower"
-        XCTAssertTrue(HisWords.sameWords(HisWords.paragraphs(message).joined(separator: "\n"), message))
+        XCTAssertTrue(HisWords.sameWords(HisWords.tidied(message), message))
         XCTAssertFalse(HisWords.sameWords("No, Casperica is free.", "no, she's free"))
         XCTAssertFalse(HisWords.sameWords("She is free.", "she's free"))
     }

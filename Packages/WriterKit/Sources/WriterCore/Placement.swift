@@ -1,10 +1,10 @@
 import Foundation
 
-/// One of the author's messages put into a page as its writing: Add to Page (Kevin,
-/// 2026-11-24: "I actually fully desire it to fill my pages as long as it uses my own
-/// words", marked "who authored what", and reversible). Kept on the message's turn
-/// (`Conversation.Turn.placed`) for its Undo. Its words are theirs, tidied only in case
-/// and punctuation (`HisWords`, in Guardrails, makes and checks them).
+/// The author's sentences put into a page as its writing, by filing (Kevin, 2026-11-24: "I
+/// actually fully desire it to fill my pages as long as it uses my own words", marked "who
+/// authored what", and reversible; 2026-11-26: "automatically"). Kept in the message's
+/// `FilingRecord` (`.placed`) for its Undo. Its words are theirs, tidied only in case and
+/// punctuation (`HisWords`, in Guardrails, makes and checks them).
 public struct Placement: Codable, Hashable, Sendable, Identifiable {
     public var id: UUID
     public var page: UUID
@@ -52,10 +52,5 @@ extension Document {
         guard !untouched.isEmpty else { return false }
         setParagraphsAsIs(paragraphs.filter { !untouched.contains($0.id) })
         return true
-    }
-
-    /// Whether any of `placement`'s words are still on the page, as placed.
-    public func holds(_ placement: Placement) -> Bool {
-        paragraphs.contains { $0.placed.contains { $0.placement == placement.id } }
     }
 }

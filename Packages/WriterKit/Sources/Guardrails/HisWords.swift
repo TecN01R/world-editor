@@ -1,17 +1,12 @@
 import Foundation
 
-/// The author's own words as they go into a page (Add to Page; Kevin, 2026-11-24: "It can
+/// The author's own words as they go into a page (filing places them; Kevin, 2026-11-24: "It can
 /// either append as a new sentence or insert it where appropriate and clean up
 /// capitalization and punctuation"). Only case, punctuation and spacing change: no spelling
 /// fixes (they would "correct" the names of his world), no "she" turned into a name, nothing
 /// reworded (Kevin, 2026-11-26, approving the design). `sameWords` is the check that holds
 /// it: nothing is placed whose words differ from the message's.
 public enum HisWords {
-    /// `message` as page paragraphs, one per line of it, each tidied (`tidied`).
-    public static func paragraphs(_ message: String) -> [String] {
-        message.split(whereSeparator: \.isNewline).map { tidied(String($0)) }.filter { !$0.isEmpty }
-    }
-
     /// One line, tidied: spaces collapsed and none before punctuation; each sentence begun
     /// with a capital, and "i" as "I"; a full stop at the end if it ends in a letter or digit.
     public static func tidied(_ line: String) -> String {
@@ -47,7 +42,7 @@ public enum HisWords {
         words(placed) == words(message)
     }
 
-    private static func words(_ text: String) -> [String] {
+    static func words(_ text: String) -> [String] {
         text.lowercased()
             .split { !($0.isLetter || $0.isNumber) }
             .map(String.init)

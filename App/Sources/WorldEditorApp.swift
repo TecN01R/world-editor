@@ -170,32 +170,6 @@ final class Library {
         return record
     }
 
-    /// Puts `message`, the author's own words, at the end of `page` (Add to Page): tidied in
-    /// case and punctuation only, and refused if that changed a word (`HisWords`). Nil when
-    /// there's nothing to place or the page is gone.
-    func place(_ message: String, on page: UUID) -> Placement? {
-        let texts = HisWords.paragraphs(message)
-        guard !texts.isEmpty, HisWords.sameWords(texts.joined(separator: "\n"), message),
-              let i = pages.firstIndex(where: { $0.id == page }) else { return nil }
-        let id = UUID()
-        var pages = pages
-        let added = pages[i].place(texts, as: id)
-        commit(pages, schema)
-        return Placement(id: id, page: page, paragraphs: added, texts: texts)
-    }
-
-    /// Takes `placement` back from its page, where it's still as placed (`Document.takeBack`).
-    func takeBack(_ placement: Placement) {
-        guard let i = pages.firstIndex(where: { $0.id == placement.page }) else { return }
-        var pages = pages
-        if pages[i].takeBack(placement) { commit(pages, schema) }
-    }
-
-    /// Whether any of `placement`'s words are still on its page as placed.
-    func holds(_ placement: Placement) -> Bool {
-        pages.first { $0.id == placement.page }?.holds(placement) ?? false
-    }
-
     /// Takes back one thing filing did (`FilingRecord.undo`). A page it made
     /// goes, or, if the author wrote on it since, goes to Recently Deleted.
     /// - Parameters:
@@ -249,6 +223,8 @@ final class Library {
                 return FilingLine(action: action, page: page, label: schema.type(type)?.name ?? "Deleted type")
             case .described(_, let text):
                 return FilingLine(action: action, page: page, words: "\u{201C}\(text)\u{201D}")
+            case .placed(let placement):
+                return FilingLine(action: action, page: page, words: "\u{201C}\(placement.texts.joined(separator: " "))\u{201D}")
             case .renamed:
                 return FilingLine(action: action, page: page)
             case .value(_, let fieldID, let value), .replaced(_, let fieldID, _, let value):

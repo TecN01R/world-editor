@@ -18,8 +18,12 @@ public struct FilingRecord: Codable, Hashable, Sendable {
         case renamed(page: UUID, was: String, title: String)
         /// A page with no writing got the author's description of it as its text
         /// ("an island republic of glassblowers"; Kevin, 2026-11-24: "Put that in the page
-        /// content, not the type").
+        /// content, not the type"). Filing before 2026-11-26 made these; now the sentence
+        /// saying it is `placed`. Kept so their Undo still works.
         case described(page: UUID, text: String)
+        /// The author's sentences about a page, put into its writing as they wrote them (Kevin,
+        /// 2026-11-26: "fill in the description based on things I said automatically").
+        case placed(Placement)
         case newType(UUID)
         case newField(UUID)
         /// An existing or new field added to a type.
@@ -64,7 +68,7 @@ public struct FilingRecord: Codable, Hashable, Sendable {
     public var actions: [Entry] {
         entries.filter {
             switch $0 {
-            case .created, .typed, .value, .replaced, .renamed, .described: true
+            case .created, .typed, .value, .replaced, .renamed, .described, .placed: true
             case .newType, .newField, .fieldAdded: false
             }
         }
@@ -106,7 +110,9 @@ public struct FilingRecord: Codable, Hashable, Sendable {
         case .renamed(let page, let was, let title):
             if let i = index(page), pages[i].title == title { pages[i].title = was }
         case .described(let page, let text):
-            if let i = index(page), pages[i].paragraphs.map(\.text) == [text] { pages[i].fileDescription("") }
+            if let i = index(page) { pages[i].takeBackDescription(text) }
+        case .placed(let placement):
+            if let i = index(placement.page) { pages[i].takeBack(placement) }
         case .created(let page, let modified):
             if let i = index(page) {
                 // What this message filed on it, value by value: anything else, or a value
@@ -151,7 +157,7 @@ public struct FilingRecord: Codable, Hashable, Sendable {
                 }
             case .newType(let type):
                 if !pages.contains(where: { $0.type == type }) { schema.removeType(type) }
-            case .created, .typed, .value, .replaced, .renamed, .described:
+            case .created, .typed, .value, .replaced, .renamed, .described, .placed:
                 break
             }
         }
@@ -164,6 +170,7 @@ extension FilingRecord.Entry {
         switch self {
         case .created(let page, _), .typed(let page, _), .value(let page, _, _), .replaced(let page, _, _, _),
              .renamed(let page, _, _), .described(let page, _): page
+        case .placed(let placement): placement.page
         case .newType, .newField, .fieldAdded: nil
         }
     }
@@ -210,8 +217,8 @@ extension FilingRecord.Entry {
             later.page == page && later.field != nil
         case .renamed(let page, _, _):
             if case .renamed(page, _, _) = later { true } else { false }
-        case .described:
-            false   // only a page with no writing is described, so nothing filed later changes it
+        case .described, .placed:
+            false   // their own Undo takes back only what's still as it was left
         case .created(let page, _):
             !sameMessage && (later.page == page || later.linked == page || later.was == .page(page))
         case .newType, .newField, .fieldAdded:

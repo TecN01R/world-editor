@@ -202,9 +202,9 @@ extension FilingPrompt {
 /// the model may choose (docs/ai-charter.md). A field that has a value gets
 /// a new one only from a message that corrects something ("Actually it's a
 /// bireme"), kept in the record so Undo puts the old one back. Only untyped
-/// pages get a type, and an existing page's writing is never touched (one
-/// with none yet may get the author's description of it as its text). What's
-/// dropped is dropped, not repaired.
+/// pages get a type, and a page's writing is only added to, at its end, with
+/// the sentences the facts came from (`Placement`). What's dropped is dropped,
+/// not repaired.
 public enum Filer {
     /// Whether `message` states anything: not only questions, guesses and musing. Filing
     /// one that doesn't can only find nothing, so it isn't asked of the model either.
@@ -226,9 +226,9 @@ public enum Filer {
         // Only questions or musing: nothing is stated, so nothing is filed (not even a type).
         guard states(message) else { return record }
         /// `phrase` as the author wrote it, as whole words; whether it's a name (capitalised
-        /// mid-sentence, as "the Treaty of Gull Rock", not just at its start); and whether
-        /// it's said as a correction (`Statement.corrects`).
-        func found(_ phrase: String) -> (words: String, isName: Bool, corrects: Bool)? {
+        /// mid-sentence, as "the Treaty of Gull Rock", not just at its start); whether
+        /// it's said as a correction (`Statement.corrects`); and which sentence says it.
+        func found(_ phrase: String) -> (words: String, isName: Bool, corrects: Bool, sentence: Int)? {
             let wanted = Statement.collapsed(phrase).trimmingCharacters(in: Statement.edges)
             guard !wanted.isEmpty else { return nil }
             for (n, s) in sentences.enumerated() where !s.hedged {
@@ -236,7 +236,7 @@ public enum Filer {
                 let words = String(s.text[r])
                 let previous = n > 0 ? sentences[n - 1].text : nil
                 return (words, r.lowerBound != s.text.startIndex && Self.looksLikeAName(words),
-                        Statement.corrects(s.text, after: previous))
+                        Statement.corrects(s.text, after: previous), n)
             }
             return nil
         }
@@ -311,20 +311,10 @@ public enum Filer {
         for fact in filings.facts {
             // The open page's name is its title (above), never a field.
             if Self.nameFields.contains(Self.key(fact.field)), isOpen(index(named: fact.page)) { continue }
-            // What a page is ("Type: an island republic of glassblowers") is its text when it has
-            // none yet, never a field (Kevin, 2026-11-24: "Put that in the page content, not the type").
-            // One word ("Kind: nation") or the page's own name isn't a description.
-            if Self.descriptionFields.contains(Self.key(fact.field)) {
-                if let i = index(named: fact.page),
-                   pages[i].paragraphs.allSatisfy({ $0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }),
-                   let hit = found(fact.value), hit.words.split(separator: " ").count > 1,
-                   Self.key(hit.words) != Self.key(pages[i].title) {
-                    let text = hit.words.prefix(1).uppercased() + hit.words.dropFirst()
-                    pages[i].fileDescription(text)
-                    record.entries.append(.described(page: pages[i].id, text: text))
-                }
-                continue
-            }
+            // What a page is ("Type: an island republic of glassblowers") is never a field: the
+            // sentence saying it goes into the page's writing, below (Kevin, 2026-11-24: "Put that
+            // in the page content, not the type").
+            if Self.descriptionFields.contains(Self.key(fact.field)) { continue }
             guard let i = index(named: fact.page), let typeID = pages[i].type,
                   let t = schema.types.firstIndex(where: { $0.id == typeID }),
                   let fieldName = name(fact.field), let hit = found(fact.value),
@@ -366,6 +356,32 @@ public enum Filer {
         if let title = renamed, let o = pages.firstIndex(where: { $0.id == open }) {
             record.entries.append(.renamed(page: pages[o].id, was: pages[o].title, title: title))
             pages[o].title = title
+        }
+
+        // The sentences the facts came from go into their pages' writing, as the author wrote
+        // them (Kevin, 2026-11-24: "fill my pages as long as it uses my own words"; 2026-11-26:
+        // "fill in the description based on things I said automatically"). Even where a field
+        // kept its value: a sentence that contradicts the page is still theirs to have there.
+        var said: [UUID: Set<Int>] = [:]
+        for fact in filings.facts where !Self.nameFields.contains(Self.key(fact.field)) {   // the title says it
+            guard let i = index(named: fact.page), let hit = found(fact.value),
+                  key(hit.words) != key(fact.field) else { continue }   // "Grandmother: grandmother" says nothing
+            said[pages[i].id, default: []].insert(hit.sentence)
+        }
+        for (page, numbers) in said.sorted(by: { $0.key.uuidString < $1.key.uuidString }) {
+            guard let i = pages.firstIndex(where: { $0.id == page }) else { continue }
+            let written = pages[i].paragraphs.map { HisWords.words($0.text) }
+            // One paragraph of what this message said about the page, leaving out what's on it already.
+            let new = numbers.sorted().map { sentences[$0].text }.filter { sentence in
+                !written.contains { $0.contains(HisWords.words(sentence)) }   // together and in order
+            }
+            guard !new.isEmpty else { continue }
+            let joined = new.joined(separator: " ")
+            let text = HisWords.tidied(joined)
+            guard HisWords.sameWords(text, joined) else { continue }
+            let id = UUID()
+            let added = pages[i].place([text], as: id)
+            record.entries.append(.placed(Placement(id: id, page: page, paragraphs: added, texts: [text], date: now)))
         }
         return record
     }
