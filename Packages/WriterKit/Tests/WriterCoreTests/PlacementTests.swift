@@ -57,4 +57,38 @@ final class PlacementTests: XCTestCase {
         let plain = try JSONEncoder().encode(Paragraph(text: "Mine."))
         XCTAssertFalse(String(decoding: plain, as: UTF8.self).contains("placed"))
     }
+
+    func testWordsAddedToTheAuthorsParagraphAreMarkedAndGoWithTheirSpace() {
+        var doc = Document(paragraphs: [Paragraph(text: "She grew up in Holm."), Paragraph(text: "Mine.")])
+        let id = UUID(), mine = doc.paragraphs[0].id
+        XCTAssertTrue(doc.append("She rows.", to: mine, as: id))
+        XCTAssertEqual(doc.paragraphs.map(\.text), ["She grew up in Holm. She rows.", "Mine."])
+        XCTAssertEqual(doc.paragraphs[0].placed, [PlacedRun(location: 21, length: 9, placement: id)])
+        XCTAssertEqual(doc.paragraphs[0].id, mine)
+        let placement = Placement(id: id, page: doc.id, paragraphs: [mine], texts: ["She rows."], appended: [true])
+        XCTAssertTrue(doc.takeBack(placement))
+        XCTAssertEqual(doc.paragraphs.map(\.text), ["She grew up in Holm.", "Mine."])
+        XCTAssertTrue(doc.paragraphs[0].placed.isEmpty)
+    }
+
+    func testAddedWordsTheAuthorWroteInStayAndSoDoesTheirParagraph() {
+        var doc = Document(paragraphs: [Paragraph(text: "She grew up in Holm.")])
+        let id = UUID(), mine = doc.paragraphs[0].id
+        _ = doc.append("She rows.", to: mine, as: id)
+        doc.replace(24..<24, in: 0, with: " still")   // "… She still rows."
+        XCTAssertEqual(doc.paragraphs[0].text, "She grew up in Holm. She still rows.")
+        let placement = Placement(id: id, page: doc.id, paragraphs: [mine], texts: ["She rows."], appended: [true])
+        XCTAssertFalse(doc.takeBack(placement))
+        XCTAssertEqual(doc.paragraphs.map(\.text), ["She grew up in Holm. She still rows."])
+    }
+
+    func testOlderRecordsWithoutAppendedStillLoad() throws {
+        let id = UUID(), page = UUID(), paragraph = UUID()
+        let json = """
+        {"id":"\(id)","page":"\(page)","paragraphs":["\(paragraph)"],"texts":["She rows."],"date":0}
+        """
+        let placement = try JSONDecoder().decode(Placement.self, from: Data(json.utf8))
+        XCTAssertEqual(placement.appended, [])
+        XCTAssertFalse(placement.isAppended(0))
+    }
 }

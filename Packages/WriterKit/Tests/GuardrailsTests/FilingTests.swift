@@ -368,4 +368,19 @@ final class PlacedSentencesTests: XCTestCase {
         _ = record.undo(sentence, pages: &pages, schema: &schema)
         XCTAssertEqual(pages[0].paragraphs.map(\.text), ["A monk.", "Yes. He comes from Holm."])
     }
+
+    func testASentenceGoesOnAtTheEndOfTheParagraphItFitsAndUndoLeavesThatParagraphAsItWas() throws {
+        let page = Document(title: "Bram", paragraphs: [Paragraph(text: "At twelve the Iron Abbey took him in."),
+                                                         Paragraph(text: "He is quiet.")])
+        var pages = [page], schema = Schema()
+        var record = Filer.file(Filings(facts: [.init(page: "Bram", field: "Trained at", value: "Iron Abbey"),
+                                                .init(page: "Bram", field: "Pet", value: "a dog")]),
+                                message: "he trained at the Iron Abbey. He has a dog.", open: page.id,
+                                pages: &pages, schema: &schema)
+        XCTAssertEqual(pages[0].paragraphs.map(\.text),
+                       ["At twelve the Iron Abbey took him in. He trained at the Iron Abbey.", "He is quiet.", "He has a dog."])
+        let sentences = try XCTUnwrap(placed(record).first)
+        _ = record.undo(sentences, pages: &pages, schema: &schema)
+        XCTAssertEqual(pages[0].paragraphs.map(\.text), ["At twelve the Iron Abbey took him in.", "He is quiet."])
+    }
 }

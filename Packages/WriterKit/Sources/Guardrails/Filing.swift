@@ -371,17 +371,33 @@ public enum Filer {
         for (page, numbers) in said.sorted(by: { $0.key.uuidString < $1.key.uuidString }) {
             guard let i = pages.firstIndex(where: { $0.id == page }) else { continue }
             let written = pages[i].paragraphs.map { HisWords.words($0.text) }
-            // One paragraph of what this message said about the page, leaving out what's on it already.
+            // What this message said about the page, leaving out what's on it already.
             let new = numbers.sorted().map { sentences[$0].text }.filter { sentence in
                 !written.contains { $0.contains(HisWords.words(sentence)) }   // together and in order
             }
-            guard !new.isEmpty else { continue }
-            let joined = new.joined(separator: " ")
-            let text = HisWords.tidied(joined)
-            guard HisWords.sameWords(text, joined) else { continue }
-            let id = UUID()
-            let added = pages[i].place([text], as: id)
-            record.entries.append(.placed(Placement(id: id, page: page, paragraphs: added, texts: [text], date: now)))
+            // Each where it fits: after the author's paragraph about the same thing, or else
+            // together at the end of the page (`HisWords.fit`).
+            var groups: [(to: UUID?, sentences: [String])] = []
+            for sentence in new {
+                let to = HisWords.fit(sentence, in: pages[i])
+                if let g = groups.firstIndex(where: { $0.to == to }) { groups[g].sentences.append(sentence) }
+                else { groups.append((to, [sentence])) }
+            }
+            var placement = Placement(page: page, paragraphs: [], texts: [], date: now)
+            for group in groups {
+                let joined = group.sentences.joined(separator: " ")
+                let text = HisWords.tidied(joined)
+                guard HisWords.sameWords(text, joined) else { continue }
+                if let to = group.to, pages[i].append(text, to: to, as: placement.id) {
+                    placement.paragraphs.append(to)
+                    placement.appended.append(true)
+                } else {
+                    placement.paragraphs += pages[i].place([text], as: placement.id)
+                    placement.appended.append(false)
+                }
+                placement.texts.append(text)
+            }
+            if !placement.paragraphs.isEmpty { record.entries.append(.placed(placement)) }
         }
         return record
     }
