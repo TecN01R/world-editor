@@ -16,6 +16,9 @@ struct CompanionPanel: View {
     /// Files chosen to go with the next message (`AttachedFile`), and why one couldn't be read.
     @State private var attached: [Conversation.Attached] = []
     @State private var attaching = false
+    @State private var scanning = false
+    /// Files being read (a picture of a page takes a moment), by name.
+    @State private var beingRead: [String] = []
     @State private var unreadable: String?
     @State private var confirmingNew = false
     @State private var showingChanges = false
@@ -279,9 +282,19 @@ struct CompanionPanel: View {
 
     /// The files waiting to go with the next message, each with a way to take it off.
     @ViewBuilder private var waitingFiles: some View {
-        if !attached.isEmpty {
+        if !attached.isEmpty || !beingRead.isEmpty {
             ScrollView(.horizontal) {
                 HStack(spacing: 8) {
+                    ForEach(Array(beingRead.enumerated()), id: \.offset) { _, name in
+                        HStack(spacing: 4) {
+                            ProgressView().controlSize(.mini)
+                            Text("Reading \u{201C}\(name)\u{201D}\u{2026}").lineLimit(1)
+                        }
+                        .font(.footnote)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.fill.secondary, in: .capsule)
+                    }
                     ForEach(Array(attached.enumerated()), id: \.offset) { i, document in
                         HStack(spacing: 4) {
                             Label(document.name, systemImage: "doc.text")
@@ -305,8 +318,24 @@ struct CompanionPanel: View {
     private func attach(_ result: Result<[URL], Error>) {
         guard case .success(let urls) = result else { return }
         for url in urls {
-            do { attached.append(try AttachedFile.read(url)) } catch {
-                unreadable = (error as? LocalizedError)?.errorDescription ?? "\u{201C}\(url.lastPathComponent)\u{201D} couldn\u{2019}t be read."
+            read(url.lastPathComponent) { try await AttachedFile.read(url) }
+        }
+    }
+
+    /// Pages from the scanner, read into text as one file.
+    private func attachScan(_ pages: [CGImage]) {
+        guard !pages.isEmpty else { return }
+        let name = "Scanned Document"
+        read(name) { try await AttachedFile.scanned(pages, name: name) }
+    }
+
+    /// Reads `name` with `load`, shown as being read meanwhile; then it waits to go, or is said why it can't.
+    private func read(_ name: String, _ load: @escaping () async throws -> Conversation.Attached) {
+        beingRead.append(name)
+        Task {
+            defer { if let i = beingRead.firstIndex(of: name) { beingRead.remove(at: i) } }
+            do { attached.append(try await load()) } catch {
+                unreadable = (error as? LocalizedError)?.errorDescription ?? "\u{201C}\(name)\u{201D} couldn\u{2019}t be read."
             }
         }
     }
@@ -600,9 +629,15 @@ struct CompanionPanel: View {
                         .glassEffect(.regular.interactive(), in: .circle)
                         .tint(.primary)   // a menu's label takes the tint, not a foreground style
                     }
-                    // A PDF or text file for it to read (Kevin, 2026-11-25), through iOS's file picker.
-                    Button { attaching = true } label: {
-                        Label("Attach a File", systemImage: "paperclip")
+                    // Something for it to read (Kevin, 2026-11-25; 2026-11-26: scans and pictures
+                    // of pages too): pages scanned with iOS's own scanner, or a file from iOS's picker.
+                    Menu {
+                        if DocumentScanner.isSupported {
+                            Button("Scan Documents", systemImage: "doc.viewfinder") { scanning = true }
+                        }
+                        Button("Choose File", systemImage: "folder") { attaching = true }
+                    } label: {
+                        Label("Attach", systemImage: "paperclip")
                             .labelStyle(.iconOnly)
                             .frame(width: barHeight, height: barHeight)
                             .contentShape(.circle)
@@ -612,6 +647,13 @@ struct CompanionPanel: View {
                     .disabled(!canWrite)
                     .fileImporter(isPresented: $attaching, allowedContentTypes: AttachedFile.types,
                                   allowsMultipleSelection: true, onCompletion: attach)
+                    .fullScreenCover(isPresented: $scanning) {
+                        DocumentScanner { pages in
+                            scanning = false
+                            attachScan(pages)
+                        }
+                        .ignoresSafeArea()
+                    }
                     // What they type is theirs (New York); the placeholder is the app's.
                     TextField("Message", text: $message, prompt: Text("Message").font(.body), axis: .vertical)
                         .font(.authored(.body))
