@@ -3,11 +3,6 @@
 The working list for World Editor. Kevin and Claude both edit it. Delete a line once
 it's on the phone and checked, or answered; git history keeps what's done.
 
-## Bugs on the Duo
-- [ ] Sometimes the pages list won't reopen after it closes (now a drawer; check it always reopens)
-- [ ] Janky animations (folding, rotating, opening the companion, typing, replies)
-- [ ] Rotation crash: check it's gone
-
 ## Check on the phone
 - [ ] Your words into your pages, automatically (Kevin, 2026-11-26: "fill in the description based on things I said automatically"): tell the companion something about a page ("she trained at the Iron Abbey") and, once filing runs after the reply, your sentence is at the end of that page, case and punctuation tidied, highlighted as iOS highlights text; it's listed under the reply with the filed fields, each with Undo. Questions and "maybe"s stay out; typing inside placed words makes them yours; Undo takes back only what's still as placed
 - [ ] Swift 6 (Kevin, 2026-11-25: "everything should be using the latest tech stack"): the whole app in Swift 6 mode, and CI's actions on their latest versions. Nothing should look different: typing, Undo and Redo, a text size change in Settings, the keyboard in the title and fields, search and the companion's replies all work as before
@@ -24,7 +19,6 @@ it's on the phone and checked, or answered; git history keeps what's done.
 
 ## Stock-first audit (plan approved 2026-11-24): batches
 - [ ] 1 Data safety and filing accuracy (pushed 5931105; waiting for the phone)
-- [ ] 2 The two bugs and the rotation crash (pushed 484d2ab; waiting for the phone)
 - [ ] 3 Open page in sync; editing crash risks (pushed 606a88a; waiting for the phone)
 - [ ] 4 Smooth typing (pushed; waiting for the phone. Not done: the open page observed on its own, Focus caching its measurements; only if typing still lags)
 - [ ] 5 Smooth replies (pushed 7c046d4; waiting for the phone)
