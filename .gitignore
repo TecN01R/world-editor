@@ -26,3 +26,6 @@ build/
 
 # Python bytecode (ci/ and scripts/ helpers)
 __pycache__/
+
+# Kevin's own material (his ChatGPT export, world lore): never committed, the repo is public
+/private/
