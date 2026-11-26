@@ -59,6 +59,13 @@ E4B for multi-turn tool use and instruction following. It runs stock (Kevin:
 It reads a prompt in seconds and writes well above reading speed, so it needs
 no saved cache, and it fits the 15 Pro's memory.
 
+Getting it ready (2026-11-26): when the companion opens with nothing due from it,
+the model is loaded and reads the conversation so far (`warmUp`), and again after
+filing has used the model, so a reply reads only the author's new message. A
+memory warning unloads it only when the app has less than 1 GB left or is in the
+background: iOS warns when the phone as a whole is short, and unloading on every
+warning made 11 of 13 replies load the model again (2 to 3 s each).
+
 How it runs (`LlamaModel`): llama.cpp's prebuilt Apple framework, release
 b12633 (`scripts/fetch-llama.sh`, checksum checked), on the GPU through Metal.
 The model is bartowski's 4-bit file

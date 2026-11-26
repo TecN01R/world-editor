@@ -15,6 +15,9 @@ protocol CompanionModel: Sendable {
     /// (search_pages, look_up), if it `canSearch`; `thinking`: reason first, if the model
     /// can. Throws `PromptTooLong` when the prompt doesn't fit the model.
     func stream(_ prompt: CompanionPrompt, tools: ReplyTools, thinking: Bool) -> AsyncThrowingStream<ReplySoFar, Error>
+    /// Gets ready to reply to a message added to `prompt`: loads the model and reads the
+    /// prompt so far, so the reply has only the message left to read.
+    func warmUp(_ prompt: CompanionPrompt, tools: ReplyTools, thinking: Bool) async
     // Declared here, not only defaulted below, so a model's own versions are the
     // ones called through `any CompanionModel` (a default that isn't a
     // requirement is always the one used, whatever the model).
@@ -38,6 +41,7 @@ extension CompanionModel {
     /// How much the model's download is, if it has one; asked whenever the download is offered.
     func downloadSize() async -> Int64? { nil }
     func prepare() async throws {}
+    func warmUp(_ prompt: CompanionPrompt, tools: ReplyTools, thinking: Bool) async {}
     /// When the model on the phone was downloaded, in words; nil if it hasn't been, or it's part of iOS.
     var version: String? { nil }
     /// Files nothing: filing is built for the companion's own model (Apple's runs only on the simulator).

@@ -191,14 +191,14 @@ final class Companion {
         others = (store?.all() ?? []).filter { $0.page != page.id }
         retracted = nil
         if state != .downloadPaused { state = .idle }   // a paused download stays on offer
-        guard conversation.waiting == nil else { return }   // a blank page too: it helps you start
         prepareSoon(after: .seconds(2))   // settle: the author may be passing through
     }
 
-    /// Prepares the open page's reply after `pause`, if one is due, only while the
-    /// companion is open: a reply is seconds of the GPU's work, too much to spend on
-    /// every page passed through with it closed. Not while the phone is hot or in Low
-    /// Power Mode either: the author begins instead.
+    /// Prepares the open page's reply after `pause`, if one is due (a blank page too: it
+    /// helps you start), or else has the model ready for the author's message (`warmUp`);
+    /// only while the companion is open: a reply is seconds of the GPU's work, too much to
+    /// spend on every page passed through with it closed. Not while the phone is hot or in
+    /// Low Power Mode either: the author begins instead.
     private func prepareSoon(after pause: Duration = .zero) {
         let phone = ProcessInfo.processInfo
         guard isOpen, download == nil, state == .idle, let opened,
@@ -207,8 +207,52 @@ final class Companion {
         preparing = Task {
             try? await Task.sleep(for: pause)
             guard !Task.isCancelled else { return }
-            await ask(about: opened.page, in: opened.library)
+            if replyDue {
+                await ask(about: opened.page, in: opened.library)
+            } else {
+                await warmUp(opened.page, in: opened.library)
+            }
         }
+    }
+
+    /// Whether the companion's turn is next: nothing it asked is waiting for the author, and
+    /// the world's conversation waits for the author to begin (Kevin, 2026-11-24: "no need
+    /// for it to think before prompted"); a page's begins with the companion.
+    private var replyDue: Bool {
+        conversation.waiting == nil && (!conversation.aboutWorld || !conversation.turns.isEmpty)
+    }
+
+    /// Nothing due from the companion: the model is loaded and reads the conversation so far,
+    /// so its reply to the author's next message starts from their words. Loading on sending
+    /// cost 2–3 s of most replies' first words (the Duo's log, 2026-11-26).
+    private func warmUp(_ page: WriterCore.Document, in library: Library) async {
+        guard model.isInstalled, !needsDownload, await model.unavailableReason == nil else { return }
+        await filing?.value
+        guard !Task.isCancelled, conversation.page == page.id else { return }
+        let page = library.pages.first { $0.id == page.id } ?? page   // as it is now, not when it opened
+        await model.warmUp(prompt(about: page, in: library), tools: tools(for: page, in: library), thinking: thinks)
+    }
+
+    /// The reply's prompt: the conversation (`kept`: the most of each turn it keeps), which
+    /// page is open, and the author's instructions.
+    private func prompt(about page: WriterCore.Document, in library: Library, kept: Int = .max) -> CompanionPrompt {
+        let isWorld = conversation.aboutWorld   // a conversation about the whole world: no page open
+        return CompanionPrompt.plain(conversation, page: isWorld ? nil : page.title, world: isWorld ? library.world.name : nil,
+                                     instructions: instructions, maxTurnCharacters: kept)
+    }
+
+    /// What the reply's tools reach: every page, with its type and fields, and what the author
+    /// said in their other conversations (this one's words are in the prompt already).
+    private func tools(for page: WriterCore.Document, in library: Library) -> ReplyTools {
+        let talks = (store?.all() ?? []).filter { $0.page != page.id }
+        let pageLookup = model.canSearch ? PageLookup(pages: library.pages, schema: library.schema, conversations: talks) : nil
+        // A look-up never sends their names: their pages', and those they wrote, unless the
+        // phone's dictionary knows the word (a real place's name).
+        return ReplyTools(pages: pageLookup, lookingUp: looksUp && pageLookup != nil, listing: true,
+                          instructing: model.canSearch,
+                          documents: model.canSearch ? Documents.Lookup(conversation) : nil,
+                          theirNames: WebLookup.theirNames(pages: pageLookup, said: conversation.turns.compactMap(\.answer),
+                                                           known: Self.dictionary()))
     }
 
     /// The model isn't on the phone (never downloaded, or its files failed their check
@@ -296,10 +340,7 @@ final class Companion {
 
     /// Asks the model for a reply about `page`, shown as it's written.
     private func ask(about page: WriterCore.Document, in library: Library) async {
-        guard conversation.waiting == nil, conversation.page == page.id, !needsDownload else { return }
-        // The world's conversation waits for the author to begin (Kevin, 2026-11-24: "no need
-        // for it to think before prompted"); a page's begins with the companion.
-        guard !conversation.aboutWorld || !conversation.turns.isEmpty else { return }
+        guard replyDue, conversation.page == page.id, !needsDownload else { return }
         if let reason = await model.unavailableReason { state = .unavailable(reason); return }
         state = .thinking
         // The reply as it's written is this ask's until a newer one takes over: an ask
@@ -313,27 +354,13 @@ final class Companion {
         // dropped it owns the conversation and the reply taken back now.
         guard !Task.isCancelled else { return }
         let page = library.pages.first { $0.id == page.id } ?? page   // as it is now, not when it opened
-        let isWorld = conversation.aboutWorld   // a conversation about the whole world: no page open
-        // What its tools reach: every page, with its type and fields, and what the author said
-        // in their other conversations (this one's words are in the prompt already).
-        let talks = (store?.all() ?? []).filter { $0.page != page.id }
-        let pageLookup = model.canSearch ? PageLookup(pages: library.pages, schema: library.schema, conversations: talks) : nil
-        // A look-up never sends their names: their pages', and those they wrote, unless the
-        // phone's dictionary knows the word (a real place's name).
-        let tools = ReplyTools(pages: pageLookup, lookingUp: looksUp && pageLookup != nil, listing: true,
-                               instructing: model.canSearch,
-                               documents: model.canSearch ? Documents.Lookup(conversation) : nil,
-                               theirNames: WebLookup.theirNames(pages: pageLookup, said: conversation.turns.compactMap(\.answer),
-                                                                known: Self.dictionary()))
+        let tools = tools(for: page, in: library)
         var reply = Reasoned(reply: "")
         do {
             // The whole conversation (Kevin, 2026-11-25: "you WILL lift the limits"); only one
             // that outgrows the model's context is read from a later point, newest kept.
             for kept in [Int.max, 24000, 12000] {
-                let prompt = CompanionPrompt.plain(conversation, page: isWorld ? nil : page.title,
-                                                   world: isWorld ? library.world.name : nil,
-                                                   instructions: instructions,
-                                                   maxTurnCharacters: kept)
+                let prompt = prompt(about: page, in: library, kept: kept)
                 do {
                     for try await partial in model.stream(prompt, tools: tools, thinking: thinks) {
                         guard !Task.isCancelled else { break }
@@ -404,6 +431,10 @@ final class Companion {
                     return
                 }
             }
+            // Filing read its own prompt over the conversation's: the conversation is read again
+            // before the author's next message, if the companion is still open (not when filing
+            // was stopped for a reply).
+            if !Task.isCancelled { prepareSoon() }
         }
     }
 

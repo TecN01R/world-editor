@@ -45,10 +45,13 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
         self.onProgress = onProgress
         let engine = Engine()
         self.engine = engine
-        // Near the app's memory limit, iOS would close it: the model's memory is given back
-        // between replies, and the next reply loads it again.
+        // Near the app's memory limit, or away from it, iOS would close it: then the model's
+        // memory is given back between replies, and the next reply loads it again
+        // (`Engine.unloadIfIdle`). UIKit posts the warning on the main thread.
         memoryWarning = NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification,
-                                                               object: nil, queue: nil) { _ in engine.unloadIfIdle() }
+                                                               object: nil, queue: .main) { _ in
+            engine.unloadIfIdle(away: MainActor.assumeIsolated { UIApplication.shared.applicationState == .background })
+        }
     }
 
     deinit { NotificationCenter.default.removeObserver(memoryWarning) }
@@ -75,6 +78,16 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
     /// temperature 1 and top-p 0.95 in both thinking modes, nothing else (no top-k, which came
     /// from Gemma's card); a new seed each reply.
     private static let replying = Sampling(temperature: 1, topP: 0.95)
+
+    /// Reads the prompt as the reply's first pass will begin it, writing nothing: the reply
+    /// then reads only from where they differ, the author's message (`Loaded.start`).
+    func warmUp(_ prompt: CompanionPrompt, tools: ReplyTools, thinking: Bool) async {
+        let text = GemmaChat.prompt(system: prompt.system, turns: prompt.turns, searches: [], tools: tools.offered, thinking: thinking)
+        let began = ContinuousClock.now
+        guard let run = try? await engine.generate(text, written: [], sampling: nil, budget: nil, inThought: false,
+                                                   room: 0, maxNew: 0, onEvent: { _ in }) else { return }
+        trialLog("WARM-UP took \(ContinuousClock.now - began) (\(run.summary))")   // TRIAL
+    }
 
     /// A reply with its tools (`replyWithTools`), each pass of the model on llama.cpp.
     func stream(_ prompt: CompanionPrompt, tools: ReplyTools, thinking: Bool) -> AsyncThrowingStream<ReplySoFar, Error> {
@@ -671,8 +684,17 @@ private final class Engine: @unchecked Sendable {
         llama_backend_init()
     }()
 
-    /// Gives back the model's memory now, or once the job at work is done.
-    func unloadIfIdle() {
+    /// A memory warning: gives back the model's memory now, or once the job at work is done,
+    /// if the app is near its own limit or `away` (where iOS closes the largest apps first).
+    /// iOS also warns when the phone as a whole runs short, with gigabytes still left to the
+    /// app: the Duo's log (2026-11-26) had 11 loads for 13 replies, warned with 3 to 6 GB
+    /// left. Unloading then frees little that counts against the app (the weights are read
+    /// from storage) and costs the next reply 2 to 3 s.
+    func unloadIfIdle(away: Bool) {
+        guard away || Self.nearLimit else {
+            trialLog("MEMORY WARNING: model kept, \(Self.gigabytes(os_proc_available_memory())) left")   // TRIAL
+            return
+        }
         guard turns.take() else {
             warned.withLock { $0 = true }
             return
@@ -680,6 +702,10 @@ private final class Engine: @unchecked Sendable {
         unload(because: "memory warning")
         turns.next()
     }
+
+    /// Less than a gigabyte left to the app: the model's own memory, about 0.4 GB counted,
+    /// with room for the rest of the app.
+    private static var nearLimit: Bool { os_proc_available_memory() < 1_000_000_000 }
 
     /// Only while holding a turn.
     private func unload(because reason: String) {
