@@ -49,6 +49,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Placing a sentence where it fits in the page, not only at the end
 
 ## Companion
+- [ ] As useful as ChatGPT is for Kevin (Kevin, 2026-11-26). Proposed, waiting for his pick: his ChatGPT export (kept in git-ignored private/) as the taste test's messages, and his ChatGPT instructions and memories carried into Instructions; first words faster (NVIDIA's DFlash drafter, the model kept warm); pictures (Nemotron's add-on, untested); search across past conversations
 - [ ] Choose a test suite for the companion from an open standard, built around how the app is used (Kevin, 2026-11-25: he judges by using it)
   - [ ] Blind taste test for Kevin (Kevin, 2026-11-25: "I'm also ok with blind taste test for me"): pairs of anonymous replies to his own messages, fresh from each candidate; he picks or ties; ranked as Chatbot Arena does (Bradley–Terry); he is the only judge
 - [ ] Search: built on Nemotron (search_pages, thinking capped); check it finds things on the phone
