@@ -48,20 +48,20 @@ enum RichText {
     /// "More…" (iOS's whole Format panel: fonts, sizes, colours, text styles, alignment…) and
     /// anything else in it go. Format is iOS's Format, Font or Text Style menu, or whichever
     /// holds Bold or Italic itself, its Bold and Italic gathered from however iOS nests them.
-    static func editMenu(_ suggested: [UIMenuElement], more: [UIMenuElement] = []) -> UIMenu {
+    @MainActor static func editMenu(_ suggested: [UIMenuElement], more: [UIMenuElement] = []) -> UIMenu {
         UIMenu(children: keepingPageFormatting(suggested, more: more))
     }
 
-    private static let pageFormattingActions: Set<Selector> = [#selector(UIResponder.toggleBoldface(_:)),
-                                                               #selector(UIResponder.toggleItalics(_:))]
-    private static let formatMenus: Set<UIMenu.Identifier> = [.format, .font, .textStyle]
+    @MainActor private static let pageFormattingActions: Set<Selector> = [#selector(UIResponder.toggleBoldface(_:)),
+                                                                          #selector(UIResponder.toggleItalics(_:))]
+    @MainActor private static let formatMenus: Set<UIMenu.Identifier> = [.format, .font, .textStyle]
 
-    private static func isPageFormatting(_ element: UIMenuElement) -> Bool {
+    @MainActor private static func isPageFormatting(_ element: UIMenuElement) -> Bool {
         (element as? UICommand).map { pageFormattingActions.contains($0.action) } ?? false
     }
 
     /// Bold and Italic in `menu`, however deep.
-    private static func pageFormatting(in menu: UIMenu) -> [UIMenuElement] {
+    @MainActor private static func pageFormatting(in menu: UIMenu) -> [UIMenuElement] {
         menu.children.flatMap { child -> [UIMenuElement] in
             if isPageFormatting(child) { return [child] }
             return (child as? UIMenu).map(pageFormatting(in:)) ?? []
@@ -69,7 +69,7 @@ enum RichText {
     }
 
     /// `elements` with Format rebuilt, however deep; menus without Bold or Italic stay as they are.
-    private static func keepingPageFormatting(_ elements: [UIMenuElement], more: [UIMenuElement]) -> [UIMenuElement] {
+    @MainActor private static func keepingPageFormatting(_ elements: [UIMenuElement], more: [UIMenuElement]) -> [UIMenuElement] {
         elements.map { element in
             guard let menu = element as? UIMenu else { return element }
             let boldAndItalic = pageFormatting(in: menu)
@@ -84,7 +84,7 @@ enum RichText {
     /// iOS's Format panel, should iOS still offer it by some other way than the edit menu's
     /// "More…": only what pages keep (bold, italic and the lists; underline and strikethrough
     /// come with them and aren't kept).
-    static let formatting = UITextFormattingViewController.Configuration(groups: [
+    @MainActor static let formatting = UITextFormattingViewController.Configuration(groups: [
         .group([.component(.fontAttributes, .automatic)]),
         .group([.component(.listStyles, .automatic)]),
     ])
@@ -101,7 +101,7 @@ enum RichText {
     /// link back into plain `@text` so `@` can suggest again. Then makes the
     /// edit itself (undoably, through the text view) and returns true; returns
     /// false when no link was touched and the edit should go ahead as usual.
-    static func unlinkIfEditing(_ tv: UITextView, range: NSRange, replacement text: String) -> Bool {
+    @MainActor static func unlinkIfEditing(_ tv: UITextView, range: NSRange, replacement text: String) -> Bool {
         let s = tv.textStorage
         guard s.length > 0 else { return false }
         let probe = min(max(0, range.location - (range.length == 0 ? 1 : 0)), s.length - 1)
@@ -159,10 +159,10 @@ enum RichText {
 
     // One shared list per kind: TextKit numbers consecutive paragraphs that
     // carry the same list, so separate runs restart at 1.
-    static let bulletList = NSTextList(markerFormat: .disc, options: 0)
-    static let numberedList = NSTextList(markerFormat: .decimal, options: 0)
+    @MainActor static let bulletList = NSTextList(markerFormat: .disc, options: 0)
+    @MainActor static let numberedList = NSTextList(markerFormat: .decimal, options: 0)
 
-    static func list(for kind: ParagraphKind) -> NSTextList? {
+    @MainActor static func list(for kind: ParagraphKind) -> NSTextList? {
         switch kind {
         case .body: nil
         case .bullet: bulletList

@@ -15,12 +15,14 @@ enum PageIndex {
         let paragraph: UUID?
     }
 
-    private static let index = CSSearchableIndex.default()
-    private static var ready: Task<Void, Never>?
+    private static var index: CSSearchableIndex { .default() }
+    /// The world's pages being indexed; searches wait for it.
+    @MainActor private static var ready: Task<Void, Never>?
 
     /// When a world opens: the index holds its pages only, so search (in the
     /// app and the system's) stays within the open world.
     /// `pages` come with their fields' text ("Species: Elf").
+    @MainActor
     static func start(with pages: [(WriterCore.Document, String)]) {
         if ready == nil { CSUserQuery.prepare() }
         let items = pages.flatMap { page, fields in Self.items(page, fields: fields) }

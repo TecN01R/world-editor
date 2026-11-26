@@ -532,7 +532,7 @@ final class Library {
 /// - `-startInFocus YES`: open the page in Focus mode (read by `RootView`)
 /// - `-focusControls YES`: with Focus mode's controls showing (read by `RootView`)
 enum Screenshots {
-    private static let defaults = UserDefaults.standard
+    private static var defaults: UserDefaults { .standard }
     static var isActive: Bool { defaults.string(forKey: "screenshotText") != nil || isRich || opensList }
     static var opensList: Bool { defaults.bool(forKey: "screenshotPages") }
     static var isRich: Bool { defaults.bool(forKey: "screenshotRich") }

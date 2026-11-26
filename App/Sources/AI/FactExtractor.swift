@@ -48,7 +48,7 @@ struct FactExtractor {
         let response = try await session.respond(
             to: "Paragraph:\n\(paragraph.text)",
             generating: ExtractionResult.self,
-            options: GenerationOptions(sampling: .greedy))
+            options: GenerationOptions(samplingMode: .greedy))
         return response.content.statements.map {
             Fact(subject: $0.subject, attribute: $0.attribute, value: $0.value,
                  certainty: $0.speculative ? .speculative : .established,

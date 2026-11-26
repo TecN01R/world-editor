@@ -1,6 +1,7 @@
 import Foundation
 import Guardrails
 import WriterCore
+import os
 #if canImport(FoundationModels)
 import FoundationModels
 #endif
@@ -130,13 +131,14 @@ func replyWithTools(_ prompt: CompanionPrompt, tools: ReplyTools, thinking: Bool
                     model name: String, state: @autoclosure () -> String,
                     to continuation: AsyncThrowingStream<ReplySoFar, Error>.Continuation,
                     pass: (_ text: String, _ inThought: Bool,
-                           _ show: @escaping (GemmaChat.Output, Double?) -> Void) async throws -> PassDone) async throws {
+                           _ show: @escaping @Sendable (GemmaChat.Output, Double?) -> Void) async throws -> PassDone) async throws {
     let began = ContinuousClock.now
     var tools = tools
     var offered = tools.offered
     var made: [GemmaChat.Search] = []
     var summaries: [String] = []
-    var firstWords: Duration?
+    // Set from the model's thread, as its first words arrive.
+    let firstWords = OSAllocatedUnfairLock<Duration?>(initialState: nil)
     var resumed = 0
     while true {
         let text = GemmaChat.prompt(system: prompt.system, turns: prompt.turns, searches: made, tools: offered, thinking: thinking)
@@ -144,7 +146,9 @@ func replyWithTools(_ prompt: CompanionPrompt, tools: ReplyTools, thinking: Bool
         let soFar = made, toolsSoFar = tools
         let done = try await pass(text, inThought) { output, reading in
             let reply = Reasoned.shown(soFar, toolsSoFar, output)
-            if reading == nil, firstWords == nil, !reply.reply.isEmpty { firstWords = ContinuousClock.now - began }
+            if reading == nil, !reply.reply.isEmpty {
+                firstWords.withLock { if $0 == nil { $0 = ContinuousClock.now - began } }
+            }
             continuation.yield(ReplySoFar(reply: reply, reading: reading))
         }
         summaries.append(done.summary)
@@ -165,7 +169,7 @@ func replyWithTools(_ prompt: CompanionPrompt, tools: ReplyTools, thinking: Bool
         // TRIAL: speed on the phone, pass by pass, and what's left.
         func count(_ text: String) -> Int { text.split(whereSeparator: \.isWhitespace).count }
         trialLog("SPEED \(name)\(thinking ? ", thinking" : ""): \(summaries.joined(separator: "; ")); "
-            + "first words after \(firstWords ?? .zero) (\(count(reply.reasoning)) words of thinking, "
+            + "first words after \(firstWords.withLock { $0 } ?? .zero) (\(count(reply.reasoning)) words of thinking, "
             + "calls: \(made.map { "\($0.tool) \u{201C}\($0.query ?? "")\u{201D}" }.joined(separator: ", ")), "
             + "\(reply.lookups.count) look-ups), whole reply (\(count(reply.reply)) words) "
             + "in \(ContinuousClock.now - began); "

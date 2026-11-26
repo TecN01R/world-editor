@@ -98,7 +98,6 @@ struct PageEditor: UIViewRepresentable {
         var keepsKeyboard = false
         var onWriting: (Bool) -> Void = { _ in }
         var onEditing: (Bool) -> Void = { _ in }
-        private var observers: [NSObjectProtocol] = []
         lazy var formatBar = FormatBar(onAction: { [weak self] action in self?.perform(action) })
 
         lazy var titleField: UITextField = {
@@ -129,44 +128,42 @@ struct PageEditor: UIViewRepresentable {
             self.library = library
             self.onFocus = onFocus
             super.init()
+            // UIKit posts these on the main thread; selector observers go away with the coordinator.
             let center = NotificationCenter.default
             // Text size changed in Settings: show the page at the new size.
-            observers.append(center.addObserver(forName: UIContentSizeCategory.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    guard let self, let tv = self.textView else { return }
-                    self.titleField.font = PageEditor.titleFont
-                    self.render(selection: tv.selectedRange)
-                }
-            })
+            center.addObserver(self, selector: #selector(textSizeChanged), name: UIContentSizeCategory.didChangeNotification, object: nil)
             // The page's writing, title or a field (all inside the text view) taking the
             // keyboard or giving it up.
-            let editing: [(Notification.Name, Bool)] = [
-                (UITextView.textDidBeginEditingNotification, true), (UITextField.textDidBeginEditingNotification, true),
-                (UITextView.textDidEndEditingNotification, false), (UITextField.textDidEndEditingNotification, false),
-            ]
-            for (name, begins) in editing {
-                observers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
-                    MainActor.assumeIsolated {
-                        guard let self, let tv = self.textView, let view = note.object as? UIView,
-                              view.isDescendant(of: tv) else { return }
-                        self.onEditing(begins)
-                    }
-                })
+            for name in [UITextView.textDidBeginEditingNotification, UITextField.textDidBeginEditingNotification] {
+                center.addObserver(self, selector: #selector(beganEditing), name: name, object: nil)
+            }
+            for name in [UITextView.textDidEndEditingNotification, UITextField.textDidEndEditingNotification] {
+                center.addObserver(self, selector: #selector(endedEditing), name: name, object: nil)
             }
             // Undo and Redo (iOS's for typing and styles, the page's own for lists): the page
             // as the text view now shows it.
             for name in [Notification.Name.NSUndoManagerDidUndoChange, .NSUndoManagerDidRedoChange] {
-                observers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
-                    MainActor.assumeIsolated {
-                        guard let self, let tv = self.textView, note.object as? UndoManager === tv.undoManager else { return }
-                        self.textViewDidChange(tv)
-                    }
-                })
+                center.addObserver(self, selector: #selector(undid), name: name, object: nil)
             }
         }
 
-        deinit {
-            for observer in observers { NotificationCenter.default.removeObserver(observer) }
+        @objc private func textSizeChanged() {
+            guard let tv = textView else { return }
+            titleField.font = PageEditor.titleFont
+            render(selection: tv.selectedRange)
+        }
+
+        @objc private func beganEditing(_ note: Notification) { editing(note, begins: true) }
+        @objc private func endedEditing(_ note: Notification) { editing(note, begins: false) }
+
+        private func editing(_ note: Notification, begins: Bool) {
+            guard let tv = textView, let view = note.object as? UIView, view.isDescendant(of: tv) else { return }
+            onEditing(begins)
+        }
+
+        @objc private func undid(_ note: Notification) {
+            guard let tv = textView, note.object as? UndoManager === tv.undoManager else { return }
+            textViewDidChange(tv)
         }
 
         private var selection: Range<Int> {

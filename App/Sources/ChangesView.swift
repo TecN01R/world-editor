@@ -183,7 +183,7 @@ private struct TimelineRow<Content: View>: View {
             }
             .frame(width: dot, height: dot)
             // Centred on the first line's lower-case letters.
-            .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + dot * 0.35 }
+            .alignmentGuide(.firstTextBaseline) { [lift = dot * 0.35] in $0[VerticalAlignment.center] + lift }
             .frame(width: column)
             VStack(alignment: .leading, spacing: 4) { content }
                 .frame(maxWidth: .infinity, alignment: .leading)

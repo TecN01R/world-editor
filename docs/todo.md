@@ -9,6 +9,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Rotation crash: check it's gone
 
 ## Check on the phone
+- [ ] Swift 6 (Kevin, 2026-11-25: "everything should be using the latest tech stack"): the whole app in Swift 6 mode, and CI's actions on their latest versions. Nothing should look different: typing, Undo and Redo, a text size change in Settings, the keyboard in the title and fields, search and the companion's replies all work as before
 - [ ] Documents (Kevin, 2026-11-25): the paperclip beside the message field, a PDF or text file; ask about it; a long one is searched ("Searched your documents for …" in its thinking)
 - [ ] Limits lifted (Kevin, 2026-11-25: "you WILL lift the limits"): the whole conversation (16K context), no per-tool budgets (only a 10-call runaway guard), 4x larger Wikipedia and page-search results, all three articles read
 - [ ] The companion is the model stock now, with its tools (Kevin, 2026-11-25). Instructions… in its menu, blank at first: write your own, or tell it how to reply from now on and it adds one ("Added to Instructions: …" under the reply opens them)
@@ -58,7 +59,6 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Image generation on the phone (Kevin, 2026-11-25): one model that does tools and images, or a separate image model to download; research running
 - [ ] Remove the old full prompt (CompanionPrompt's instructions, examples, background) once the stock one has settled; unused by the app until then
 - [ ] Spotlight finds every world's pages
-- [ ] Swift 6 language mode
 - [ ] Replies keep running in the background (continued processing with the GPU)
 - [ ] Download keeps its speed when the app isn't in front
 - [ ] Images in the companion (documents are built). The whole web needs a search provider and key

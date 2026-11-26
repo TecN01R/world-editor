@@ -489,7 +489,7 @@ private final class Engine: @unchecked Sendable {
     /// `room` tokens would be left for its output, and `Interrupted` when the author leaves
     /// the app meanwhile.
     func generate(_ prompt: String, written: [llama_token], sampling: Sampling?, budget: Int?, inThought: Bool,
-                  room: Int, maxNew: Int, onEvent: @escaping (Event) -> Void) async throws -> Run {
+                  room: Int, maxNew: Int, onEvent: @escaping @Sendable (Event) -> Void) async throws -> Run {
         // iOS gives a background app no GPU: a job asked for while the author is away
         // (filing as they leave, the first reply once the download finishes in the
         // background) waits for them, without holding the model.
@@ -513,7 +513,7 @@ private final class Engine: @unchecked Sendable {
         if await MainActor.run(body: { UIApplication.shared.applicationState == .background }) {
             away.withLock { $0 = true }
         }
-        let stop = { away.withLock { $0 } }
+        let stop: @Sendable () -> Bool = { away.withLock { $0 } }
         return try await Self.awake {
             guard !stop() else { throw Interrupted() }
             let model: Loaded
