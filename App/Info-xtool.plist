@@ -4,13 +4,15 @@
      build sets the same keys in project.yml. -->
 <plist version="1.0">
 <dict>
-	<!-- The companion's model download continues in the background (a continued
-	     processing task, named after the bundle ID: xtool's signing prefixes it
-	     with the team ID on the phone). -->
+	<!-- The companion's model download, and its replies, continue in the background
+	     (continued processing tasks, named after the bundle ID: xtool's signing
+	     prefixes it with the team ID on the phone). -->
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.tecn01r.worldeditor.companion-download</string>
 		<string>XTL-YRQNG56JP3.com.tecn01r.worldeditor.companion-download</string>
+		<string>com.tecn01r.worldeditor.companion-reply</string>
+		<string>XTL-YRQNG56JP3.com.tecn01r.worldeditor.companion-reply</string>
 	</array>
 </dict>
 </plist>

@@ -5,5 +5,8 @@
 	<!-- The companion's on-device model needs more than the default memory limit. -->
 	<key>com.apple.developer.kernel.increased-memory-limit</key>
 	<true/>
+	<!-- A reply runs on, on the GPU, when the author leaves the app (BackgroundReply). -->
+	<key>com.apple.developer.background-tasks.continued-processing.gpu</key>
+	<true/>
 </dict>
 </plist>

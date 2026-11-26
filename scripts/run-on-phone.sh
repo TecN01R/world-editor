@@ -48,10 +48,12 @@ revive() {
     sleep 6
     reachable
 }
-# Signs and installs with xtool-duo where it's installed: a patched xtool that asks Apple for the
-# increased-memory-limit entitlement on a free team, which stock xtool drops (the app then gets
-# about 3.4 GB on the Duo instead of 5.8; Kevin, 2026-11-25). Stock xtool otherwise.
-installer=$(command -v xtool-duo || echo xtool)
+# Signs and installs with a patched xtool where one is installed, as stock xtool drops what the
+# companion needs on a free team: World Editor's own (scripts/build-xtool.sh) asks Apple for the
+# increased memory limit and Background GPU Access, else the WolkaraForever project's xtool-duo
+# for the memory limit only. Stock xtool otherwise (the app then gets about 3.4 GB on the Duo
+# instead of 5.8; Kevin, 2026-11-25).
+installer=$(command -v xtool-world-editor || command -v xtool-duo || echo xtool)
 if [[ "${1:-}" == "--no-launch" ]]; then
     shift
     xtool dev build --ipa "$@"

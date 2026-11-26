@@ -93,6 +93,9 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
     /// A reply with its tools (`replyWithTools`), each pass of the model on llama.cpp.
     func stream(_ prompt: CompanionPrompt, tools: ReplyTools, thinking: Bool) -> AsyncThrowingStream<ReplySoFar, Error> {
         streaming { continuation in
+            // Runs on if the author leaves the app, where the phone allows it.
+            let background = await MainActor.run { BackgroundReply.begin() }
+            defer { BackgroundReply.end(background) }
             try await replyWithTools(prompt, tools: tools, thinking: thinking, model: Self.name,
                                      state: Engine.state, to: continuation) { text, inThought, show in
                 let pass = Pass()
@@ -109,6 +112,7 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
                             pass.add(token, piece)
                             show(pass.output(inThought), nil)
                         }
+                        BackgroundReply.progressed()
                     }
                 }
                 return PassDone(output: pass.output(inThought), summary: run.summary, resumed: pass.resumed)
@@ -504,10 +508,11 @@ private final class Engine: @unchecked Sendable {
     /// the app meanwhile.
     func generate(_ prompt: String, written: [llama_token], sampling: Sampling?, budget: Int?, inThought: Bool,
                   room: Int, maxNew: Int, onEvent: @escaping @Sendable (Event) -> Void) async throws -> Run {
-        // iOS gives a background app no GPU: a job asked for while the author is away
-        // (filing as they leave, the first reply once the download finishes in the
-        // background) waits for them, without holding the model.
-        try await Self.foreground()
+        // iOS gives a background app no GPU, unless a reply's background task holds it
+        // (`BackgroundReply`): a job asked for while the author is away (filing as they leave,
+        // the first reply once the download finishes in the background) waits for them,
+        // without holding the model.
+        if !BackgroundReply.isRunning { try await Self.foreground() }
         await turns.wait()
         defer {
             let warning = warned.withLock { flag in
@@ -519,7 +524,8 @@ private final class Engine: @unchecked Sendable {
         }
         try Task.checkCancellation()
         // Leaving the app from here (loading included) ends the job before its next piece of
-        // GPU work, which would fail in the background.
+        // GPU work, which would fail in the background, unless a reply's background task
+        // holds the GPU; once that ends, so does the job, and it goes on when they're back.
         let away = OSAllocatedUnfairLock(initialState: false)
         let observer = NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification,
                                                               object: nil, queue: nil) { _ in away.withLock { $0 = true } }
@@ -527,7 +533,7 @@ private final class Engine: @unchecked Sendable {
         if await MainActor.run(body: { UIApplication.shared.applicationState == .background }) {
             away.withLock { $0 = true }
         }
-        let stop: @Sendable () -> Bool = { away.withLock { $0 } }
+        let stop: @Sendable () -> Bool = { away.withLock { $0 } && !BackgroundReply.isRunning }
         return try await Self.awake {
             guard !stop() else { throw Interrupted() }
             let model: Loaded

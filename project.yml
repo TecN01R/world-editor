@@ -50,9 +50,10 @@ targets:
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
         ITSAppUsesNonExemptEncryption: false
-        # The companion's model download continues in the background.
+        # The companion's model download, and its replies, continue in the background.
         BGTaskSchedulerPermittedIdentifiers:
           - $(PRODUCT_BUNDLE_IDENTIFIER).companion-download
+          - $(PRODUCT_BUNDLE_IDENTIFIER).companion-reply
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ${BUNDLE_ID}

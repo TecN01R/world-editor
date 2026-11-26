@@ -28,6 +28,13 @@ The script:
    emulates, so no 2FA code ever arrives. A free second Apple ID works.
 5. pairs the iPhone over USB (tap **Trust** on the phone)
 
+Stock xtool drops the capabilities the companion asks for (the increased
+memory limit, Background GPU Access). `scripts/build-xtool.sh` builds World
+Editor's own xtool (`~/.local/bin/xtool-world-editor`, from
+`scripts/xtool-world-editor.patch`), which asks Apple for them;
+`scripts/run-on-phone.sh` signs with it when it's there. A free team gets the
+memory limit; Background GPU Access needs a paid Apple Developer Program team.
+
 On the iPhone, the first install also needs **Settings → Privacy & Security →
 Developer Mode** turned on, and possibly trusting your developer certificate
 under **Settings → General → VPN & Device Management**.
