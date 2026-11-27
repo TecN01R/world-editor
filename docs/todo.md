@@ -14,8 +14,8 @@ intimidate. Like our focus writer, that's so cozy. The goal is to get my thought
 into a knowledge database essentially." Native, no Flutter; iOS's text engine kept. His references:
 cozy games, ChatGPT's chat, Focus mode ("it fills the space"; paper's blankness is intimidating); he
 writes "as if I were having a conversation"; his world seen as a wiki, a book, a web and a corkboard.
-- [ ] A Research: what makes a UI cozy, writing without a blank page, seeing a knowledge base in his four views, what native iOS allows on the Duo; a report he can read on his phone
-- [ ] B Two or three design directions as pictures at the Duo's sizes; he picks or mixes; nothing built before that
+- A Research: done 2026-11-27 (report in git-ignored private/reports/, sent to him). Coziness is mostly removal (nothing to fill in, owed, lost or flashing); structure suggested after writing, never demanded; four views each showing a neighbourhood; colour, if any, on every edge as one warm room under iOS's glass
+- [ ] B Three directions drawn at the folded Duo's size (Lamplight, Night Study, The World Book; a private canvas sent to him): waiting for his pick or mix; nothing built before that. If Lamplight: first check on the phone that a warm background reaches under the side column
 - [ ] C Build it a step at a time, with the conversation-first steps below as its engine
 
 ## The conversation first (Kevin, 2026-11-27)
