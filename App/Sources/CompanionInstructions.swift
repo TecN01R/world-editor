@@ -29,7 +29,6 @@ struct CompanionInstructions: View {
                         .disabled(instructions.isEmpty)
                 }
             }
-            .paletteBackground()
             .navigationTitle("Companion Instructions")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -68,7 +68,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = Palette.background
+        view.backgroundColor = .systemBackground
 
         view.addLayoutGuide(area)
         view.keyboardLayoutGuide.followsUndockedKeyboard = true
@@ -296,7 +296,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
     /// Natural line spacing: TextKit's line boxes hold every glyph, so
     /// nothing clips and the measurement is the layout.
     static func attributes(_ size: CGFloat) -> [NSAttributedString.Key: Any] {
-        [.font: font(size), .foregroundColor: Palette.ink]   // as in Edit mode
+        [.font: font(size), .foregroundColor: PageEditor.ink]   // as in Edit mode
     }
 
     /// The paragraph at `size`, styled as the text view shows it.

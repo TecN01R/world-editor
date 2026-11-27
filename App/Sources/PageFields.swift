@@ -287,7 +287,6 @@ struct TypeFieldsSheet: View {
                     Button("Add Field", systemImage: "plus") { adding = true }
                 }
             }
-            .paletteBackground()
             .navigationTitle("\(type?.name ?? "") Fields")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -361,7 +360,6 @@ struct FieldSheet: View {
                     }
                 }
             }
-            .paletteBackground()
             .navigationTitle(editing == nil ? "Add Field" : "Edit Field")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

@@ -416,7 +416,6 @@ struct PageList: View {
         } message: {
             Text(worldError ?? "")
         }
-        .paletteBackground()
         .navigationTitle(library.world.name)
         // The world's name, with a menu to switch, make, rename and delete
         // worlds. Unfolded: iOS's own small title in the bar's row, with its
@@ -865,7 +864,6 @@ struct WorldConversationList: View {
                 }
             }
         }
-        .paletteBackground()
         .navigationTitle("Conversations")
         .navigationBarTitleDisplayMode(.inline)
         // A stock sheet: its bar across the top, not in the folded Duo's side column.
@@ -911,7 +909,6 @@ struct MentionsView: View {
                                            description: Text("Pages that link here with @ or in a field show up here."))
                 }
             }
-            .paletteBackground()
             .navigationTitle("Mentions")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -923,5 +920,13 @@ struct MentionsView: View {
             .toolbarVerticalBehavior(.disabled)
         }
         .presentationDetents([.medium, .large])
+    }
+}
+
+private extension View {
+    /// A pages-list row with no line between it and the next: the list as a book's contents
+    /// rather than a settings screen (Kevin, 2026-11-27).
+    func calmRow() -> some View {
+        listRowSeparator(.hidden)
     }
 }

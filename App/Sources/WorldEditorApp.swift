@@ -8,15 +8,14 @@ struct WorldEditorApp: App {
     @State private var companion = Companion()
     @Environment(\.scenePhase) private var phase
 
-    /// What the palette doesn't colour (menus, alerts, iOS's own sheets) in iOS's softer dark
-    /// grey, its sheets' and popovers' own, rather than its black (Kevin, 2026-11-27: "maybe it's
-    /// all the black it doesn't feel soothing or welcoming but I also don't want to ascribe a
-    /// theme"): iOS's own colours, one level up. UIKit's views (the writing's caret and
-    /// selection) take the palette's accent.
-    private static func styleWindows() {
+    /// Dark mode in iOS's softer dark grey, its sheets' and popovers' own, rather than its black
+    /// (Kevin, 2026-11-27: "maybe it's all the black it doesn't feel soothing or welcoming but I
+    /// also don't want to ascribe a theme"): iOS's own colours, one level up, everywhere in the
+    /// app. (Gruvbox's colours were tried after it and taken out the same day: "The gruvbox
+    /// looks half assed": they coloured the page but not the bars and side column around it.)
+    private static func softenDark() {
         for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
             scene.traitOverrides.userInterfaceLevel = .elevated
-            for window in scene.windows { window.tintColor = Palette.accent }
         }
     }
 
@@ -25,8 +24,7 @@ struct WorldEditorApp: App {
             RootView()
                 .environment(library)
                 .environment(companion)
-                .tint(Color(Palette.accent))
-                .onAppear(perform: Self.styleWindows)
+                .onAppear(perform: Self.softenDark)
         }
         .onChange(of: phase) { _, phase in
             if phase != .active { library.flushAll() }   // never lose the last edits
