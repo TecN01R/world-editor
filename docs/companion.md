@@ -283,9 +283,44 @@ and no open page (`CompanionPrompt(world:)`). It doesn't speak first: it
 waits for the author to write (Kevin, 2026-11-24: "no need for it to think
 before prompted"); a conversation can begin with the author's words
 (`Conversation.answer` on an empty one). What's said is filed into the pages it names
-(`FilingPrompt(world:)`): "she" has no page to mean, so it isn't filed, and
-nothing is renamed. Page conversations remember it, as they remember each
-other.
+(`FilingPrompt(world:)`), and nothing is renamed. Page conversations remember it,
+as they remember each other.
+
+**Who "she" is: the subject in focus.** With no page open, "she" had no page to
+mean, so it wasn't filed (found in the log of Kevin's phone, 2026-11-27): after "Old
+Tamsin is a clockmaker", "She was expelled for mending clocks for free." never
+reached Old Tamsin's page. The logic for it is in WriterKit since 2026-11-27 and
+tested there; the app hands it over with the first install of the correction
+(`docs/todo.md`). `Filer.focus` finds who they were last talking about, from their
+three messages before the one being read, the newest first, and from each: the pages
+its filing put facts or sentences on, then the pages it made or linked, then the
+pages it names by title (so "What do I have on the Clockmakers' Guild?" counts,
+though a question files nothing). Pages that are gone don't count, nor does what a
+message filed once any of it was undone. The first of them is the subject, and the
+world's filing prompt names it in its first line ("They were last talking about “Old
+Tamsin” (type: Character): when they say “she”, “he”, “it” or “they” without saying
+who, they mean that page, as they would the open page."), then quotes their message
+just before ("only to show who and what they mean; file nothing from it"). That
+message is quoted but never filed from: `Filer` is given only the message being
+read, so a value that is only in the earlier one is dropped, as any words that
+aren't in the message are. With nobody in focus the prompt is as it was, and so are
+the instructions and a page's prompt, byte for byte (pinned in WriterKit's
+`Tests/GuardrailsTests/Fixtures`).
+
+`Filer.file` then takes a fact on "she", "he", "it" or "they" as the subject's, and
+part of a name as the one page in focus whose title begins or ends with it: "the
+guild" is The Clockmakers' Guild and "Tamsin" is Old Tamsin; where two pages in
+focus fit, it means neither. A page called exactly that always wins, and a value is
+still linked only by a page's whole title ("expelled by the guild" stays those
+words). All of that is a guess, and so is a page the model names that the message
+doesn't. **A guess only adds** (a rule of the correction's plan, which Kevin approved on 2026-11-27): it
+fills an empty field and puts the sentence on that page as written ("She" stays
+"She"), and never replaces a value, renames a page or gives it another type.
+"Actually she's a tinker" leaves Old Tamsin's Trade as it is, with the sentence on
+her page; "Actually Old Tamsin is a tinker" corrects it, as before. A message read
+late, after something was filed from one sent after it, only adds too
+(`Filer.isLate`); and `Filer.pending` lists the messages a saved conversation still
+has to read, so what waits needn't be held in memory, where closing the app lost it.
 
 ## Filing: structure from the conversation
 

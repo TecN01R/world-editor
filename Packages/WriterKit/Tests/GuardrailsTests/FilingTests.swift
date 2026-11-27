@@ -256,6 +256,49 @@ final class FilingTests: XCTestCase {
         XCTAssertEqual(pages[0].values[home.id], .page(pages[1].id))
     }
 
+    /// The model may call the page "the open page", as its instructions do: before 2026-11-27
+    /// that never matched, as names are compared without their leading "the" (`Filer.key`).
+    func testTheModelCallingItTheOpenPageFilesOnIt() throws {
+        for name in ["the open page", "The open page", "open page", "this page"] {
+            let untitled = Document(paragraphs: [Paragraph(text: "Someone from the islands")])
+            var pages = [untitled], schema = Schema()
+            _ = Filer.file(Filings(facts: [.init(page: name, field: "Home", value: "Port Vell")],
+                                   pages: [.init(title: name, type: "Character")]),
+                           message: "She lives in Port Vell", open: untitled.id, pages: &pages, schema: &schema)
+            XCTAssertEqual(schema.types.map(\.name), ["Character"], name)
+            XCTAssertEqual(pages.map(\.title), ["", "Port Vell"], name)
+            let home = try XCTUnwrap(schema.fields.first, name)
+            XCTAssertEqual(pages[0].values[home.id], .page(pages[1].id), name)
+        }
+        // Each way of calling it is kept as names are compared.
+        XCTAssertEqual(Filer.openPage, Set(Filer.openPage.map(Filer.key)))
+        XCTAssertTrue(Filer.openPage.isSuperset(of: Filer.pronouns))
+    }
+
+    /// A page the model names that the message doesn't (here "it" could be Verran, or not)
+    /// is a guess: it's added to, never corrected. Named in the message, it's corrected as ever.
+    func testAPageTheMessageDoesntNameIsOnlyAddedTo() throws {
+        let ruler = FieldDefinition(name: "Ruler", kind: .text)
+        let place = PageType(name: "Place", fields: [ruler.id])
+        var verran = Document(title: "Verran", paragraphs: [Paragraph(text: "")])
+        verran.type = place.id
+        verran.values[ruler.id] = .text("a council")
+        for (message, after) in [("Actually it's ruled by a queen. It's bitterly cold.", "a council"),
+                                 ("Actually Verran is ruled by a queen. It's bitterly cold.", "a queen")] {
+            var pages = [casperica, verran], schema = Schema(fields: [ruler], types: [place])
+            let record = file(Filings(facts: [.init(page: "Verran", field: "Ruler", value: "a queen"),
+                                              .init(page: "Verran", field: "Climate", value: "bitterly cold")]),
+                              message, pages: &pages, schema: &schema)
+            let there = try XCTUnwrap(pages.first { $0.id == verran.id })
+            XCTAssertEqual(there.values[ruler.id], .text(after), message)
+            XCTAssertEqual(record.actions.contains { $0.was != nil }, after == "a queen", message)
+            // Either way its empty field is filled, and both sentences are theirs to have there.
+            let climate = try XCTUnwrap(schema.fields.first { $0.name == "Climate" }, message)
+            XCTAssertEqual(there.values[climate.id], .text("bitterly cold"), message)
+            XCTAssertEqual(there.paragraphs.map(\.text), [message], message)
+        }
+    }
+
     func testOnlyNamesMidSentenceGetPages() {
         var pages = [casperica], schema = Schema()
         _ = file(Filings(facts: [.init(page: "she", field: "Age", value: "Nineteen"),
@@ -382,5 +425,90 @@ final class PlacedSentencesTests: XCTestCase {
         let sentences = try XCTUnwrap(placed(record).first)
         _ = record.undo(sentences, pages: &pages, schema: &schema)
         XCTAssertEqual(pages[0].paragraphs.map(\.text), ["At twelve the Iron Abbey took him in.", "He is quiet."])
+    }
+}
+
+/// The filing prompts as they were before the world's conversation had a subject in focus
+/// (2026-11-27), byte for byte: the instructions, a page's prompt, and the world's with
+/// nobody in focus (Fixtures/filing-*.txt, written by the code as it was then). They are
+/// what the phone's model has been tried with: changing one changes how it files.
+final class PinnedFilingPromptTests: XCTestCase {
+    private let world = PinnedWorld()
+
+    /// `text` is the file `name`, byte for byte (as text first, which shows where they differ).
+    private func assertPinned(_ text: String, _ name: String, line: UInt = #line) throws {
+        let url = try XCTUnwrap(Bundle.module.url(forResource: name, withExtension: "txt", subdirectory: "Fixtures"), line: line)
+        let pinned = try Data(contentsOf: url)
+        XCTAssertEqual(text, String(decoding: pinned, as: UTF8.self), line: line)
+        XCTAssertEqual(Data(text.utf8), pinned, line: line)
+    }
+
+    func testTheInstructionsAreAsTheyWere() throws {
+        try assertPinned(FilingPrompt.instructions, "filing-instructions")
+    }
+
+    func testAPagesPromptIsAsItWas() throws {
+        let prompt = FilingPrompt(open: world.tamsin, pages: world.pages, schema: world.schema,
+                                  asked: PinnedWorld.asked, message: PinnedWorld.message)
+        try assertPinned(prompt.message, "filing-page-prompt")
+        try assertPinned(prompt.system, "filing-instructions")
+        // With a page open there's no subject in focus to name: that page is who they mean.
+        let page = (title: "Old Tamsin", type: "Character" as String?, fields: "Trade: clockmaker")
+        let types = [(name: "Character", fields: ["Trade"])]
+        XCTAssertEqual(FilingPrompt(page: page, types: types, others: ["Mara"], asked: nil, message: "She's sixty.",
+                                    subject: (title: "Mara", type: nil), saidBefore: "Mara is twelve."),
+                       FilingPrompt(page: page, types: types, others: ["Mara"], asked: nil, message: "She's sixty."))
+    }
+
+    func testTheWorldsPromptWithNobodyInFocusIsAsItWas() throws {
+        let prompt = FilingPrompt(world: world.pages, schema: world.schema, asked: PinnedWorld.asked, message: PinnedWorld.message)
+        try assertPinned(prompt.message, "filing-world-prompt")
+        try assertPinned(prompt.system, "filing-instructions")
+        // What they said before is only quoted beside a subject.
+        XCTAssertEqual(FilingPrompt(world: world.pages, schema: world.schema, asked: PinnedWorld.asked, message: PinnedWorld.message,
+                                    focus: [], saidBefore: "Old Tamsin is a clockmaker."), prompt)
+    }
+
+    /// With a subject, the world's prompt is that same one with its two lines and nothing else.
+    func testWithASubjectTheWorldsPromptGainsTwoLinesAndNothingElse() throws {
+        let plain = FilingPrompt(world: world.pages, schema: world.schema, asked: PinnedWorld.asked, message: PinnedWorld.message)
+        let prompt = FilingPrompt(world: world.pages, schema: world.schema, asked: PinnedWorld.asked, message: PinnedWorld.message,
+                                  focus: [world.tamsin.id, world.pages[1].id], saidBefore: "Old Tamsin is a clockmaker.")
+        let subject = " They were last talking about “Old Tamsin” (type: Character): when they say “she”, “he”, “it” or "
+            + "“they” without saying who, they mean that page, as they would the open page."
+        let before = "Just before, they said (only to show who and what they mean; file nothing from it): "
+            + "“Old Tamsin is a clockmaker.”\n\n"
+        let whole = "No page is open: they're talking about their world as a whole."
+        XCTAssertEqual(prompt.message, plain.message.replacingOccurrences(of: whole, with: whole + subject)
+            .replacingOccurrences(of: "Their friend said:", with: before + "Their friend said:"))
+        XCTAssertEqual(prompt.message.count, plain.message.count + subject.count + before.count)
+        try assertPinned(prompt.system, "filing-instructions")
+    }
+}
+
+/// The small world the pinned prompts are built from.
+private struct PinnedWorld {
+    static let asked = "Why was she expelled?"
+    static let message = "She was expelled for mending clocks for free. Mara took over her bench, didn\u{2019}t she?"
+
+    var tamsin: Document
+    var pages: [Document]
+    var schema: Schema
+
+    init() {
+        let trade = FieldDefinition(name: "Trade", kind: .text)
+        let guild = FieldDefinition(name: "Guild", kind: .page)
+        let founded = FieldDefinition(name: "Founded", kind: .text)
+        let character = PageType(name: "Character", fields: [trade.id, guild.id])
+        let organization = PageType(name: "Organization", fields: [founded.id])
+        var clockmakers = Document(title: "The Clockmakers' Guild", paragraphs: [Paragraph(text: "")])
+        clockmakers.type = organization.id
+        var tamsin = Document(title: "Old Tamsin", paragraphs: [Paragraph(text: "A clockmaker.")])
+        tamsin.type = character.id
+        tamsin.values = [trade.id: .text("clockmaker"), guild.id: .page(clockmakers.id)]
+        self.tamsin = tamsin
+        pages = [tamsin, clockmakers, Document(title: "Mara", paragraphs: [Paragraph(text: "")]),
+                 Document(paragraphs: [Paragraph(text: "A bell that rings at noon")])]
+        schema = Schema(fields: [trade, guild, founded], types: [character, organization, PageType(name: "Place")])
     }
 }

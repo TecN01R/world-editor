@@ -1,0 +1,16 @@
+The open page: “Old Tamsin” (type: Character)
+
+Its fields:
+Trade: clockmaker
+Guild: The Clockmakers' Guild
+
+The world's types:
+- Character: Trade, Guild
+- Organization: Founded
+- Place
+
+Other pages: The Clockmakers' Guild, Mara, A bell that rings at noon
+
+Their friend said: “Why was she expelled?”
+
+Their message: “She was expelled for mending clocks for free. Mara took over her bench, didn’t she?”

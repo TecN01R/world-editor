@@ -139,21 +139,35 @@ public struct FilingPrompt: Equatable, Sendable {
     ///   - types: the world's types, each with its field names.
     ///   - others: the other pages' titles (with no page open, each with its filled fields).
     ///   - asked: what the companion said that the message answers.
+    ///   - subject: with no page open, the page they were last talking about (its title and
+    ///     its type's name): the one they mean by "she", "he", "it" or "they".
+    ///   - saidBefore: with a subject, their message just before this one, quoted to show who
+    ///     and what they mean. Nothing is filed from it: `Filer` is only given `message`.
     public init(page: (title: String, type: String?, fields: String)?, types: [(name: String, fields: [String])],
-                others: [String], asked: String?, message: String) {
+                others: [String], asked: String?, message: String,
+                subject: (title: String, type: String?)? = nil, saidBefore: String? = nil) {
         system = Self.instructions
+        let subject = page == nil ? subject : nil   // with a page open, that page is who they mean
         var lines: [String]
         if let page {
-            lines = ["The open page: \(Self.quoted(page.title))" + (page.type.map { " (type: \($0))" } ?? " (no type yet)")]
+            lines = ["The open page: \(Self.named(page.title, type: page.type))"]
             if !page.fields.isEmpty { lines.append("Its fields:\n\(page.fields)") }
         } else {
-            lines = ["No page is open: they're talking about their world as a whole."]
+            lines = ["No page is open: they're talking about their world as a whole." + (subject.map {
+                " They were last talking about \(Self.named($0.title, type: $0.type)): when they say \(Self.quoted("she")), "
+                    + "\(Self.quoted("he")), \(Self.quoted("it")) or \(Self.quoted("they")) without saying who, they mean "
+                    + "that page, as they would the open page."
+            } ?? "")]
         }
         lines.append(types.isEmpty ? "The world's types: none yet" : "The world's types:\n" + types.map {
             "- \($0.name)" + ($0.fields.isEmpty ? "" : ": \($0.fields.joined(separator: ", "))")
         }.joined(separator: "\n"))
         let titles = others.filter { !$0.isEmpty }.prefix(Self.maxOthers)
         if !titles.isEmpty { lines.append((page == nil ? "Their pages: " : "Other pages: ") + titles.joined(separator: ", ")) }
+        if subject != nil, let before = saidBefore?.trimmingCharacters(in: .whitespacesAndNewlines), !before.isEmpty {
+            lines.append("Just before, they said (only to show who and what they mean; file nothing from it): "
+                         + Self.quoted(CompanionPrompt.excerpt(before, maxCharacters: Self.maxSaidBefore) ?? before))
+        }
         if let asked, !asked.isEmpty { lines.append("Their friend said: \(Self.quoted(asked))") }
         lines.append("Their message: \(Self.quoted(message))")
         self.message = lines.joined(separator: "\n\n")
@@ -162,7 +176,17 @@ public struct FilingPrompt: Equatable, Sendable {
     /// Enough titles to link the usual names; a world bigger than this needs a look-up (roadmap §5).
     static let maxOthers = 200
 
+    /// How much of their message just before is quoted (about 500 tokens): past it, how it
+    /// opens and its latest part. It's there to show who they mean, so a long one mustn't
+    /// crowd the message being filed out of the model's context.
+    static let maxSaidBefore = 2000
+
     private static func quoted(_ s: String) -> String { "\u{201C}\(s)\u{201D}" }
+
+    /// A page as the prompt names it: its title, quoted, and its type.
+    private static func named(_ title: String, type: String?) -> String {
+        quoted(title) + (type.map { " (type: \($0))" } ?? " (no type yet)")
+    }
 }
 
 extension FilingPrompt {
@@ -173,7 +197,14 @@ extension FilingPrompt {
     }
 
     /// The prompt for `message`, sent from the world's own conversation: no page open.
-    public init(world pages: [Document], schema: Schema, asked: String?, message: String) {
+    /// - Parameters:
+    ///   - focus: the pages they were last talking about, the subject first (`Filer.focus`):
+    ///     the prompt says who "she", "he", "it" or "they" means. With none, or a subject
+    ///     that's gone or has no name, it reads as it did before there was one.
+    ///   - saidBefore: their message just before this one (`Filer.said(before:in:)`), quoted
+    ///     when there's a subject; never filed from.
+    public init(world pages: [Document], schema: Schema, asked: String?, message: String,
+                focus: [UUID] = [], saidBefore: String? = nil) {
         // With no page open, each page's filled fields show with its name: the model can see
         // what's already set before it gives a field a value.
         let others = pages.map { page -> String in
@@ -181,8 +212,10 @@ extension FilingPrompt {
                 .split(separator: "\n").joined(separator: "; ")
             return filled.isEmpty ? page.heading : "\(page.heading) (\(filled))"
         }
+        let subject = focus.first.flatMap { id in pages.first { $0.id == id && !$0.heading.isEmpty } }
         self.init(page: nil, types: schema.types.map { (name: $0.name, fields: schema.fields(of: $0).map(\.name)) },
-                  others: others, asked: asked, message: message)
+                  others: others, asked: asked, message: message,
+                  subject: subject.map { (title: $0.heading, type: schema.type($0.type)?.name) }, saidBefore: saidBefore)
     }
 
     /// The prompt for `message`, sent from `page`'s conversation in a world of `pages` and `schema`.
@@ -205,6 +238,12 @@ extension FilingPrompt {
 /// pages get a type, and a page's writing is only added to, at its end, with
 /// the sentences the facts came from (`Placement`). What's dropped is dropped,
 /// not repaired.
+///
+/// Which page a fact goes on can be a guess: in the world's conversation "she" or "the
+/// guild" means a page they were just talking about (`focus`), and the model may name a
+/// page the message doesn't. A guess only adds: it fills an empty field and places its
+/// sentence, and never replaces a value or renames a page (a rule of the plan Kevin
+/// approved on 2026-11-27). So does a message read late (`isLate`).
 public enum Filer {
     /// Whether `message` states anything: not only questions, guesses and musing. Filing
     /// one that doesn't can only find nothing, so it isn't asked of the model either.
@@ -217,10 +256,17 @@ public enum Filer {
     ///     value; reading a message again passes what it saw the first time.
     ///   - renames: whether naming the page's subject may rename it (reading again: only if
     ///     the title is still what it was the first time).
+    ///   - late: the message is read after something was filed from a later one (`isLate`):
+    ///     it only adds (empty fields, new pages, its sentences), replacing and renaming nothing.
+    ///   - focus: in the world's conversation (no page is `open`), the pages they were last
+    ///     talking about, the subject first (`focus(before:in:pages:)`): a fact's page or a
+    ///     listed page given as "she", "he", "it" or "they" is the subject, and one given as
+    ///     the first or last words of just one of their titles ("the guild", "Tamsin") is
+    ///     that page. With a page open they're not used: it's who they mean.
     public static func file(_ filings: Filings, message: String, open: UUID,
                             pages: inout [Document], schema: inout Schema, now: Date = Date(),
                             replaceable: (UUID, UUID, FieldValue) -> Bool = { _, _, _ in true },
-                            renames: Bool = true) -> FilingRecord {
+                            renames: Bool = true, late: Bool = false, focus: [UUID] = []) -> FilingRecord {
         let sentences = Statement.split(message)
         var record = FilingRecord()
         // Only questions or musing: nothing is stated, so nothing is filed (not even a type).
@@ -249,6 +295,32 @@ public enum Filer {
                Self.key(pages[i].title) == name || Self.openPage.contains(name) || renamed.map(Self.key) == name { return i }
             return pages.firstIndex { Self.key($0.heading) == name }
         }
+        // In the world's conversation no page is open, and the pages in focus are who they
+        // mean without naming them; with a page open, that page is.
+        let focus = pages.contains { $0.id == open } ? [] : focus
+        let whole = Statement.collapsed(message)   // every sentence of it, to look for a title in
+        /// The page the model means by `name`, for a fact's page or a listed page (never for
+        /// a value: values link by title alone), and whether that's a guess. By its title it's
+        /// a guess when the message doesn't name it and it isn't the open page: the model
+        /// worked out who they mean. Otherwise it's a page in focus, always a guess: the
+        /// subject for a pronoun; or the one page there whose title begins or ends with these
+        /// words ("the guild" for "The Clockmakers' Guild"; with two such, neither).
+        func meant(by name: String) -> (index: Int, guess: Bool)? {
+            if let i = index(named: name) {
+                return (i, pages[i].id != open && Statement.wholeWords(Self.key(pages[i].heading), in: whole) == nil)
+            }
+            if Self.pronouns.contains(Self.key(name)) {
+                return pages.firstIndex { $0.id == focus.first }.map { ($0, true) }
+            }
+            let part = Self.nameWords(name)
+            guard !part.isEmpty else { return nil }
+            let holding = pages.indices.filter { i in
+                guard focus.contains(pages[i].id) else { return false }
+                let title = Self.nameWords(pages[i].heading)
+                return title.starts(with: part) || title.suffix(part.count).elementsEqual(part)
+            }
+            return holding.count == 1 ? (holding[0], true) : nil
+        }
         func type(named name: String) -> UUID? {
             guard let name = Self.name(name) else { return nil }
             if let type = schema.types.first(where: { $0.name.lowercased() == name.lowercased() }) { return type.id }
@@ -272,7 +344,7 @@ public enum Filer {
         // lines by the old title still find the page; ones by the new title find it too.
         // (By id each time: new pages go in near the top and move it.)
         func isOpen(_ i: Int?) -> Bool { i.map { pages[$0].id == open } ?? false }
-        if renames, let o = pages.firstIndex(where: { $0.id == open }) {
+        if renames, !late, let o = pages.firstIndex(where: { $0.id == open }) {
             // The model may call the page by its new name ("Mara: Name = Mara" on an untitled one).
             func about(_ fact: Filings.Fact) -> Bool {
                 index(named: fact.page) == o || (index(named: fact.page) == nil && Self.key(fact.page) == Self.key(fact.value))
@@ -288,9 +360,12 @@ public enum Filer {
         }
 
         for page in filings.pages {
-            var i = index(named: page.title)
-            // A new page needs a name, as the author wrote one: capitalised ("Myriddea", not "grandmother").
-            if i == nil, let title = words(page.title), title.contains(where: \.isUppercase) {
+            var i = meant(by: page.title)?.index
+            // A new page needs a name, as the author wrote one: capitalised ("Myriddea", not
+            // "grandmother"), and never the "She" a sentence begins with: a page called that
+            // would be who every "she" after it meant.
+            if i == nil, let title = words(page.title), title.contains(where: \.isUppercase),
+               !Self.pronouns.contains(Self.key(title)) {
                 // Its text says what it is: not part of its name ("Lady" for Lady Corvina), nor what
                 // it isn't ("not Port Vell").
                 let named = Set(key(title).split(separator: " "))
@@ -315,11 +390,14 @@ public enum Filer {
             // sentence saying it goes into the page's writing, below (Kevin, 2026-11-24: "Put that
             // in the page content, not the type").
             if Self.descriptionFields.contains(Self.key(fact.field)) { continue }
-            guard let i = index(named: fact.page), let typeID = pages[i].type,
+            guard let (i, guess) = meant(by: fact.page), let typeID = pages[i].type,
                   let t = schema.types.firstIndex(where: { $0.id == typeID }),
                   let fieldName = name(fact.field), let hit = found(fact.value),
                   key(hit.words) != key(fieldName) else { continue }   // "Grandmother: grandmother" says nothing
             let words = hit.words
+            let page = pages[i].id
+            // A guess at the page, or a message read late, only adds: it corrects nothing.
+            let corrects = hit.corrects && !guess && !late
             let onType = schema.fields(of: schema.types[t]).first { $0.name.lowercased() == fieldName.lowercased() }
             let shared = schema.fields.first { $0.name.lowercased() == fieldName.lowercased() }
             // A field the author took off this type (its pages still hold values in it) isn't put back.
@@ -327,10 +405,10 @@ public enum Filer {
             let known = onType ?? shared
             // A name with no page yet gets one (the model often files "Sword: Mercy" without listing Mercy).
             let linkable = known.map { def in
-                def.kind == .page && (pages[i].values[def.id].map { hit.corrects && replaceable(pages[i].id, def.id, $0) } ?? true)
+                def.kind == .page && (pages[i].values[def.id].map { corrects && replaceable(page, def.id, $0) } ?? true)
             } ?? true
             if hit.isName, linkable, index(named: words) == nil { _ = make(words) }
-            guard let i = index(named: fact.page) else { continue }   // where it is now, after a new page
+            guard let i = pages.firstIndex(where: { $0.id == page }) else { continue }   // where it is now, after a new page
             let linked = index(named: words).flatMap { $0 == i ? nil : pages[$0] }
             let field = known ?? FieldDefinition(name: fieldName, kind: linked == nil ? .text : .page,
                                                  pageType: linked?.type)
@@ -338,9 +416,9 @@ public enum Filer {
             // only when the sentence saying the new value corrects something.
             let was = pages[i].values[field.id]
             guard let value = value(words, linked: linked, for: field), value != was,
-                  was.map({ hit.corrects && replaceable(pages[i].id, field.id, $0) }) ?? true,
-                  !filled.contains([pages[i].id, field.id]) else { continue }
-            filled.insert([pages[i].id, field.id])
+                  was.map({ corrects && replaceable(page, field.id, $0) }) ?? true,
+                  !filled.contains([page, field.id]) else { continue }
+            filled.insert([page, field.id])
             if known == nil {
                 schema.fields.append(field)
                 record.entries.append(.newField(field.id))
@@ -350,8 +428,8 @@ public enum Filer {
                 record.entries.append(.fieldAdded(type: typeID, field: field.id))
             }
             pages[i].values[field.id] = value
-            record.entries.append(was.map { .replaced(page: pages[i].id, field: field.id, was: $0, value: value) }
-                                  ?? .value(page: pages[i].id, field: field.id, value: value))
+            record.entries.append(was.map { .replaced(page: page, field: field.id, was: $0, value: value) }
+                                  ?? .value(page: page, field: field.id, value: value))
         }
         if let title = renamed, let o = pages.firstIndex(where: { $0.id == open }) {
             record.entries.append(.renamed(page: pages[o].id, was: pages[o].title, title: title))
@@ -364,7 +442,7 @@ public enum Filer {
         // kept its value: a sentence that contradicts the page is still theirs to have there.
         var said: [UUID: Set<Int>] = [:]
         for fact in filings.facts where !Self.nameFields.contains(Self.key(fact.field)) {   // the title says it
-            guard let i = index(named: fact.page), let hit = found(fact.value),
+            guard let i = meant(by: fact.page)?.index, let hit = found(fact.value),
                   key(hit.words) != key(fact.field) else { continue }   // "Grandmother: grandmother" says nothing
             said[pages[i].id, default: []].insert(hit.sentence)
         }
@@ -415,8 +493,13 @@ public enum Filer {
             && parts.allSatisfy { $0.first?.isUppercase == true || ["of", "the", "and", "de", "la", "von", "van"].contains($0) }
     }
 
-    /// What the model may call the open page instead of its title (an untitled one has none).
-    static let openPage: Set = ["she", "he", "it", "they", "her", "him", "them", "this page", "the open page"]
+    /// Who the author means without naming them: the open page, or in the world's
+    /// conversation the subject in focus.
+    static let pronouns: Set = ["she", "he", "it", "they", "her", "him", "them"]
+
+    /// What the model may call the open page instead of its title (an untitled one has
+    /// none), as `key` gives it: "the open page" is "open page".
+    static let openPage = pronouns.union(["this page", "open page"])
 
     /// The author's words as a value of `field`'s kind; nil if they don't fit it.
     private static func value(_ words: String, linked: Document?, for field: FieldDefinition) -> FieldValue? {
@@ -435,12 +518,119 @@ public enum Filer {
         return name.hasPrefix("the ") ? String(name.dropFirst(4)) : name
     }
 
+    /// A name's words, to tell part of a title by ("the guild", "Tamsin"): as `key` has it,
+    /// each without the punctuation around it ("Clockmakers'" is "clockmakers").
+    static func nameWords(_ name: String) -> [String] {
+        key(name).split(separator: " ").map { $0.trimmingCharacters(in: .punctuationCharacters) }.filter { !$0.isEmpty }
+    }
+
     /// A type or field name the model chose: a few words on one line, capitalised.
     static func name(_ raw: String) -> String? {
         let name = Statement.collapsed(raw).trimmingCharacters(in: Statement.edges)
         guard !name.isEmpty, name.count <= 40, !["none", "none yet", "unknown", "n/a"].contains(name.lowercased())
         else { return nil }
         return name.prefix(1).uppercased() + name.dropFirst()
+    }
+}
+
+/// Which of the author's messages are still to be read, which are read late, and who
+/// they were last talking about in the world's conversation.
+extension Filer {
+    /// The author's messages in `conversation` still to be read a first time, oldest first:
+    /// answers that state something (`states`) and have no record. Every message the model
+    /// has read has one, even an empty one, so none is read twice, and one still waiting
+    /// when the app closed is found again when it opens. (`Turn.needsFiling` is for Try
+    /// Again: it's also true of a message read with nothing found.)
+    public static func pending(in conversation: Conversation) -> [Conversation.Turn] {
+        conversation.turns.filter { $0.filed == nil && $0.answer.map(states) == true }
+    }
+
+    /// Whether `turn`'s message is read late: something filed from a message the author
+    /// sent after it still stands, further on in `conversation` or in any of `elsewhere`
+    /// (the world's other conversations; this one is left out of them). What a late message
+    /// would correct or rename may be newer than it is, so it only adds (`file`'s `late`).
+    public static func isLate(_ turn: UUID, in conversation: Conversation, elsewhere: [Conversation] = []) -> Bool {
+        guard let t = conversation.turns.firstIndex(where: { $0.id == turn }) else { return false }
+        func filedSomething(_ turn: Conversation.Turn) -> Bool { turn.filed?.isEmpty == false }
+        func sent(_ turn: Conversation.Turn) -> Date { turn.answered ?? turn.asked }
+        let when = sent(conversation.turns[t])
+        return conversation.turns[(t + 1)...].contains(where: filedSomething)
+            || elsewhere.contains { $0.page != conversation.page && $0.turns.contains { sent($0) > when && filedSomething($0) } }
+    }
+
+    /// How far back the subject is looked for: the author's last three messages.
+    static let focusReach = 3
+
+    /// Who the author was last talking about in the world's conversation when they sent
+    /// `turn`'s message: the pages that "she", "he", "it" or "they", or part of a name ("the
+    /// guild"), may mean there, the likeliest (the subject) first. From their three
+    /// messages before it, the newest first, and from each: the pages its filing put facts
+    /// or sentences on, then the ones it made or linked, then the ones the message names by
+    /// title (so asking about a page counts). Left out: pages that are gone or have no
+    /// name, and what a message filed once any of it was undone (the pages it names itself
+    /// still count).
+    public static func focus(before turn: UUID, in conversation: Conversation, pages: [Document]) -> [UUID] {
+        let there = Set(pages.filter { !$0.heading.isEmpty }.map(\.id))
+        var focus: [UUID] = []
+        for earlier in answered(before: turn, in: conversation).suffix(focusReach).reversed() {
+            let filed = earlier.filed.flatMap { $0.undid ? nil : $0.actions } ?? []
+            let on = filed.compactMap { action -> UUID? in
+                switch action {
+                case .value, .replaced, .described, .placed: action.page
+                case .created, .typed, .renamed, .newType, .newField, .fieldAdded: nil
+                }
+            }
+            let madeOrLinked = filed.compactMap { action -> UUID? in
+                if case .created(let page, _) = action { page } else { action.linked }
+            }
+            for page in on + madeOrLinked + named(in: earlier.answer ?? "", pages: pages)
+            where there.contains(page) && !focus.contains(page) {
+                focus.append(page)
+            }
+        }
+        return focus
+    }
+
+    /// The author's message just before `turn`'s in `conversation`: what the world's filing
+    /// prompt quotes beside the subject (`FilingPrompt(world:)`'s `saidBefore`).
+    public static func said(before turn: UUID, in conversation: Conversation) -> String? {
+        answered(before: turn, in: conversation).last?.answer
+    }
+
+    /// The turns of `conversation` before `turn` that the author answered, oldest first.
+    private static func answered(before turn: UUID, in conversation: Conversation) -> [Conversation.Turn] {
+        guard let t = conversation.turns.firstIndex(where: { $0.id == turn }) else { return [] }
+        return conversation.turns[..<t].filter { $0.answer != nil }
+    }
+
+    /// The pages `message` names by their titles, in the order it names them: as whole
+    /// words, whatever their case, with or without a leading "The" (as `key` has them). A
+    /// title inside a longer one it names isn't named ("Mara" in "Mara's Forge"), and one
+    /// under three letters never is, as too likely to be another word (as a wiki entry
+    /// links names: `WikiEntry.pieces`). Of two pages with one title, the first.
+    static func named(in message: String, pages: [Document]) -> [UUID] {
+        let whole = Statement.collapsed(message)
+        var titles: [(title: String, id: UUID)] = [], seen = Set<String>()
+        for page in pages {
+            let title = key(page.heading)
+            if title.count >= 3, seen.insert(title).inserted { titles.append((title, page.id)) }
+        }
+        // The longest first, so a longer title keeps its words; of equals, the first page's.
+        let longestFirst = titles.enumerated().sorted {
+            ($0.element.title.count, $1.offset) > ($1.element.title.count, $0.offset)
+        }.map(\.element)
+        var found: [(range: Range<String.Index>, id: UUID)] = []
+        for (title, id) in longestFirst {
+            var from = whole.startIndex
+            while let range = Statement.wholeWords(title, in: whole, from: from) {
+                if !found.contains(where: { $0.range.overlaps(range) }) {
+                    found.append((range, id))
+                    break
+                }
+                from = range.upperBound
+            }
+        }
+        return found.sorted { $0.range.lowerBound < $1.range.lowerBound }.map(\.id)
     }
 }
 
@@ -493,11 +683,11 @@ struct Statement {
         return titles.contains(last.lowercased()) || (last.count == 1 && last != "I" && last.allSatisfy(\.isUppercase))
     }
 
-    /// Where `phrase` is in `text` as whole words, ignoring case and accents: "Al" is
-    /// never found inside "always".
-    static func wholeWords(_ phrase: String, in text: String) -> Range<String.Index>? {
+    /// Where `phrase` is in `text` (from `start` on, if given) as whole words, ignoring case
+    /// and accents: "Al" is never found inside "always".
+    static func wholeWords(_ phrase: String, in text: String, from start: String.Index? = nil) -> Range<String.Index>? {
         func wordy(_ c: Character?) -> Bool { c.map { $0.isLetter || $0.isNumber } ?? false }
-        var from = text.startIndex
+        var from = start ?? text.startIndex
         while let r = text.range(of: phrase, options: [.caseInsensitive, .diacriticInsensitive], range: from..<text.endIndex) {
             let before = r.lowerBound > text.startIndex ? text[text.index(before: r.lowerBound)] : nil
             let after = r.upperBound < text.endIndex ? text[r.upperBound] : nil
