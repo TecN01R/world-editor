@@ -14,6 +14,7 @@ let package = Package(
         .library(name: "Guardrails", targets: ["Guardrails"]),
         .library(name: "ModelCatalog", targets: ["ModelCatalog"]),
         .library(name: "DesignTokens", targets: ["DesignTokens"]),
+        .library(name: "SampleWorld", targets: ["SampleWorld"]),
     ],
     targets: [
         .target(name: "WriterCore"),
@@ -22,6 +23,7 @@ let package = Package(
         .target(name: "Guardrails", dependencies: ["WriterCore", "Provenance"]),
         .target(name: "ModelCatalog"),
         .target(name: "DesignTokens"),
+        .target(name: "SampleWorld", dependencies: ["WriterCore"]),
 
         .testTarget(name: "WriterCoreTests", dependencies: ["WriterCore"]),
         .testTarget(name: "FocusLayoutTests", dependencies: ["FocusLayout"]),
@@ -30,6 +32,7 @@ let package = Package(
                     resources: [.copy("Fixtures")]),
         .testTarget(name: "ModelCatalogTests", dependencies: ["ModelCatalog"]),
         .testTarget(name: "DesignTokensTests", dependencies: ["DesignTokens"]),
+        .testTarget(name: "SampleWorldTests", dependencies: ["SampleWorld", "WriterCore"]),
     ],
     swiftLanguageModes: [.v6]
 )

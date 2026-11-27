@@ -184,7 +184,7 @@ jobs:
           ONLY: ${{ needs.changes.outputs.only }}
         run: ci/screenshots.sh app/WorldEditor.app ${{ matrix.pose }}
       - uses: actions/upload-artifact@v7
-        if: always()
+        if: ${{ !cancelled() }}   # what was captured, even when a shot failed
         with:
           name: shots-${{ matrix.pose }}
           path: shots
@@ -198,7 +198,8 @@ jobs:
   publish:
     needs: [changes, shots]
     timeout-minutes: 10
-    if: always() && needs.changes.outputs.changed == 'true'
+    # Publishes what there is even when a pose failed, but not for a run a newer push replaced.
+    if: ${{ !cancelled() && needs.changes.outputs.changed == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
