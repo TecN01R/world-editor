@@ -19,6 +19,9 @@ writes "as if I were having a conversation"; his world seen as a wiki, a book, a
 - [ ] C Build it a step at a time, with the conversation-first steps below as its engine. First (built, waiting for the phone to be reachable): the conversation restyled as all three directions had it (his words large in New York, no bubbles; the companion's smaller, set in; the message field's words large while short), and three looks in the companion's menu, colours only (Kevin: "themes ... I'm not trying to create a design or maintenance burden"): Night Study, Lamplight, World Book. Then: try filing on his real, messy writing (new pages, kinds and fields from what he says already exist; how well the phone's model does it is the open question)
 
 ## The conversation first (Kevin, 2026-11-27)
+The goal, in his words: "I'll just usually talk with ChatGPT and never actually formalize anything so
+as long as it feels like that experience but things are actually created frictionlessly then that's
+what I want."
 Kevin: "I want to write it conversationally or in any messy way and be able to refine it back and
 forth and that populates my pages. I do want them to be structured. And they need to be malleable
 enough that everything about them can change and the system is smart enough to adapt." The app is
@@ -60,6 +63,7 @@ pages first today; this makes the conversation the place he writes and the pages
 - [ ] Android app: later, its own native project
 
 ## Companion
+- [ ] His ChatGPT conversations into his world (proposed 2026-11-27): when the export arrives, file his own side of them (never ChatGPT's words) into pages as the companion files a message, each with Undo, so he starts with the world he has already talked out
 - [ ] As useful as ChatGPT is for Kevin (Kevin, 2026-11-26). Waiting for his ChatGPT export (kept in git-ignored private/): about 20 things he actually asked ChatGPT, asked of the phone's companion too, side by side on one page, so he sees where it holds up (2026-11-27); his ChatGPT instructions and memories carried into Instructions. Done since: faster first words, pictures, the open page
 - [ ] Choose a test suite for the companion from an open standard, built around how the app is used (Kevin, 2026-11-25: he judges by using it)
   - [ ] Blind taste test for Kevin (Kevin, 2026-11-25: "I'm also ok with blind taste test for me"): pairs of anonymous replies to his own messages, fresh from each candidate; he picks or ties; ranked as Chatbot Arena does (Bradley–Terry); he is the only judge
