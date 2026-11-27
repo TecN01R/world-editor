@@ -266,14 +266,14 @@ marked, and Undo on the newest (`Conversation.history`).
 conversationally or in any messy way and be able to refine it back and forth and
 that populates my pages"). The app opens in the world's conversation, no page
 open, and it's in front whenever no page is: the last one open, else the newest,
-else a new one (`RootView`). The pages list is where the author reads their
-world; its Conversation row at the top (a place in the list, as Mail lists
-mailboxes, so the only chat button is a page's own companion; Kevin, 2026-11-24:
-"which assistant is which?") goes back to the conversation. The conversation's
-menu starts a new one, and Conversations… lists the others in a sheet, newest
-first, each titled by the author's first words (`WorldConversationList`,
-`CompanionPanel(worldConversation:)`). Before that (2026-11-24), the row opened
-the list of conversations in the pages list's place, with the one chosen beside it.
+else a new one (`RootView`). The drawer, as ChatGPT's (Kevin, 2026-11-27:
+"Shouldn't it be easier to get to the full conversation list?"), has New
+Conversation and Connections at the top, then every world conversation, newest
+first, each titled by the author's first words and marked while it's in front
+(swipe to delete), then the pages (`PageList`, `CompanionPanel(worldConversation:)`).
+Before that, a Conversation row led back to the one conversation and the others
+were in a sheet from its menu (2026-11-27), and before that (2026-11-24) the list
+of conversations took the pages list's place.
 Each conversation is stored under its own id, marked `aboutWorld`; one exists once
 something's been said in it. The model
 gets every page as background, the ones bearing on what's being said first,

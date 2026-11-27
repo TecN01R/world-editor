@@ -39,12 +39,12 @@ struct CompanionPanel: View {
     /// Folded, a sheet; unfolded, the inspector column beside the page.
     let inSheet: Bool
     /// A conversation about the whole world, where the author starts (`RootView`): its bar
-    /// has Changes and the menu.
+    /// has Connections and the menu (Changes is in the menu).
     var worldConversation: UUID? = nil
     /// Starts another world conversation (its menu's New Conversation).
     var newConversation: (() -> Void)? = nil
-    /// Shows the world's other conversations (its menu's Conversations…).
-    var conversations: (() -> Void)? = nil
+    /// Shows the world's connections (`WorldMapView`), from the world conversation's bar.
+    var openMap: (() -> Void)? = nil
     private var aboutWorld: Bool { worldConversation != nil }
 
     /// Folded, a stock sheet: a navigation bar with the title, Close, Changes
@@ -74,8 +74,14 @@ struct CompanionPanel: View {
                 .navigationTitle(library.world.name)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
+                    // The world growing, a tap away; Changes is in the menu (no more than three
+                    // buttons on a screen, as Apple advises).
+                    if let openMap {
+                        ToolbarItem(placement: .primaryAction) {
+                            Button("Connections", systemImage: "point.3.connected.trianglepath.dotted", action: openMap)
+                        }
+                    }
                     if ready {
-                        ToolbarItem(placement: .primaryAction) { changesButton }
                         ToolbarItem(placement: .primaryAction) { more }
                     }
                 }
@@ -458,7 +464,15 @@ struct CompanionPanel: View {
             Label("Added to Your Pages", systemImage: "square.stack.3d.up")
             ForEach(library.describe(record), id: \.self) { line in
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    filed(line, from: turn)
+                    // In the world's conversation, a line opens its page: what was just added,
+                    // where it now lives (Kevin, 2026-11-27, of watching the world grow).
+                    if aboutWorld, let id = line.action.page, library.pages.contains(where: { $0.id == id }) {
+                        Button { library.selection = id } label: { filed(line, from: turn) }
+                            .buttonStyle(.plain)
+                            .accessibilityHint("Opens \(line.page)")
+                    } else {
+                        filed(line, from: turn)
+                    }
                     undo(line, from: turn)
                 }
             }
@@ -469,10 +483,11 @@ struct CompanionPanel: View {
     }
 
     /// "New page: Myriddea (Place)", "Casperica · Character", "Casperica · Origin: Myriddea":
-    /// page names and filed words in New York, types and fields in San Francisco.
+    /// page names and filed words in New York, types and fields in San Francisco. In the
+    /// world's conversation the page name is in the accent colour, as a tap opens the page.
     private func filed(_ line: FilingLine) -> Text {
         func authored(_ s: String) -> Text { Text(s).font(.authored(.footnote)) }
-        let page = authored(line.page)
+        let page = aboutWorld ? authored(line.page).foregroundStyle(Color(Look.accent)) : authored(line.page)
         if case .renamed(_, let was, _) = line.action {
             return Text("\(page) · renamed, was \(was.isEmpty ? Text("untitled") : authored(was))")
         }
@@ -801,12 +816,9 @@ struct CompanionPanel: View {
             if let newConversation { newConversation() } else { confirmingNew = true }
         }
         .disabled(companion.conversation.turns.isEmpty)
-        if let conversations {
-            Button("Conversations…", systemImage: "bubble.left.and.text.bubble.right", action: conversations)
-        }
         ShareLink("Share Conversation", item: transcript)
             .disabled(companion.conversation.turns.isEmpty)
-        if !inSheet && !aboutWorld { changesButton }   // the sheet (Kevin, 2026-11-24) and the world's screen have it beside the menu
+        if !inSheet { changesButton }   // the sheet has it beside the menu (Kevin, 2026-11-24)
         Toggle(isOn: Binding { companion.looksUp } set: { companion.looksUp = $0 }) {
             Label("Look Things Up", systemImage: "globe")
             Text("On Wikipedia, for questions about the real world")

@@ -19,8 +19,8 @@ writes "as if I were having a conversation"; his world seen as a wiki, a book, a
   - [ ] 1 One look (iOS's dark greys warmed slightly, one amber accent, every screen) and the conversation as ChatGPT has it (his words on the right in a bubble, the companion's across the width, Send only when there's something to send): built, installing; check on the phone that the background reaches under the folded Duo's side column
   - [ ] 2 Three tabs, Talk, Pages, Map, a sidebar when unfolded (the stock tab view)
   - [ ] 3 The world grows: the filed line's names tappable; new pages with an amber dot in Pages until opened
-  - [ ] 4 Map: the web around a page (new cards settling in once), and cards; names mentioned but not yet talked about as small dim cards
-  - [ ] 5 A page: title, picture, his lead, facts folded after three, the rest, "Mentioned in"
+  - [ ] 4 Connections (first called a map; Kevin, 2026-11-27: "I'd have to know the geology and geography of the world and I don't yet"): the web of how things connect, cards for pages, faint dashed ones for names only mentioned, new ones glowing and arriving once; built, installing. A geographic map only later, grown from where he says places are
+  - [ ] 5 A page that reads like a good wiki entry (Kevin, 2026-11-27: "I do love reading a good wiki"; not maintaining one): his best description as the lead, the facts as an infobox, the rest of what he said, names linked, "Mentioned in" quoting what he said elsewhere
   - Never: totals, streaks, progress bars, badges, notifications. A whole-world "A year ago" line in Pages, later
 
 ## What the app is for (Kevin, 2026-11-27)

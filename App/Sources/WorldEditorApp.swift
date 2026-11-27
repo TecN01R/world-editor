@@ -62,8 +62,31 @@ final class Library {
             guard oldValue != selection else { return }
             cursor = selection.flatMap(searchCursor) ?? (0, 0)
             if let old = oldValue { flush(old); discardIfEmpty(old) }
+            if let selection { unseen.remove(selection) }
         }
     }
+
+    /// Pages the companion made or added to that the author hasn't opened since: marked in the
+    /// pages list until they do, so each arrives as a new part of the world (Kevin, 2026-11-27,
+    /// of watching the world grow as the pull to come back: "Yes, that"). Kept per world.
+    var unseen: Set<UUID> = [] {
+        didSet {
+            guard unseen != oldValue else { return }
+            UserDefaults.standard.set(unseen.map(\.uuidString), forKey: perWorld("unseen"))
+        }
+    }
+
+    /// Where each page's card is in the world's Connections (`WorldMap`), kept so they grow
+    /// outward rather than rearranging themselves each time. Kept per world.
+    var mapPlaces: [UUID: WorldMap.Place] = [:] {
+        didSet {
+            guard mapPlaces != oldValue, let data = try? JSONEncoder().encode(mapPlaces) else { return }
+            UserDefaults.standard.set(data, forKey: perWorld("mapPlaces"))
+        }
+    }
+
+    /// The key a setting is saved under for the open world alone ("unseen.<world's id>").
+    private func perWorld(_ setting: String) -> String { setting + "." + world.id.uuidString }
 
     /// Caret position shared by both editors so switching modes keeps your place.
     var cursor = (paragraph: 0, offset: 0)
@@ -183,7 +206,10 @@ final class Library {
         record.seen = seen
         record.seenTitle = seenTitle
         record.date = Date()
-        if !record.isEmpty { commit(pages, schema) }
+        if !record.isEmpty {
+            commit(pages, schema)
+            unseen.formUnion(record.actions.compactMap(\.page).filter { $0 != selection })   // the open page is seen
+        }
         return record
     }
 
@@ -283,15 +309,15 @@ final class Library {
     private var pendingSaves: [UUID: Task<Void, Never>] = [:]
 
     /// A conversation about the whole world stands for no page: it goes by its own id
-    /// (`WorldConversationList`; Kevin, 2026-11-24).
+    /// (the drawer's Conversations; Kevin, 2026-11-24).
     func worldSubject(_ conversation: UUID) -> WriterCore.Document {
         WriterCore.Document(id: conversation, title: world.name)
     }
 
     /// The world conversation last open, to open again (nil: none yet).
     var lastWorldConversation: UUID? {
-        get { UserDefaults.standard.string(forKey: "worldConversation." + world.id.uuidString).flatMap(UUID.init) }
-        set { UserDefaults.standard.set(newValue?.uuidString, forKey: "worldConversation." + world.id.uuidString) }
+        get { UserDefaults.standard.string(forKey: perWorld("worldConversation")).flatMap(UUID.init) }
+        set { UserDefaults.standard.set(newValue?.uuidString, forKey: perWorld("worldConversation")) }
     }
 
     /// The open page (an empty one if none is open).
@@ -343,6 +369,9 @@ final class Library {
     /// Reads a world from disk. No page opens: its conversation is in front (`RootView`).
     private func load(_ world: World) {
         self.world = world
+        unseen = Set((UserDefaults.standard.stringArray(forKey: perWorld("unseen")) ?? []).compactMap(UUID.init))
+        mapPlaces = UserDefaults.standard.data(forKey: perWorld("mapPlaces"))
+            .flatMap { try? JSONDecoder().decode([UUID: WorldMap.Place].self, from: $0) } ?? [:]
         UserDefaults.standard.set(world.id.uuidString, forKey: Self.openWorldKey)
         store = worldStore.flatMap { try? DocumentStore(directory: $0.documents(world.id)) }
         schemaStore = worldStore.map { SchemaStore(url: $0.schema(world.id)) }
