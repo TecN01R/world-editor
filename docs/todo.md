@@ -16,11 +16,13 @@ cozy games, ChatGPT's chat, Focus mode ("it fills the space"; paper's blankness 
 writes "as if I were having a conversation"; his world seen as a wiki, a book, a web and a corkboard.
 - A Research: done 2026-11-27 (report in git-ignored private/reports/, sent to him). Coziness is mostly removal (nothing to fill in, owed, lost or flashing); structure suggested after writing, never demanded; four views each showing a neighbourhood; colour, if any, on every edge as one warm room under iOS's glass
 - [ ] C One design, decided from research and from successful apps, not by Kevin ("experience will be [the arbiter] and so will research and comparing to other apps"; "I don't need multiple themes"); built a step at a time:
-  - [ ] 1 One look (iOS's dark greys warmed slightly, one amber accent, every screen) and the conversation as ChatGPT has it (his words on the right in a bubble, the companion's across the width, Send only when there's something to send): built, installing; check on the phone that the background reaches under the folded Duo's side column
-  - [ ] 2 Three tabs, Talk, Pages, Map, a sidebar when unfolded (the stock tab view)
-  - [ ] 3 The world grows: the filed line's names tappable; new pages with an amber dot in Pages until opened
-  - [ ] 4 Connections (first called a map; Kevin, 2026-11-27: "I'd have to know the geology and geography of the world and I don't yet"): the web of how things connect, cards for pages, faint dashed ones for names only mentioned, new ones glowing and arriving once; built, installing. A geographic map only later, grown from where he says places are
-  - [ ] 5 A page that reads like a good wiki entry (Kevin, 2026-11-27: "I do love reading a good wiki"; not maintaining one): his best description as the lead, the facts as an infobox, the rest of what he said, names linked, "Mentioned in" quoting what he said elsewhere
+  - [ ] 1 One look and the conversation as ChatGPT lays it out: installed, to check (does the colour reach under the folded side column?)
+  - [ ] 2 The drawer, as ChatGPT's, in place of tabs (Kevin: "Shouldn't it be easier to get to the full conversation list?"): New Conversation, Connections, every conversation, then the pages; installed
+  - [ ] 3 The world grows: new pages marked until opened; filed names tappable; installed
+  - [ ] 4 Connections (Kevin, of a "map": "I'd have to know the geology and geography of the world and I don't yet"): cards, lines, faint dashed rumours, new ones glowing; installed. A geographic map only later, grown from where he says places are
+  - [ ] 5 Pages read as wiki entries (Kevin: "I do love reading a good wiki"): lead, facts box, links, "Mentioned in"; Edit and Read; installed
+  - [ ] 6 One companion (Kevin: "I don't feel this is radical enough or frictionless enough"): the conversation is the only one; a page has Talk; installed
+  - Next: whatever still feels like friction or "an app" once he has used it
   - Never: totals, streaks, progress bars, badges, notifications. A whole-world "A year ago" line in Pages, later
 
 ## What the app is for (Kevin, 2026-11-27)
