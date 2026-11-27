@@ -3,12 +3,11 @@ import SwiftUI
 import UIKit
 import WriterCore
 
-/// The companion, beside the page (a sheet when folded), laid out like the AI
-/// chat apps people know: the author's messages in bubbles on the right (New
-/// York, their words), the companion's replies as plain text across the panel
-/// (San Francisco), newest at the bottom, and a message field below (typed, or
-/// dictated with the keyboard's microphone). iOS has no chat view, so the
-/// bubbles are the one custom part.
+/// The companion, beside the page (a sheet when folded): the author's messages large and
+/// without bubbles (New York, their words, as on their page), the companion's replies
+/// smaller, in grey and set in from them (San Francisco), newest at the bottom, and a
+/// message field below (typed, or dictated with the keyboard's microphone). iOS has no
+/// chat view: the conversation is stock text, arranged by the app.
 struct CompanionPanel: View {
     @Environment(Library.self) private var library
     @Environment(Companion.self) private var companion
@@ -30,6 +29,9 @@ struct CompanionPanel: View {
     @State private var confirmingNew = false
     @State private var showingChanges = false
     @State private var editingInstructions = false
+    @AppStorage(Look.key) private var look = Look.nightStudy
+    /// How far the companion's replies, and what was filed, sit in from the author's words.
+    @ScaledMetric(relativeTo: .callout) private var replyIndent: CGFloat = 18
     /// Where the conversation is scrolled: the newest message, as in Messages.
     @State private var position = ScrollPosition(edge: .bottom)
     /// One height for the whole message bar: the HIG's minimum touch size,
@@ -123,6 +125,7 @@ struct CompanionPanel: View {
         .defaultScrollAnchor(.top, for: .sizeChanges)
         .scrollPosition($position)
         .scrollDismissesKeyboard(.interactively)
+        .lookBackground()
         .overlay {
             Live {   // the download's progress and the first reply redraw only this
                 if let download = companion.download {
@@ -163,9 +166,11 @@ struct CompanionPanel: View {
         var body: some View { content() }
     }
 
-    /// The companion's words: plain text, the width of the panel.
+    /// The companion's words: plain text, smaller and quieter than the author's (`mine`).
     private func words(_ text: String) -> some View {
         Text(Self.markdown(text))
+            .font(.callout)
+            .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -251,6 +256,7 @@ struct CompanionPanel: View {
                 .accessibilityAdjustableAction { show($0 == .increment ? at + 1 : at - 1) }
             }
         }
+        .padding(.leading, replyIndent)   // as notes in the margin beside the author's words
     }
 
     /// The models write Markdown: bold, italics, code and links show as such
@@ -266,11 +272,11 @@ struct CompanionPanel: View {
         Button("Copy", systemImage: "doc.on.doc") { UIPasteboard.general.string = text }
     }
 
-    /// The author's words: a bubble on the right, in New York, under the files they attached
-    /// to it (Kevin, 2026-11-25: "pdf or text analysis"). A plain fill, not glass: Apple keeps
-    /// Liquid Glass for controls, off content.
+    /// The author's words, under the files they attached to it (Kevin, 2026-11-25: "pdf or text
+    /// analysis"): no bubble, large in New York, like their page, as the cozy directions all had
+    /// it (Kevin, 2026-11-27: "they feel better than what we have today").
     private func mine(_ text: String, attached: [Conversation.Attached]) -> some View {
-        VStack(alignment: .trailing, spacing: 6) {
+        VStack(alignment: .leading, spacing: 6) {
             ForEach(Array(attached.enumerated()), id: \.offset) { _, document in
                 if let picture = document.picture {
                     PictureThumbnail(url: companion.pictures?.appendingPathComponent(picture))
@@ -282,15 +288,12 @@ struct CompanionPanel: View {
             }
             if !text.isEmpty {
                 Text(text)
-                    .font(.authored(.body))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(.fill.secondary, in: .rect(cornerRadius: 20))
+                    .font(.authored(.title3))
+                    .foregroundStyle(Color(PageEditor.ink))
                     .contextMenu { copy(text) }
             }
         }
-        .padding(.leading, 48)
-        .frame(maxWidth: .infinity, alignment: .trailing)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// The files waiting to go with the next message, each with a way to take it off.
@@ -457,6 +460,7 @@ struct CompanionPanel: View {
         .font(.footnote)
         .foregroundStyle(.secondary)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, replyIndent)
     }
 
     /// "New page: Myriddea (Place)", "Casperica · Character", "Casperica · Origin: Myriddea":
@@ -542,6 +546,7 @@ struct CompanionPanel: View {
                             .accessibilityLabel("Writing")
                     }
                 }
+                .padding(.leading, replyIndent)   // where the finished reply sits, so it doesn't move
             }
             if let fraction = companion.reading {
                 reading(fraction)
@@ -582,6 +587,7 @@ struct CompanionPanel: View {
                 .symbolEffect(.pulse, options: .repeating, isActive: !done)
         }
         .tint(.secondary)
+        .padding(.leading, replyIndent)   // with the reply it's for
     }
 
     /// The reply so far, once it has any words.
@@ -741,7 +747,7 @@ struct CompanionPanel: View {
                     }
                     // What they type is theirs (New York); the placeholder is the app's.
                     TextField("Message", text: $message, prompt: Text("Message").font(.body), axis: .vertical)
-                        .font(.authored(.body))
+                        .font(.authored(draftSize))
                         .lineLimit(1...6)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
@@ -751,10 +757,11 @@ struct CompanionPanel: View {
                     Button(action: send) {
                         Image(systemName: "arrow.up")
                             .fontWeight(.semibold)
-                            .foregroundStyle(canSend ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
+                            // On a look's accent, its dark background (7.9:1 on amber, 6.8:1 on gold); on iOS's blue, white.
+                            .foregroundStyle(canSend ? AnyShapeStyle(Color(look.background ?? .white)) : AnyShapeStyle(.secondary))
                             .frame(width: barHeight, height: barHeight)
                     }
-                    .glassEffect(canSend ? .regular.tint(.accentColor).interactive() : .regular.interactive(), in: .circle)
+                    .glassEffect(canSend ? .regular.tint(look.accent.map(Color.init) ?? .accentColor).interactive() : .regular.interactive(), in: .circle)
                     .disabled(!canSend)
                     .accessibilityLabel("Send")
                 }
@@ -799,6 +806,13 @@ struct CompanionPanel: View {
             Text("On Wikipedia, for questions about the real world")
         }
         Button("Instructions…", systemImage: "text.document") { editingInstructions = true }
+        // TRIAL: the looks to live with before choosing one (Kevin, 2026-11-27: "I can't decide").
+        Picker(selection: $look) {
+            ForEach(Look.allCases) { Text($0.name).tag($0) }
+        } label: {
+            Label("Look", systemImage: "paintpalette")
+        }
+        .pickerStyle(.menu)
     }
 
     /// "World Editor 0.1.0 (1)".
@@ -828,6 +842,16 @@ struct CompanionPanel: View {
     /// Its reply is waiting for an answer, or nothing has been said yet (the author may begin).
     private var canWrite: Bool {
         companion.conversation.waiting != nil || companion.conversation.turns.isEmpty
+    }
+
+    /// What they're writing, as large as a short message allows, smaller as it grows, as Focus
+    /// mode fills its page (Kevin, 2026-11-27, of Focus mode: "it fills the space").
+    private var draftSize: Font.TextStyle {
+        switch message.count {
+        case ..<60: .title
+        case ..<140: .title2
+        default: .title3
+        }
     }
 
     private var canSend: Bool {

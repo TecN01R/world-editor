@@ -174,6 +174,7 @@ struct RootView: View {
             EditorView(focusMode: $focusMode, focusControls: $focusControls, chromeHidden: chromeHidden,
                        onCompanionOpened: putPagesListAway)
             .id(id)
+            .lookBackground()
             // The page's companion, on the page but outside its id, so changing pages never
             // rebuilds it (Kevin, 2026-11-24, "stop replacing stock components"): unfolded,
             // iOS's inspector beside the page; folded, iOS's sheet, half or full height. Each
@@ -416,6 +417,7 @@ struct PageList: View {
         } message: {
             Text(worldError ?? "")
         }
+        .lookBackground()
         .navigationTitle(library.world.name)
         // The world's name, with a menu to switch, make, rename and delete
         // worlds. Unfolded: iOS's own small title in the bar's row, with its
@@ -864,6 +866,7 @@ struct WorldConversationList: View {
                 }
             }
         }
+        .lookBackground()
         .navigationTitle("Conversations")
         .navigationBarTitleDisplayMode(.inline)
         // A stock sheet: its bar across the top, not in the folded Duo's side column.
@@ -909,6 +912,7 @@ struct MentionsView: View {
                                            description: Text("Pages that link here with @ or in a field show up here."))
                 }
             }
+            .lookBackground()
             .navigationTitle("Mentions")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

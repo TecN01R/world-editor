@@ -7,15 +7,23 @@ struct WorldEditorApp: App {
     @State private var library = Library()
     @State private var companion = Companion()
     @Environment(\.scenePhase) private var phase
+    @AppStorage(Look.key) private var look = Look.nightStudy
 
-    /// Dark mode in iOS's softer dark grey, its sheets' and popovers' own, rather than its black
+    /// The look (`Look`) in what UIKit draws, on launch and whenever it's changed. In every look,
+    /// dark mode in iOS's softer dark grey, its sheets' and popovers' own, rather than its black
     /// (Kevin, 2026-11-27: "maybe it's all the black it doesn't feel soothing or welcoming but I
     /// also don't want to ascribe a theme"): iOS's own colours, one level up, everywhere in the
     /// app. (Gruvbox's colours were tried after it and taken out the same day: "The gruvbox
     /// looks half assed": they coloured the page but not the bars and side column around it.)
-    private static func softenDark() {
+    private static func applyLook(_ look: Look) {
         for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
             scene.traitOverrides.userInterfaceLevel = .elevated
+            // The look's own colours reach what UIKit draws too: the window behind everything
+            // (and, if iOS lets it, the Duo's side column), and the writing's caret and selection.
+            for window in scene.windows {
+                window.backgroundColor = look.background
+                window.tintColor = look.accent
+            }
         }
     }
 
@@ -24,7 +32,9 @@ struct WorldEditorApp: App {
             RootView()
                 .environment(library)
                 .environment(companion)
-                .onAppear(perform: Self.softenDark)
+                .tint(look.accent.map(Color.init))
+                .onAppear { Self.applyLook(look) }
+                .onChange(of: look) { _, look in Self.applyLook(look) }
         }
         .onChange(of: phase) { _, phase in
             if phase != .active { library.flushAll() }   // never lose the last edits

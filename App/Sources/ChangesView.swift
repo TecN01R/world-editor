@@ -53,6 +53,7 @@ struct ChangesView: View {
                                            description: Text("What the companion adds to your pages from this conversation shows here."))
                 }
             }
+            .lookBackground()
             .navigationTitle("Changes")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: FieldKey.self) { FieldTimeline(key: $0) }
@@ -138,6 +139,7 @@ struct FieldTimeline: View {
         }
         .listStyle(.plain)
         .environment(\.defaultMinListRowHeight, 0)
+        .lookBackground()
         .navigationTitle(library.schema.fields.first { $0.id == key.field }?.name ?? "Field")
         .navigationSubtitle(library.pageName(key.page))
         .overlay {

@@ -16,7 +16,7 @@ cozy games, ChatGPT's chat, Focus mode ("it fills the space"; paper's blankness 
 writes "as if I were having a conversation"; his world seen as a wiki, a book, a web and a corkboard.
 - A Research: done 2026-11-27 (report in git-ignored private/reports/, sent to him). Coziness is mostly removal (nothing to fill in, owed, lost or flashing); structure suggested after writing, never demanded; four views each showing a neighbourhood; colour, if any, on every edge as one warm room under iOS's glass
 - [ ] B Three directions drawn at the folded Duo's size (Lamplight, Night Study, The World Book; a private canvas sent to him): waiting for his pick or mix; nothing built before that. If Lamplight: first check on the phone that a warm background reaches under the side column
-- [ ] C Build it a step at a time, with the conversation-first steps below as its engine
+- [ ] C Build it a step at a time, with the conversation-first steps below as its engine. First (built, waiting for the phone to be reachable): the conversation restyled as all three directions had it (his words large in New York, no bubbles; the companion's smaller, set in; the message field's words large while short), and three looks in the companion's menu, colours only (Kevin: "themes ... I'm not trying to create a design or maintenance burden"): Night Study, Lamplight, World Book. Then: try filing on his real, messy writing (new pages, kinds and fields from what he says already exist; how well the phone's model does it is the open question)
 
 ## The conversation first (Kevin, 2026-11-27)
 Kevin: "I want to write it conversationally or in any messy way and be able to refine it back and
@@ -46,7 +46,7 @@ pages first today; this makes the conversation the place he writes and the pages
       audit's batches 1, 3–8, 10 and 12 (docs/stock-deviations.md)
 
 ## Stock-first audit (plan approved 2026-11-24): work left
-- [ ] 9 Stock swaps: bubbles and the menu's title done; left: a stack in the sidebar for conversations and filters, UIPageControl for Focus dots
+- [ ] 9 Stock swaps: the menu's title done; left: a stack in the sidebar for conversations and filters, UIPageControl for Focus dots
 - [ ] 11 Clean-up: download cancel/expiry and ordered progress done; TRIAL logging stays until the speed and Live Activity tests are read; thinking plumbing kept for search
 
 ## A companion for 8 GB+ phones, not just the Duo (Kevin, 2026-11-24; plan approved)

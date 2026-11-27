@@ -31,7 +31,7 @@ struct PageEditor: UIViewRepresentable {
     func makeUIView(context: Context) -> PageView {
         let tv = PageTextView(usingTextLayoutManager: true)
         tv.delegate = context.coordinator
-        tv.backgroundColor = .systemBackground
+        tv.backgroundColor = Self.paper
         tv.alwaysBounceVertical = true
         tv.keyboardDismissMode = .interactive
         tv.textContainer.lineFragmentPadding = 0   // the writing lines up under the title and fields
@@ -54,6 +54,7 @@ struct PageEditor: UIViewRepresentable {
 
     func updateUIView(_ view: PageView, context: Context) {
         context.coordinator.onFocus = onFocus
+        view.textView.backgroundColor = Self.paper
         // Renamed from elsewhere (the companion filing "Her name is Florica", or its Undo):
         // the title shows it, unless the author is typing in it.
         let title = context.coordinator.titleField
@@ -81,9 +82,12 @@ struct PageEditor: UIViewRepresentable {
         return [.font: font, .foregroundColor: ink, .paragraphStyle: p]
     }
 
-    /// The writing's colour: a touch off-white in dark mode (88%; pure white
-    /// on black shimmers and reads heavy), the standard label colour in light.
-    static let ink = UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 1, alpha: 0.88) : .label }
+    /// The writing's colour, the look's (`Look.ink`).
+    static var ink: UIColor { Look.current.ink }
+
+    /// Behind the writing: iOS's own in Night Study; clear in a look with its own background,
+    /// which the page's whole screen shows (`lookBackground`).
+    static var paper: UIColor { Look.current.background == nil ? .systemBackground : .clear }
 
     @MainActor
     final class Coordinator: NSObject, UITextViewDelegate, UITextFieldDelegate {

@@ -68,7 +68,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .systemBackground
+        view.backgroundColor = Look.current.background ?? .systemBackground
 
         view.addLayoutGuide(area)
         view.keyboardLayoutGuide.followsUndockedKeyboard = true
