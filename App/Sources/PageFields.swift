@@ -207,7 +207,7 @@ private struct FieldValueView: View {
         }
     }
 
-    /// A pull-down like a menu-style Picker (value in the accent colour, per
+    /// A pull-down like a menu-style Picker (value in the tint, white here, per
     /// the HIG), but its value stays on one line (truncated), so a long page
     /// name never wraps the row. `current` is the user's value, nil for none.
     private func dropdown<Value: Hashable, More: View>(_ selection: Binding<Value>, current: String?,

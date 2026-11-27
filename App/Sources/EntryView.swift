@@ -115,7 +115,7 @@ struct EntryView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(heading(of: mention.page) ?? "Untitled")
                             .font(.authored(.headline))
-                            .foregroundStyle(Color(Look.accent))
+                            .underline()
                         if let quote = mention.quote {
                             Text("\u{201C}\(quote)\u{201D}")
                                 .font(.authored(.subheadline))
@@ -131,11 +131,11 @@ struct EntryView: View {
         .padding(.top, 10)
     }
 
-    /// `text` as a link to the page `id` (the form `@` links take, `RichText.url`), in the accent.
+    /// `text` as a link to the page `id` (the form `@` links take, `RichText.url`), underlined.
     private static func link(_ text: String, to id: UUID) -> AttributedString {
         var link = AttributedString(text)
         link.link = RichText.url(id)
-        link.foregroundColor = Color(Look.accent)
+        link.underlineStyle = .single   // links underlined, not coloured (one look, grey and white)
         return link
     }
 

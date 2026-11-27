@@ -42,8 +42,10 @@ only once it's on Kevin's phone and checked, or he has answered it.
 ## Conventions
 
 - Dark only (Kevin, 2026-11-27: "Let's stop offering a light mode I'll never use
-  it"): Info.plist's `UIUserInterfaceStyle` is Dark. One look, no themes (`Look`: iOS's
-  dark greys warmed slightly, one amber accent), on every screen. Kevin doesn't choose
+  it"): Info.plist's `UIUserInterfaceStyle` is Dark. One look (`Look`), grey and white
+  only, as ChatGPT has it: iOS's own elevated greys and text colours, every control
+  white, no accent colour, red only to delete ("All the mixture of cool and warm colors
+  and random icon colors just seems unprofessional"). No themes. Kevin doesn't choose
   between design options: decide from research and successful apps, ship one, adjust.
 - iOS defaults first: use stock components and take their default look and
   placement (titles, toolbars, sidebar, keyboard bar). Customise only where

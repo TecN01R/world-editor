@@ -4,13 +4,17 @@ import SwiftUI
 import WidgetKit   // NSUserActivityTypeLiveActivity
 import WriterCore
 
-/// The world's conversation (or its Connections), or the open page, with the pages list beside
-/// it. The conversation is where the author starts (Kevin, 2026-11-27: "I want to write it
-/// conversationally or in any messy way ... and that populates my pages"): it shows whenever
-/// no page or Connections is open, and the pages are where they read their world. Folded, it's a
-/// stack (list, then conversation or page); unfolded, the list is a drawer. Controls are standard
-/// toolbar items, so on iPhone Duo the system lays them out in the side column.
+/// The world's conversation, its Connections or its Pages, or a page opened from one of them,
+/// with the drawer beside it (`Drawer`). The conversation is where the author starts (Kevin,
+/// 2026-11-27: "I want to write it conversationally or in any messy way ... and that populates
+/// my pages"), and the last one they were in is where the app opens; the pages are where they
+/// read their world. Folded, it's a stack (the drawer, then what's in front); unfolded, the
+/// drawer slides over. Controls are standard toolbar items, so on iPhone Duo the system lays
+/// them out in the side column.
 struct RootView: View {
+    /// What's in front when no page is open.
+    enum Screen { case conversation, connections, pages }
+
     @Environment(Library.self) private var library
     @Environment(Companion.self) private var companion
     @State private var column: NavigationSplitViewColumn = Self.opensOnList ? .sidebar : .detail
@@ -21,52 +25,47 @@ struct RootView: View {
     @State private var worldConversation: UUID?
     /// The page being edited; any other opens to be read, as a wiki entry (`EntryView`).
     @State private var editing: UUID?
-    /// Connections (`WorldMapView`) is in front when no page is open, in place of the conversation.
-    @State private var showingMap = false
+    /// What's in front when no page is open, and what a page opened from it goes back to.
+    @State private var screen = Screen.conversation
     /// Unfolded, the drawer is closed once the app has opened: the conversation (or page) in
-    /// front, the drawer a tap away (open for CI's shot of the pages list).
+    /// front, the drawer a tap away (open for CI's `Screenshots.opensList` shot).
     @State private var columns: NavigationSplitViewVisibility = Self.opensOnList ? .all : .detailOnly
     /// `settleList` has run, or isn't wanted: CI's shots stay where they open.
     @State private var listSettled = Screenshots.isActive
-    /// The pages list as it was before Focus mode put it away, to put back after.
+    /// The drawer as it was before Focus mode put it away, to put back after.
     @State private var columnsBeforeFocus: NavigationSplitViewVisibility?
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
-    /// Unfolded: the pages list is a sidebar beside the page.
+    /// Regular unfolded, where the drawer slides over; compact folded, where it's a stack.
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     private static var startsInFocus: Bool { UserDefaults.standard.bool(forKey: "startInFocus") }
-    /// The app opens on the pages list, for its first layout before the conversation takes
-    /// its place (`settleList`). CI's shots open where they're taken: on the list only for
-    /// the list's own shot.
+    /// The app opens on the drawer, for its first layout before the conversation takes its
+    /// place (`settleList`). CI's shots open where they're taken: on the drawer only for
+    /// `Screenshots.opensList`.
     private static var opensOnList: Bool { !Screenshots.isActive || Screenshots.opensList }
 
     /// In Focus mode everything but the writing hides (bars, status, home
-    /// indicator, pages list) until a tap outside the text brings it back.
+    /// indicator, drawer) until a tap outside the text brings it back.
     /// VoiceOver users keep the controls: hidden ones would be unreachable.
     private var chromeHidden: Bool { focusMode && !focusControls && !voiceOver }
 
+    /// The screen in front, or nil while a page is open.
+    private var inFront: Screen? { library.selection == nil ? screen : nil }
+
     var body: some View {
-        // Focus mode takes the whole display: the pages list steps aside when unfolded.
+        // Focus mode takes the whole display: the drawer steps aside when unfolded.
         NavigationSplitView(columnVisibility: $columns, preferredCompactColumn: $column) {
-            PageList(selection: Binding { library.selection } set: {
-                library.selection = $0
-                if $0 != nil { closeDrawer() }
-            }, titleInBar: sizeClass == .regular,
-               current: library.selection == nil && !showingMap ? worldConversation : nil,
-               newConversation: startConversation, openConversation: { worldConversation = $0; openConversation() },
-               openMap: openMap) {
-                library.newPage()
-                editing = library.selection   // a new page is for writing on
-                column = .detail
-                closeDrawer()
-            }
+            Drawer(titleInBar: sizeClass == .regular, current: inFront,
+                   currentConversation: inFront == .conversation ? worldConversation : nil,
+                   newConversation: startConversation,
+                   openConversation: { worldConversation = $0; open(.conversation) },
+                   openConnections: { open(.connections) }, openPages: { open(.pages) })
             .onAppear(perform: settleList)
         } detail: {
             detail
         }
-        // Unfolded, the pages list is a drawer that slides over the page, in portrait and
-        // landscape alike, never squeezing it (Kevin, 2026-11-24: "the drawer would slide
-        // over instead").
+        // Unfolded, the drawer slides over the page, in portrait and landscape alike, never
+        // squeezing it (Kevin, 2026-11-24: "the drawer would slide over instead").
         .navigationSplitViewStyle(.prominentDetail)
         // Coming back to the app (its icon, the app switcher) opens nothing: it's where
         // the author left it, even while the companion's download runs. Only a tap on the
@@ -78,9 +77,10 @@ struct RootView: View {
         .onContinueUserActivity(NSUserActivityTypeLiveActivity) { _ in
             trialLog("LIVE ACTIVITY tap, download \(companion.download != nil)")   // TRIAL: does iOS send it?
             guard companion.download != nil, !focusMode else { return }
-            openConversation()
+            open(.conversation)
         }
-        // Each world has its own conversation, in front whenever no page is open.
+        // Each world has its own conversations; the last one open is shown, else the newest,
+        // else a new one.
         .task(id: library.world.id) {
             companion.loadWorldConversations(in: library)
             worldConversation = library.lastWorldConversation ?? companion.worldConversations.first?.page ?? UUID()
@@ -119,7 +119,7 @@ struct RootView: View {
             // Entering, the controls show and then fade on their usual timer
             // (or as soon as you type), so Exit Focus is in sight at first (Kevin).
             focusControls = focus
-            // Unfolded, the pages list steps aside, and comes back only if it was out before
+            // Unfolded, the drawer steps aside, and comes back only if it was out before
             // (always bringing it back opened the drawer over the page in portrait).
             if focus {
                 columnsBeforeFocus = columns
@@ -130,8 +130,8 @@ struct RootView: View {
         }
     }
 
-    /// What's beside the pages list (unfolded) or over it (folded): the open page, or else
-    /// the world's conversation.
+    /// What's beside the drawer (unfolded) or over it (folded): the open page, or else the
+    /// screen in front.
     @ViewBuilder private var detail: some View {
         if let id = library.selection {
             // Read as a wiki entry (Kevin, 2026-11-27: "I do love reading a good wiki"); Edit for
@@ -140,15 +140,49 @@ struct RootView: View {
                 if editing == id {
                     EditorView(focusMode: $focusMode, focusControls: $focusControls, chromeHidden: chromeHidden) { editing = nil }
                 } else {
-                    EntryView(page: library.document, talk: openConversation) { editing = id }
+                    EntryView(page: library.document, talk: { open(.conversation) }) { editing = id }
                 }
             }
             .id(id)
             .lookBackground()
-        } else if showingMap {
-            WorldMapView { library.selection = $0 }
-        } else if let id = worldConversation {
-            CompanionPanel(worldConversation: id, newConversation: startConversation, openMap: openMap)
+            // Back to where it was opened from, named, rather than to the drawer.
+            .navigationBarBackButtonHidden(true)
+            .toolbar {
+                if !focusMode {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button(screenName, systemImage: "chevron.backward") { library.selection = nil }
+                    }
+                }
+            }
+        } else {
+            switch screen {
+            case .conversation: conversation
+            case .connections:
+                WorldMapView { library.selection = $0 }
+                    .withDrawerButton(openDrawer, folded: sizeClass == .compact)
+            case .pages:
+                PageList {
+                    library.newPage()
+                    editing = library.selection   // a new page is for writing on
+                }
+                .withDrawerButton(openDrawer, folded: sizeClass == .compact)
+            }
+        }
+    }
+
+    /// What a page goes back to, by name.
+    private var screenName: String {
+        switch screen {
+        case .conversation: "Conversation"
+        case .connections: "Connections"
+        case .pages: "Pages"
+        }
+    }
+
+    /// The world conversation in front.
+    @ViewBuilder private var conversation: some View {
+        if let id = worldConversation {
+            CompanionPanel(worldConversation: id, newConversation: startConversation, openMap: { open(.connections) })
             .task(id: id) {
                 companion.open(library.worldSubject(id), in: library, aboutWorld: true)
                 library.lastWorldConversation = id
@@ -158,14 +192,15 @@ struct RootView: View {
             // author sends, and files what they said when they leave it (`Companion.isOpen`).
             .onAppear { companion.isOpen = true }
             .onDisappear { companion.isOpen = false }
+            .withDrawerButton(openDrawer, folded: sizeClass == .compact)
         }
     }
 
-    /// The pages list's rows grew and wobbled into place the first time it slid in after
-    /// launch (Kevin, 2026-11-27: "all the menu entries wobble and grow and oscillate", the
-    /// rows, the first time only): iOS sized them for the first time inside the slide's
-    /// animation. So the app opens on the list, and once it's laid out (the next turn of the
-    /// main loop, within the launch's own animation) the conversation takes its place at once.
+    /// The drawer's rows grew and wobbled into place the first time it slid in after launch
+    /// (Kevin, 2026-11-27: "all the menu entries wobble and grow and oscillate", the rows, the
+    /// first time only): iOS sized them for the first time inside the slide's animation. So the
+    /// app opens on the drawer, and once it's laid out (the next turn of the main loop, within
+    /// the launch's own animation) the conversation takes its place at once.
     private func settleList() {
         guard !listSettled else { return }
         listSettled = true
@@ -177,31 +212,28 @@ struct RootView: View {
         }
     }
 
-    /// Back to the world's conversation, leaving the page (an empty one is discarded).
-    private func openConversation() {
-        showingMap = false
+    /// `screen` in front, leaving the page (an empty one is discarded).
+    private func open(_ screen: Screen) {
+        self.screen = screen
         library.selection = nil
         column = .detail
         closeDrawer()
     }
 
-    /// The world's connections, leaving the page; a page opened from them goes back to them.
-    private func openMap() {
-        showingMap = true
-        library.selection = nil
-        column = .detail
-        closeDrawer()
-    }
-
-    /// A new world conversation, in place of the one open (which stays in the list).
+    /// A new world conversation, in place of the one open (which stays in the drawer).
     private func startConversation() {
         worldConversation = UUID()
-        openConversation()
+        open(.conversation)
     }
 
-    /// Unfolded, a choice in the pages list's drawer (a page, a conversation, a new one)
+    /// The drawer: folded, back to it; unfolded, sliding over.
+    private func openDrawer() {
+        if sizeClass == .regular { withAnimation { columns = .all } } else { column = .sidebar }
+    }
+
+    /// Unfolded, a choice in the drawer (a conversation, Connections, Pages, a new one)
     /// closes it to show what was chosen, as iOS's own drawer does in portrait (Kevin,
-    /// 2026-11-24). Only the author's choices: the pages list is left where iOS and the author
+    /// 2026-11-24). Only the author's choices: the drawer is left where iOS and the author
     /// put it as the Duo folds, unfolds and rotates (moving it then too crashed iOS's split
     /// view, 2026-11-24).
     private func closeDrawer() {
@@ -209,23 +241,11 @@ struct RootView: View {
     }
 }
 
+/// The world's pages, by kind, with search and Recently Deleted: the Pages screen, opened from
+/// the drawer.
 struct PageList: View {
     @Environment(Library.self) private var library
-    @Environment(Companion.self) private var companion
-    @Binding var selection: UUID?
-    /// Unfolded, the title shares the top row with New Page; folded, the
-    /// buttons move to the Duo's side column and the title heads the list.
-    let titleInBar: Bool
-    /// The world conversation in front, if one is (its row is marked).
-    let current: UUID?
-    /// A new world conversation, and one of the others, from the rows at the top.
-    let newConversation: () -> Void
-    let openConversation: (UUID) -> Void
-    /// The world's connections.
-    let openMap: () -> Void
     let newPage: () -> Void
-    /// A world conversation whose deletion is being asked about.
-    @State private var deletingTalk: Conversation?
     @State private var searching = false
     /// Showing Recently Deleted in place of the pages.
     @State private var showingDeleted = false
@@ -234,12 +254,8 @@ struct PageList: View {
     @State private var renaming: PageType?
     @State private var deleting: PageType?
     @State private var newName = ""
-    /// The world dialogs, from the title menu.
-    @State private var creatingWorld = false
-    @State private var renamingWorld = false
-    @State private var deletingWorld = false
-    @State private var worldName = ""
-    @State private var worldError: String?
+    /// A kind of page whose fields are being edited, from its heading.
+    @State private var editingFields: PageType?
 
     var body: some View {
         @Bindable var library = library
@@ -249,42 +265,8 @@ struct PageList: View {
             guard let page = library.pages.first(where: { $0.id == found.page }) else { return nil }
             return (page, found.paragraph.flatMap { p in page.paragraphs.firstIndex { $0.id == p } })
         }
-        List(selection: $selection) {
-            // Folded: the world's name, large, as the screen's title: tap it to
-            // switch, make or manage worlds.
-            if !titleInBar {
-                Section {
-                    TitleMenu(title: library.world.name, hint: "Switches, creates and manages worlds") { worldMenu }
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 0))   // clear of the card's rounded corners, which clip a flush M's serifs
-                        .listRowSeparator(.hidden)
-                        .selectionDisabled()
-                }
-            }
+        List(selection: $library.selection) {
             if query.isEmpty {
-                // The drawer's top, as ChatGPT's (Kevin, 2026-11-27: "Shouldn't it be easier to
-                // get to the full conversation list?"): a new conversation, the world's
-                // connections, then every conversation, newest first, then the pages.
-                Section {
-                    Button(action: newConversation) {
-                        Label("New Conversation", systemImage: "square.and.pencil")
-                    }
-                    .tint(.primary)
-                    .selectionDisabled()
-                    .calmRow()
-                    Button(action: openMap) {
-                        Label("Connections", systemImage: "point.3.connected.trianglepath.dotted")
-                    }
-                    .tint(.primary)
-                    .selectionDisabled()
-                    .accessibilityHint("How the people, places and things of your world connect, growing as you talk.")
-                    .calmRow()
-                }
-                if !companion.worldConversations.isEmpty {
-                    Section("Conversations") {
-                        ForEach(companion.worldConversations, id: \.page) { conversationRow($0) }
-                    }
-                }
                 if showingDeleted, !library.recentlyDeleted.isEmpty {
                     Section {
                         ForEach(library.recentlyDeleted) { deletedRow($0) }
@@ -301,7 +283,15 @@ struct PageList: View {
                         Section {
                             ForEach(group.pages) { row($0, snippet: nil) }
                         } header: {
-                            if let heading = group.heading { Text(heading) }
+                            if let heading = group.heading {
+                                // Each kind's own options, on its heading (Kevin, 2026-11-27: "shouldn't
+                                // the edit character fields be also in the header label for each").
+                                if let type = group.type {
+                                    Text(heading).contextMenu { kindMenu(type) }
+                                } else {
+                                    Text(heading)
+                                }
+                            }
                         }
                     }
                 }
@@ -365,7 +355,7 @@ struct PageList: View {
             if empty { showingDeleted = false }   // its row is gone; back to the pages
         }
         .onChange(of: library.world.id) { showingDeleted = false }   // it belongs to the world it was shown in
-        // From the world menu's Types: deleting a type asks first.
+        // From a kind's heading: deleting it asks first.
         .confirmationDialog("Delete “\(deleting?.name ?? "")”?",
                             isPresented: Binding { deleting != nil } set: { if !$0 { deleting = nil } },
                             titleVisibility: .visible, presenting: deleting) { type in
@@ -373,48 +363,10 @@ struct PageList: View {
         } message: { type in
             Text(Self.deletingTypeMessage(pages: library.pageCount(ofType: type.id)))
         }
-        .alert("Couldn’t Save the World", isPresented: Binding { worldError != nil } set: { if !$0 { worldError = nil } }) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(worldError ?? "")
-        }
         .lookBackground()
-        .navigationTitle(library.world.name)
-        // The world's name, with a menu to switch, make, rename and delete
-        // worlds. Unfolded: iOS's own small title in the bar's row, with its
-        // title menu. Folded, where the bar's buttons sit in the Duo's side
-        // column: the name large at the top of the list (TitleMenu), since iOS
-        // gives a large title no menu (Kevin asked for it large there).
+        .navigationTitle("Pages")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar(removing: titleInBar ? nil : .title)
-        .toolbarTitleMenu { if titleInBar { worldMenu } }
-        .alert("New World", isPresented: $creatingWorld) {
-            TextField("Name, such as a book or a setting", text: $worldName)
-            Button("Cancel", role: .cancel) {}
-            Button("Create") {
-                let name = worldName.trimmingCharacters(in: .whitespaces)
-                guard !name.isEmpty else { return }
-                do { try library.newWorld(named: name) } catch { worldError = "“\(name)” couldn’t be created: \(error.localizedDescription)" }
-            }
-        } message: {
-            Text("A world has its own pages, types and fields.")
-        }
-        .alert("Rename World", isPresented: $renamingWorld) {
-            TextField("Name", text: $worldName)
-            Button("Cancel", role: .cancel) {}
-            Button("Rename") {
-                let name = worldName.trimmingCharacters(in: .whitespaces)
-                guard !name.isEmpty else { return }
-                do { try library.renameWorld(library.world.id, to: name) } catch { worldError = "It couldn’t be renamed: \(error.localizedDescription)" }
-            }
-        }
-        .confirmationDialog("Delete “\(library.world.name)”?", isPresented: $deletingWorld, titleVisibility: .visible) {
-            Button("Delete World", role: .destructive) { library.deleteWorld(library.world.id) }
-        } message: {
-            let count = library.pageCount(inWorld: library.world.id)
-            Text(count == 0 ? "It has no pages. This can’t be undone."
-                 : "Its \(count == 1 ? "page" : "\(count) pages") will be deleted for good, with its types and fields. This can’t be undone.")
-        }
+        .sheet(item: $editingFields) { TypeFieldsSheet(type: $0.id) }
         .toolbar {
             // Kevin, 2026-11-24: search at the very bottom, New Page in its usual place at the
             // top. Search where iOS puts it (he asked for the Duo's best practice): in the
@@ -433,43 +385,6 @@ struct PageList: View {
         }
     }
 
-    /// A world conversation: its first words and when it was last talked in, marked while it's
-    /// the one in front; swipe to delete (it asks first).
-    private func conversationRow(_ talk: Conversation) -> some View {
-        Button { openConversation(talk.page) } label: {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(talk.title ?? "New Conversation")
-                    .font(.authored(.body))
-                    .lineLimit(1)
-                if let when = talk.lastActive {
-                    Text(when, format: .relative(presentation: .named))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(.rect)
-        }
-        .tint(.primary)
-        .selectionDisabled()
-        .accessibilityAddTraits(current == talk.page ? .isSelected : [])
-        .listRowSeparator(.hidden)
-        .listRowBackground(current == talk.page ? Color(Look.raised) : nil)
-        .swipeActions(allowsFullSwipe: false) {
-            Button("Delete", systemImage: "trash") { deletingTalk = talk }.tint(.red)
-        }
-        .confirmationDialog("Delete this conversation?",
-                            isPresented: Binding { deletingTalk?.page == talk.page } set: { if !$0 { deletingTalk = nil } },
-                            titleVisibility: .visible) {
-            Button("Delete Conversation", role: .destructive) {
-                companion.deleteWorldConversation(talk.page, in: library)
-                if current == talk.page { newConversation() }   // never left on one that's gone
-            }
-        } message: {
-            Text("What it added to your pages stays.")
-        }
-    }
-
     private func row(_ page: WriterCore.Document, snippet: String?) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 8) {
@@ -479,7 +394,7 @@ struct PageList: View {
                 // New or added to by the companion, not yet opened (`Library.unseen`).
                 if library.unseen.contains(page.id) {
                     Circle()
-                        .fill(Color(Look.accent))
+                        .fill(Color(Look.emphasis))
                         .frame(width: 8, height: 8)
                         .accessibilityLabel("New")
                 }
@@ -503,27 +418,11 @@ struct PageList: View {
         }
     }
 
-    @ViewBuilder private var worldMenu: some View {
-        Picker("World", selection: Binding { library.world.id } set: { library.open(world: $0) }) {
-            ForEach(library.worlds) { Text($0.name).tag($0.id) }
-        }
-        Button("New World…", systemImage: "plus") { worldName = ""; creatingWorld = true }
-        Button("Rename World…", systemImage: "pencil") { worldName = library.world.name; renamingWorld = true }
-        if library.worlds.count > 1 {
-            Button("Delete World…", systemImage: "trash", role: .destructive) { deletingWorld = true }
-        }
-        // The world's kinds of page, to rename or delete: out of the list, where they read as
-        // machinery above the pages (Kevin, 2026-11-27); a page's own type menu chooses its type.
-        if !library.schema.types.isEmpty {
-            Menu("Types", systemImage: "square.text.square") {
-                ForEach(library.schema.types) { type in
-                    Menu(type.name) {
-                        Button("Rename…", systemImage: "pencil") { rename(type) }
-                        Button("Delete…", systemImage: "trash", role: .destructive) { deleting = type }
-                    }
-                }
-            }
-        }
+    /// A kind of page's own options, from its heading: its fields, its name, or it gone.
+    @ViewBuilder private func kindMenu(_ type: PageType) -> some View {
+        Button("Edit Fields\u{2026}", systemImage: "list.bullet.rectangle") { editingFields = type }
+        Button("Rename\u{2026}", systemImage: "pencil") { rename(type) }
+        Button("Delete\u{2026}", systemImage: "trash", role: .destructive) { deleting = type }
     }
 
     /// A section of the pages list: one type's pages under its heading, or the rest's.
@@ -577,7 +476,7 @@ struct PageList: View {
         .accessibilityHint("Recover it, or delete it now")
         .calmRow()
         .swipeActions(edge: .leading) {
-            Button("Recover", systemImage: "arrow.uturn.backward") { library.recover(page.id) }.tint(.blue)
+            Button("Recover", systemImage: "arrow.uturn.backward") { library.recover(page.id) }.tint(.gray)
         }
         .swipeActions(allowsFullSwipe: false) {
             Button("Delete Now", systemImage: "trash") { choosing = page }.tint(.red)
@@ -756,8 +655,8 @@ struct EditorView: View {
                 if typing { ToolbarItem(placement: .confirmationAction) { doneButton } }
             } else if editing {
                 // Editing the page, folded and unfolded alike (Kevin, 2026-11-24): Back or the
-                // sidebar button, Focus, and Done (the iPhone keyboard has no key to close it) in
-                // iOS's blue, each its own button, never in "•••". Read and Mentions wait for
+                // sidebar button, Focus, and Done (the iPhone keyboard has no key to close it),
+                // each its own button, never in "•••". Read and Mentions wait for
                 // the keyboard to go down: folded, the side column above the keyboard holds
                 // only three buttons (with a menu as well, iOS put Done in a "•••" of its own;
                 // "just looks terrible"). (Swapping the bar while any keyboard was up, search's
@@ -833,5 +732,20 @@ private extension View {
     /// rather than a settings screen (Kevin, 2026-11-27).
     func calmRow() -> some View {
         listRowSeparator(.hidden)
+    }
+
+    /// Folded, the drawer's button where Back would be, as ChatGPT has it (Kevin, 2026-11-27:
+    /// "an easy way to see all conversations"); unfolded, iOS's own sidebar button does it.
+    @ViewBuilder func withDrawerButton(_ open: @escaping () -> Void, folded: Bool) -> some View {
+        if folded {
+            navigationBarBackButtonHidden(true)
+                .toolbar {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("Conversations and Pages", systemImage: "sidebar.leading", action: open)
+                    }
+                }
+        } else {
+            self
+        }
     }
 }

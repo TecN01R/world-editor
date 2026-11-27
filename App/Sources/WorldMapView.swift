@@ -50,32 +50,26 @@ struct WorldMapView: View {
             (card.id, CGPoint(x: margin + cardWidth / 2 + CGFloat(card.place.x - minX) * step.width,
                               y: margin + cardHeight / 2 + CGFloat(card.place.y - minY) * step.height))
         })
-        return ScrollViewReader { proxy in
-            ScrollView([.horizontal, .vertical]) {
-                ZStack(alignment: .topLeading) {
-                    Canvas { context, _ in
-                        for line in map.lines {
-                            let ends = line.compactMap { centres[$0] }
-                            guard ends.count == 2 else { continue }
-                            var path = Path()
-                            path.move(to: ends[0])
-                            path.addLine(to: ends[1])
-                            context.stroke(path, with: .color(Color(Look.ink).opacity(0.18)), lineWidth: 1.5)
-                        }
-                    }
-                    .accessibilityHidden(true)   // the cards say what they're linked to by being there
-                    ForEach(map.cards) { card in
-                        cardView(card)
-                            .position(centres[card.id] ?? .zero)
-                            .id(card.id)
+        let focus = newest(in: map).flatMap { centres[$0] }
+        return ZoomingScroll(size: size, focus: focus) {
+            ZStack(alignment: .topLeading) {
+                Canvas { context, _ in
+                    for line in map.lines {
+                        let ends = line.compactMap { centres[$0] }
+                        guard ends.count == 2 else { continue }
+                        var path = Path()
+                        path.move(to: ends[0])
+                        path.addLine(to: ends[1])
+                        context.stroke(path, with: .color(Color(Look.ink).opacity(0.18)), lineWidth: 1.5)
                     }
                 }
-                .frame(width: size.width, height: size.height)
+                .accessibilityHidden(true)   // the cards say what they're linked to by being there
+                ForEach(map.cards) { card in
+                    cardView(card).position(centres[card.id] ?? .zero)
+                }
             }
-            .scrollIndicators(.hidden)
-            .onAppear {
-                if let newest = newest(in: map) { proxy.scrollTo(newest, anchor: .center) }
-            }
+            .frame(width: size.width, height: size.height)
+            .environment(library)
         }
     }
 
@@ -105,10 +99,10 @@ struct WorldMapView: View {
             .frame(width: cardWidth, height: cardHeight, alignment: .leading)
             .background(card.isRumour ? Color.clear : Color(Look.raised), in: shape)
             .overlay {
-                shape.strokeBorder(new ? Color(Look.accent) : Color(Look.ink).opacity(card.isRumour ? 0.35 : 0.08),
+                shape.strokeBorder(new ? Color(Look.emphasis) : Color(Look.ink).opacity(card.isRumour ? 0.35 : 0.08),
                                    style: StrokeStyle(lineWidth: new ? 1.5 : 1, dash: card.isRumour ? [4, 4] : []))
             }
-            .shadow(color: new ? Color(Look.accent).opacity(0.35) : .clear, radius: 12)
+            .shadow(color: new ? Color(Look.emphasis).opacity(0.25) : .clear, radius: 12)
             .contentShape(shape)
         }
         .buttonStyle(.plain)

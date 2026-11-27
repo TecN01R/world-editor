@@ -18,7 +18,7 @@ struct WorldEditorApp: App {
             scene.traitOverrides.userInterfaceLevel = .elevated
             for window in scene.windows {
                 window.backgroundColor = Look.background
-                window.tintColor = Look.accent
+                window.tintColor = Look.emphasis
             }
         }
     }
@@ -28,7 +28,7 @@ struct WorldEditorApp: App {
             RootView()
                 .environment(library)
                 .environment(companion)
-                .tint(Color(Look.accent))
+                .tint(.primary)   // every control white (`Look`)
                 .onAppear(perform: Self.applyLook)
         }
         .onChange(of: phase) { _, phase in

@@ -96,7 +96,7 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         textView.backgroundColor = .clear
         textView.textContainerInset = .zero
         textView.textContainer.lineFragmentPadding = 0
-        textView.tintColor = Look.accent   // the app's one accent, as in Edit mode
+        textView.tintColor = Look.emphasis   // white, as every control is
         textView.autocapitalizationType = .sentences
         textView.inlinePredictionType = .no         // ghost text would be content we didn't measure
         textView.allowsEditingTextAttributes = true // ⌘B, ⌘I and the Format menu

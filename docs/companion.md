@@ -265,15 +265,17 @@ marked, and Undo on the newest (`Conversation.history`).
 **Since 2026-11-27 it's where the author starts** (Kevin: "I want to write it
 conversationally or in any messy way and be able to refine it back and forth and
 that populates my pages"). The app opens in the world's conversation, no page
-open, and it's in front whenever no page is: the last one open, else the newest,
-else a new one (`RootView`). The drawer, as ChatGPT's (Kevin, 2026-11-27:
-"Shouldn't it be easier to get to the full conversation list?"), has New
-Conversation and Connections at the top, then every world conversation, newest
-first, each titled by the author's first words and marked while it's in front
-(swipe to delete), then the pages (`PageList`, `CompanionPanel(worldConversation:)`).
-Before that, a Conversation row led back to the one conversation and the others
-were in a sheet from its menu (2026-11-27), and before that (2026-11-24) the list
-of conversations took the pages list's place.
+open, and it's in front unless a page, Connections or Pages is: the last one open,
+else the newest, else a new one (`RootView`). The drawer, as ChatGPT's (Kevin,
+2026-11-27: "Shouldn't it be easier to get to the full conversation list?"), has
+the world's name with its menu, then New Conversation, Connections and Pages, then
+only the world conversations, newest first, each titled by the author's first
+words and marked while it's in front (swipe to delete) (`Drawer`,
+`CompanionPanel(worldConversation:)`); the pages are a screen of their own
+(`PageList`). Before that, the pages came after the conversations in the same
+list (2026-11-27); before that, a Conversation row led back to the one
+conversation and the others were in a sheet from its menu (2026-11-27), and
+before that (2026-11-24) the list of conversations took the pages list's place.
 Each conversation is stored under its own id, marked `aboutWorld`; one exists once
 something's been said in it. The model
 gets every page as background, the ones bearing on what's being said first,

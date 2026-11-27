@@ -62,7 +62,7 @@ struct PageEditor: UIViewRepresentable {
     }
 
     /// Bold New York, scaled with Dynamic Type.
-    static var titleFont: UIFont { newYork(34, weight: .bold, scaledAs: .largeTitle) }   // the size of the world's title
+    static var titleFont: UIFont { newYork(34, weight: .bold, scaledAs: .largeTitle) }   // a large title
 
     /// New York at 19 pt for the default text size, scaled with Dynamic Type.
     static var font: UIFont { newYork(19, weight: .regular, scaledAs: .body) }

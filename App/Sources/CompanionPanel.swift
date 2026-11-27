@@ -441,10 +441,10 @@ struct CompanionPanel: View {
 
     /// "New page: Myriddea (Place)", "Casperica · Character", "Casperica · Origin: Myriddea":
     /// page names and filed words in New York, types and fields in San Francisco. The page
-    /// name is in the accent colour, as a tap opens the page.
+    /// name is underlined, as a tap opens the page.
     private func filed(_ line: FilingLine) -> Text {
         func authored(_ s: String) -> Text { Text(s).font(.authored(.footnote)) }
-        let page: Text = authored(line.page).foregroundStyle(Color(Look.accent))
+        let page: Text = authored(line.page).underline()   // it opens the page, as a link would
         if case .renamed(_, let was, _) = line.action {
             return Text("\(page) · renamed, was \(was.isEmpty ? Text("untitled") : authored(was))")
         }
@@ -715,10 +715,10 @@ struct CompanionPanel: View {
                         Button(action: send) {
                             Image(systemName: "arrow.up")
                                 .fontWeight(.semibold)
-                                .foregroundStyle(Color(Look.background))   // 7.7:1 on the accent
+                                .foregroundStyle(Color(Look.background))   // dark on white, as ChatGPT's Send
                                 .frame(width: barHeight, height: barHeight)
                         }
-                        .glassEffect(.regular.tint(Color(Look.accent)).interactive(), in: .circle)
+                        .glassEffect(.regular.tint(Color(Look.emphasis)).interactive(), in: .circle)
                         .accessibilityLabel("Send")
                         .transition(.scale.combined(with: .opacity))
                     }
@@ -746,7 +746,7 @@ struct CompanionPanel: View {
     }
 
     @ViewBuilder private var items: some View {
-        // Another world conversation, this one kept in the list.
+        // Another world conversation, this one kept in the drawer.
         Button("New Conversation", systemImage: "square.and.pencil", action: newConversation)
             .disabled(companion.conversation.turns.isEmpty)
         ShareLink("Share Conversation", item: transcript)
