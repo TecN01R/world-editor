@@ -123,6 +123,7 @@ struct CompanionPanel: View {
         .defaultScrollAnchor(.top, for: .sizeChanges)
         .scrollPosition($position)
         .scrollDismissesKeyboard(.interactively)
+        .paletteBackground()
         .overlay {
             Live {   // the download's progress and the first reply redraw only this
                 if let download = companion.download {
@@ -751,10 +752,11 @@ struct CompanionPanel: View {
                     Button(action: send) {
                         Image(systemName: "arrow.up")
                             .fontWeight(.semibold)
-                            .foregroundStyle(canSend ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
+                            // The background's colour on the accent: dark on gruvbox's yellow (8.7:1).
+                            .foregroundStyle(canSend ? AnyShapeStyle(Color(Palette.background)) : AnyShapeStyle(.secondary))
                             .frame(width: barHeight, height: barHeight)
                     }
-                    .glassEffect(canSend ? .regular.tint(.accentColor).interactive() : .regular.interactive(), in: .circle)
+                    .glassEffect(canSend ? .regular.tint(Color(Palette.accent)).interactive() : .regular.interactive(), in: .circle)
                     .disabled(!canSend)
                     .accessibilityLabel("Send")
                 }

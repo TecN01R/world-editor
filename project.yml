@@ -44,6 +44,7 @@ targets:
       properties:
         CFBundleDisplayName: World Editor
         UILaunchScreen: {}
+        UIUserInterfaceStyle: Dark   # dark only (Kevin, 2026-11-27)
         UIApplicationSupportsIndirectInputEvents: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

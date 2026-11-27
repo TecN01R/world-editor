@@ -17,7 +17,7 @@ struct TitleMenu<Items: View>: View {
         Menu(content: items) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(title)
-                    .foregroundStyle(Color(uiColor: PageEditor.ink))   // the writing's colour, as a page's title
+                    .foregroundStyle(Color(uiColor: Palette.ink))   // the writing's colour, as a page's title
                     .font(Font(PageEditor.titleFont))   // the very font a page's title uses, so they match exactly
                     .id(textSize)
                     .lineLimit(2)

@@ -23,7 +23,7 @@ while IFS='|' read -r UDID NAME; do
   echo "== $NAME ($UDID)"
   xcrun simctl boot "$UDID" || true
   xcrun simctl bootstatus "$UDID" -b
-  xcrun simctl ui "$UDID" appearance dark   # dark mode first
+  xcrun simctl ui "$UDID" appearance dark   # as the app, which is dark only
   xcrun simctl status_bar "$UDID" override --time 9:41 --batteryLevel 100 --cellularBars 4 || true
   xcrun simctl install "$UDID" "$APP"
   # Skip the one-time "slide to type" keyboard tip.

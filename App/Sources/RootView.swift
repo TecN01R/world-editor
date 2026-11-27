@@ -276,9 +276,8 @@ struct PageList: View {
     let openConversation: () -> Void
     let newPage: () -> Void
     @State private var searching = false
-    /// Showing only one type's pages, or Recently Deleted.
-    private enum Filter: Hashable { case type(UUID), deleted }
-    @State private var filter: Filter?
+    /// Showing Recently Deleted in place of the pages.
+    @State private var showingDeleted = false
     /// A deleted page whose choices (recover, delete now) are showing.
     @State private var choosing: WriterCore.Document?
     @State private var renaming: PageType?
@@ -307,6 +306,7 @@ struct PageList: View {
                     TitleMenu(title: library.world.name, hint: "Switches, creates and manages worlds") { worldMenu }
                         .listRowBackground(Color.clear)
                         .listRowInsets(EdgeInsets(top: 0, leading: 4, bottom: 0, trailing: 0))   // clear of the card's rounded corners, which clip a flush M's serifs
+                        .listRowSeparator(.hidden)
                         .selectionDisabled()
                 }
             }
@@ -321,15 +321,9 @@ struct PageList: View {
                     .tint(.primary)
                     .selectionDisabled()
                     .accessibilityHint("Back to your conversation about your world.")
+                    .calmRow()
                 }
-                // Types are managed here, as Notes manages folders; a page's
-                // own type menu only chooses its type.
-                if !library.schema.types.isEmpty {
-                    Section("Types") {
-                        ForEach(library.schema.types) { typeRow($0) }
-                    }
-                }
-                if filter == .deleted, !library.recentlyDeleted.isEmpty {
+                if showingDeleted, !library.recentlyDeleted.isEmpty {
                     Section {
                         ForEach(library.recentlyDeleted) { deletedRow($0) }
                     } header: {
@@ -338,17 +332,34 @@ struct PageList: View {
                         Text("Pages are deleted for good after 30 days.")
                     }
                 } else {
-                    let type = if case .type(let id)? = filter { library.schema.type(id) } else { PageType?.none }
-                    Section {
-                        ForEach(library.pages.filter { type == nil || $0.type == type?.id }) { row($0, snippet: nil) }
-                    } header: {
-                        Text(type?.name ?? "Pages")
+                    // The pages, under their kind (Characters, Places…), as a book's contents
+                    // rather than a database (Kevin, 2026-11-27, of the list with its Types section:
+                    // "This looks awful and not inviting or relaxing or frictionless").
+                    ForEach(groups, id: \.type?.id) { group in
+                        Section {
+                            ForEach(group.pages) { row($0, snippet: nil) }
+                        } header: {
+                            if let heading = group.heading { Text(heading) }
+                        }
                     }
                 }
                 // Out of the way at the bottom, as Notes and Photos keep it (Kevin, 2026-11-24: cluttered).
                 if !library.recentlyDeleted.isEmpty {   // tapped again, back to the pages
                     Section {
-                        filterRow("Recently Deleted", systemImage: "trash", count: library.recentlyDeleted.count, .deleted)
+                        Button {
+                            withAnimation { showingDeleted.toggle() }
+                        } label: {
+                            HStack {
+                                Label("Recently Deleted", systemImage: "trash")
+                                Spacer()
+                                if showingDeleted { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                            }
+                        }
+                        .tint(.secondary)
+                        .selectionDisabled()
+                        .accessibilityAddTraits(showingDeleted ? .isSelected : [])
+                        .accessibilityHint(showingDeleted ? "Shows your pages" : "Shows the pages you deleted")
+                        .calmRow()
                     }
                 }
             } else {
@@ -359,6 +370,7 @@ struct PageList: View {
                 }
             }
         }
+        .listStyle(.plain)
         .searchable(text: $library.searchQuery, prompt: "Search Pages")
         .searchSuggestions {
             ForEach(library.searchSuggestions, id: \.self) { Text($0).searchCompletion($0) }
@@ -388,14 +400,23 @@ struct PageList: View {
             }
         }
         .onChange(of: library.recentlyDeleted.isEmpty) { _, empty in
-            if empty, filter == .deleted { filter = nil }   // its row is gone; back to all pages
+            if empty { showingDeleted = false }   // its row is gone; back to the pages
         }
-        .onChange(of: library.world.id) { filter = nil }   // a filter belongs to the world it was set in
+        .onChange(of: library.world.id) { showingDeleted = false }   // it belongs to the world it was shown in
+        // From the world menu's Types: deleting a type asks first.
+        .confirmationDialog("Delete “\(deleting?.name ?? "")”?",
+                            isPresented: Binding { deleting != nil } set: { if !$0 { deleting = nil } },
+                            titleVisibility: .visible, presenting: deleting) { type in
+            Button("Delete Type", role: .destructive) { library.deleteType(type.id) }
+        } message: { type in
+            Text(Self.deletingTypeMessage(pages: library.pageCount(ofType: type.id)))
+        }
         .alert("Couldn’t Save the World", isPresented: Binding { worldError != nil } set: { if !$0 { worldError = nil } }) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(worldError ?? "")
         }
+        .paletteBackground()
         .navigationTitle(library.world.name)
         // The world's name, with a menu to switch, make, rename and delete
         // worlds. Unfolded: iOS's own small title in the bar's row, with its
@@ -441,12 +462,8 @@ struct PageList: View {
             // pinned item goes there only while searching with no room.
             ToolbarItem(placement: .topBarPinnedTrailing) {
                 Button("New Page", systemImage: "square.and.pencil") {
-                    // Showing one type: the new page is one of them (as a new
-                    // note goes in the open folder), so it's in the list.
-                    let type = if case .type(let id)? = filter { library.schema.type(id) } else { PageType?.none }
-                    if type == nil { filter = nil }
+                    showingDeleted = false   // the new page shows in the list
                     newPage()
-                    if let type { library.update { $0.type = type.id } }
                 }
                 .keyboardShortcut("n")
             }
@@ -460,21 +477,19 @@ struct PageList: View {
                 .font(.authored(.headline))
                 .lineLimit(1)
             if let snippet {
-                // Searching: the line that matched, in place of date and preview.
+                // Searching: the line that matched, in place of how it begins.
                 Text(highlighted(snippet)).lineLimit(1)
                     .font(.authored(.subheadline))
                     .foregroundStyle(.secondary)
-            } else {
-                HStack(spacing: 6) {
-                    Text(page.modified, format: .relative(presentation: .named))
-                    if !page.preview.isEmpty { Text(page.preview).font(.authored(.subheadline)).lineLimit(1) }
-                }
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            } else if !page.preview.isEmpty {
+                // How it begins, in place of when it changed: what's on it, not its bookkeeping.
+                Text(page.preview).font(.authored(.subheadline)).lineLimit(1)
+                    .foregroundStyle(.secondary)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
+        .calmRow()
         .swipeActions {
             Button("Delete", systemImage: "trash", role: .destructive) { library.delete(page.id) }
         }
@@ -489,52 +504,45 @@ struct PageList: View {
         if library.worlds.count > 1 {
             Button("Delete World…", systemImage: "trash", role: .destructive) { deletingWorld = true }
         }
-    }
-
-    /// A row that shows only some pages: tap to show them (again to show
-    /// all). Not a page, so never selected as one.
-    private func filterRow(_ title: String, systemImage: String, count: Int, _ rowFilter: Filter) -> some View {
-        let shown = filter == rowFilter
-        return Button {
-            withAnimation { filter = shown ? nil : rowFilter }
-        } label: {
-            HStack {
-                Label(title, systemImage: systemImage)
-                Spacer()
-                Text(count, format: .number).foregroundStyle(.secondary)
-                if shown { Image(systemName: "checkmark").foregroundStyle(.tint) }
+        // The world's kinds of page, to rename or delete: out of the list, where they read as
+        // machinery above the pages (Kevin, 2026-11-27); a page's own type menu chooses its type.
+        if !library.schema.types.isEmpty {
+            Menu("Types", systemImage: "square.text.square") {
+                ForEach(library.schema.types) { type in
+                    Menu(type.name) {
+                        Button("Rename…", systemImage: "pencil") { rename(type) }
+                        Button("Delete…", systemImage: "trash", role: .destructive) { deleting = type }
+                    }
+                }
             }
         }
-        .tint(.primary)
-        .selectionDisabled()
-        .accessibilityAddTraits(shown ? .isSelected : [])
-        .accessibilityHint(shown ? "Shows all pages" : "Shows only these pages")
     }
 
-    /// A type: tap to show only its pages; hold or swipe to rename or delete it.
-    private func typeRow(_ type: PageType) -> some View {
-        filterRow(type.name, systemImage: "square.text.square", count: library.pageCount(ofType: type.id), .type(type.id))
-        .contextMenu {
-            Button("Rename", systemImage: "pencil") { rename(type) }
-            Button("Delete", systemImage: "trash", role: .destructive) { deleting = type }
+    /// A section of the pages list: one type's pages under its heading, or the rest's.
+    private typealias PageGroup = (type: PageType?, heading: String?, pages: [WriterCore.Document])
+
+    /// The pages by kind: each type's, in the types' order, under its name in the plural;
+    /// then the rest, headed "Other Pages" only when some pages are typed. Empty kinds are
+    /// left out.
+    private var groups: [PageGroup] {
+        let typed = library.schema.types.compactMap { type -> PageGroup? in
+            let pages = library.pages.filter { $0.type == type.id }
+            return pages.isEmpty ? nil : (type, Self.plural(type.name), pages)
         }
-        // Delete only asks: a destructive role would animate the row away
-        // before the answer. No full swipe, so it can't skip the question.
-        .swipeActions(allowsFullSwipe: false) {
-            Button("Delete", systemImage: "trash") { deleting = type }.tint(.red)
-            Button("Rename", systemImage: "pencil") { rename(type) }
-        }
-        // On the row, so its popover points at the type it's about.
-        .confirmationDialog("Delete “\(type.name)”?",
-                            isPresented: Binding { deleting?.id == type.id } set: { if !$0 { deleting = nil } },
-                            titleVisibility: .visible) {
-            Button("Delete Type", role: .destructive) {
-                if filter == .type(type.id) { filter = nil }
-                library.deleteType(type.id)
-            }
-        } message: {
-            Text(Self.deletingTypeMessage(pages: library.pageCount(ofType: type.id)))
-        }
+        let known = Set(library.schema.types.map(\.id))
+        let others = library.pages.filter { $0.type.map { !known.contains($0) } ?? true }
+        guard !others.isEmpty else { return typed }
+        return typed + [(nil, typed.isEmpty ? nil : "Other Pages", others)]
+    }
+
+    /// A kind of page in the plural ("Character", "Characters"), by Foundation's grammar
+    /// agreement; as it is where that doesn't know the word.
+    private static func plural(_ name: String) -> String {
+        var morphology = Morphology()
+        morphology.number = .plural
+        var text = AttributedString(name)
+        text.inflect = InflectionRule(morphology: morphology)
+        return String(text.inflected().characters)
     }
 
     private static func deletingTypeMessage(pages count: Int) -> String {
@@ -559,6 +567,7 @@ struct PageList: View {
         .tint(.primary)
         .selectionDisabled()
         .accessibilityHint("Recover it, or delete it now")
+        .calmRow()
         .swipeActions(edge: .leading) {
             Button("Recover", systemImage: "arrow.uturn.backward") { library.recover(page.id) }.tint(.blue)
         }
@@ -856,6 +865,7 @@ struct WorldConversationList: View {
                 }
             }
         }
+        .paletteBackground()
         .navigationTitle("Conversations")
         .navigationBarTitleDisplayMode(.inline)
         // A stock sheet: its bar across the top, not in the folded Duo's side column.
@@ -901,6 +911,7 @@ struct MentionsView: View {
                                            description: Text("Pages that link here with @ or in a field show up here."))
                 }
             }
+            .paletteBackground()
             .navigationTitle("Mentions")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

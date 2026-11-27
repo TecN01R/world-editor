@@ -4,6 +4,9 @@
      build sets the same keys in project.yml. -->
 <plist version="1.0">
 <dict>
+	<!-- Dark only (Kevin, 2026-11-27: "Let's stop offering a light mode I'll never use it"). -->
+	<key>UIUserInterfaceStyle</key>
+	<string>Dark</string>
 	<key>NSCameraUsageDescription</key>
 	<string>To scan pages and take photos for the companion.</string>
 	<!-- The companion's model download, and its replies, continue in the background

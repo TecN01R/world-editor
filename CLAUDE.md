@@ -36,13 +36,14 @@ only once it's on Kevin's phone and checked, or he has answered it.
    orphan commit (never on `main`, never as artifacts). Kevin tests on the Duo
    himself, so don't run them or send screenshots by default; run them (then
    `ci/fetch_screenshots.sh`, delete local copies after) only when he asks or a
-   change touches something he can't see on his phone (light mode, the other
-   fold state, large Dynamic Type).
+   change touches something he can't see on his phone (the other fold state,
+   large Dynamic Type).
 
 ## Conventions
 
-- Dark mode first: design and review UI in dark appearance (CI screenshots
-  are dark); light mode must still work.
+- Dark only (Kevin, 2026-11-27: "Let's stop offering a light mode I'll never use
+  it"): Info.plist's `UIUserInterfaceStyle` is Dark. Warm colours after gruvbox,
+  set only in iOS's own ways (`Palette`, docs/stock-deviations.md).
 - iOS defaults first: use stock components and take their default look and
   placement (titles, toolbars, sidebar, keyboard bar). Customise only where
   Kevin asks or a default clearly fails a stated rule, and say which is which.
