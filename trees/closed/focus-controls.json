@@ -1,0 +1,2822 @@
+[
+ {
+  "AXFrame": "{{0, 0}, {466, 678}}",
+  "AXLabel": "World Editor",
+  "AXUniqueId": null,
+  "AXValue": null,
+  "children": [
+   {
+    "AXFrame": "{{0, 0}, {466, 678}}",
+    "AXLabel": null,
+    "AXUniqueId": null,
+    "AXValue": null,
+    "children": [
+     {
+      "AXFrame": "{{0, 0}, {466, 678}}",
+      "AXLabel": null,
+      "AXUniqueId": null,
+      "AXValue": null,
+      "children": [
+       {
+        "AXFrame": "{{0, 0}, {466, 678}}",
+        "AXLabel": null,
+        "AXUniqueId": null,
+        "AXValue": null,
+        "children": [
+         {
+          "AXFrame": "{{0, 0}, {466, 678}}",
+          "AXLabel": null,
+          "AXUniqueId": null,
+          "AXValue": null,
+          "children": [
+           {
+            "AXFrame": "{{0, 0}, {466, 678}}",
+            "AXLabel": null,
+            "AXUniqueId": null,
+            "AXValue": null,
+            "children": [
+             {
+              "AXFrame": "{{0, 0}, {466, 678}}",
+              "AXLabel": null,
+              "AXUniqueId": null,
+              "AXValue": null,
+              "children": [
+               {
+                "AXFrame": "{{0, 0}, {466, 678}}",
+                "AXLabel": null,
+                "AXUniqueId": null,
+                "AXValue": null,
+                "children": [
+                 {
+                  "AXFrame": "{{0, 0}, {466, 678}}",
+                  "AXLabel": null,
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [
+                   {
+                    "AXFrame": "{{0, 0}, {466, 678}}",
+                    "AXLabel": "Toolbar",
+                    "AXUniqueId": "Toolbar",
+                    "AXValue": null,
+                    "children": [
+                     {
+                      "AXFrame": "{{0, 0}, {466, 678}}",
+                      "AXLabel": null,
+                      "AXUniqueId": null,
+                      "AXValue": null,
+                      "children": [],
+                      "content_required": false,
+                      "custom_actions": [],
+                      "enabled": true,
+                      "frame": {
+                       "height": 678,
+                       "width": 466,
+                       "x": 0,
+                       "y": 0
+                      },
+                      "help": null,
+                      "pid": 23529,
+                      "role": "AXGroup",
+                      "role_description": "group",
+                      "subrole": null,
+                      "title": null,
+                      "traits": [],
+                      "type": "Group"
+                     }
+                    ],
+                    "content_required": false,
+                    "custom_actions": [],
+                    "enabled": true,
+                    "frame": {
+                     "height": 678,
+                     "width": 466,
+                     "x": 0,
+                     "y": 0
+                    },
+                    "help": null,
+                    "pid": 23529,
+                    "role": "AXGroup",
+                    "role_description": "group",
+                    "subrole": null,
+                    "title": null,
+                    "traits": [],
+                    "type": "Group"
+                   },
+                   {
+                    "AXFrame": "{{0, 0}, {466, 678}}",
+                    "AXLabel": null,
+                    "AXUniqueId": null,
+                    "AXValue": null,
+                    "children": [
+                     {
+                      "AXFrame": "{{0, 0}, {466, 678}}",
+                      "AXLabel": null,
+                      "AXUniqueId": null,
+                      "AXValue": null,
+                      "children": [
+                       {
+                        "AXFrame": "{{0, 0}, {466, 678}}",
+                        "AXLabel": "Toolbar",
+                        "AXUniqueId": "Toolbar",
+                        "AXValue": null,
+                        "children": [
+                         {
+                          "AXFrame": "{{0, 0}, {466, 678}}",
+                          "AXLabel": null,
+                          "AXUniqueId": null,
+                          "AXValue": null,
+                          "children": [
+                           {
+                            "AXFrame": "{{0, 0}, {466, 678}}",
+                            "AXLabel": null,
+                            "AXUniqueId": null,
+                            "AXValue": null,
+                            "children": [
+                             {
+                              "AXFrame": "{{0, 0}, {466, 678}}",
+                              "AXLabel": null,
+                              "AXUniqueId": null,
+                              "AXValue": null,
+                              "children": [
+                               {
+                                "AXFrame": "{{0, 0}, {0, 0}}",
+                                "AXLabel": null,
+                                "AXUniqueId": null,
+                                "AXValue": null,
+                                "children": [
+                                 {
+                                  "AXFrame": "{{394, 174}, {48, 48}}",
+                                  "AXLabel": null,
+                                  "AXUniqueId": null,
+                                  "AXValue": null,
+                                  "children": [
+                                   {
+                                    "AXFrame": "{{394, 174}, {48, 48}}",
+                                    "AXLabel": null,
+                                    "AXUniqueId": null,
+                                    "AXValue": null,
+                                    "children": [
+                                     {
+                                      "AXFrame": "{{399, 179}, {38, 38}}",
+                                      "AXLabel": null,
+                                      "AXUniqueId": null,
+                                      "AXValue": null,
+                                      "children": [
+                                       {
+                                        "AXFrame": "{{399, 179}, {38, 38}}",
+                                        "AXLabel": null,
+                                        "AXUniqueId": null,
+                                        "AXValue": null,
+                                        "children": [
+                                         {
+                                          "AXFrame": "{{399, 179}, {38, 38}}",
+                                          "AXLabel": "Exit Focus",
+                                          "AXUniqueId": null,
+                                          "AXValue": null,
+                                          "children": [],
+                                          "content_required": false,
+                                          "custom_actions": [],
+                                          "enabled": true,
+                                          "frame": {
+                                           "height": 38,
+                                           "width": 38,
+                                           "x": 399,
+                                           "y": 179
+                                          },
+                                          "help": null,
+                                          "pid": 23529,
+                                          "role": "AXButton",
+                                          "role_description": "button",
+                                          "subrole": null,
+                                          "title": null,
+                                          "traits": [],
+                                          "type": "Button"
+                                         }
+                                        ],
+                                        "content_required": false,
+                                        "custom_actions": [],
+                                        "enabled": true,
+                                        "frame": {
+                                         "height": 38,
+                                         "width": 38,
+                                         "x": 399,
+                                         "y": 179
+                                        },
+                                        "help": null,
+                                        "pid": 23529,
+                                        "role": "AXGroup",
+                                        "role_description": "group",
+                                        "subrole": null,
+                                        "title": null,
+                                        "traits": [],
+                                        "type": "Group"
+                                       }
+                                      ],
+                                      "content_required": false,
+                                      "custom_actions": [],
+                                      "enabled": true,
+                                      "frame": {
+                                       "height": 38,
+                                       "width": 38,
+                                       "x": 399,
+                                       "y": 179
+                                      },
+                                      "help": null,
+                                      "pid": 23529,
+                                      "role": "AXGroup",
+                                      "role_description": "group",
+                                      "subrole": null,
+                                      "title": null,
+                                      "traits": [],
+                                      "type": "Group"
+                                     }
+                                    ],
+                                    "content_required": false,
+                                    "custom_actions": [],
+                                    "enabled": true,
+                                    "frame": {
+                                     "height": 48,
+                                     "width": 48,
+                                     "x": 394,
+                                     "y": 174
+                                    },
+                                    "help": null,
+                                    "pid": 23529,
+                                    "role": "AXGroup",
+                                    "role_description": "group",
+                                    "subrole": null,
+                                    "title": null,
+                                    "traits": [],
+                                    "type": "Group"
+                                   }
+                                  ],
+                                  "content_required": false,
+                                  "custom_actions": [],
+                                  "enabled": true,
+                                  "frame": {
+                                   "height": 48,
+                                   "width": 48,
+                                   "x": 394,
+                                   "y": 174
+                                  },
+                                  "help": null,
+                                  "pid": 23529,
+                                  "role": "AXGroup",
+                                  "role_description": "group",
+                                  "subrole": null,
+                                  "title": null,
+                                  "traits": [],
+                                  "type": "Group"
+                                 },
+                                 {
+                                  "AXFrame": "{{394, 234}, {48, 48}}",
+                                  "AXLabel": null,
+                                  "AXUniqueId": null,
+                                  "AXValue": null,
+                                  "children": [
+                                   {
+                                    "AXFrame": "{{394, 234}, {48, 48}}",
+                                    "AXLabel": null,
+                                    "AXUniqueId": null,
+                                    "AXValue": null,
+                                    "children": [
+                                     {
+                                      "AXFrame": "{{399, 239}, {38, 38}}",
+                                      "AXLabel": null,
+                                      "AXUniqueId": null,
+                                      "AXValue": null,
+                                      "children": [
+                                       {
+                                        "AXFrame": "{{399, 239}, {38, 38}}",
+                                        "AXLabel": null,
+                                        "AXUniqueId": null,
+                                        "AXValue": null,
+                                        "children": [
+                                         {
+                                          "AXFrame": "{{399, 239}, {38, 38}}",
+                                          "AXLabel": "Done",
+                                          "AXUniqueId": null,
+                                          "AXValue": null,
+                                          "children": [],
+                                          "content_required": false,
+                                          "custom_actions": [],
+                                          "enabled": true,
+                                          "frame": {
+                                           "height": 38,
+                                           "width": 38,
+                                           "x": 399,
+                                           "y": 239
+                                          },
+                                          "help": null,
+                                          "pid": 23529,
+                                          "role": "AXButton",
+                                          "role_description": "button",
+                                          "subrole": null,
+                                          "title": null,
+                                          "traits": [],
+                                          "type": "Button"
+                                         }
+                                        ],
+                                        "content_required": false,
+                                        "custom_actions": [],
+                                        "enabled": true,
+                                        "frame": {
+                                         "height": 38,
+                                         "width": 38,
+                                         "x": 399,
+                                         "y": 239
+                                        },
+                                        "help": null,
+                                        "pid": 23529,
+                                        "role": "AXGroup",
+                                        "role_description": "group",
+                                        "subrole": null,
+                                        "title": null,
+                                        "traits": [],
+                                        "type": "Group"
+                                       }
+                                      ],
+                                      "content_required": false,
+                                      "custom_actions": [],
+                                      "enabled": true,
+                                      "frame": {
+                                       "height": 38,
+                                       "width": 38,
+                                       "x": 399,
+                                       "y": 239
+                                      },
+                                      "help": null,
+                                      "pid": 23529,
+                                      "role": "AXGroup",
+                                      "role_description": "group",
+                                      "subrole": null,
+                                      "title": null,
+                                      "traits": [],
+                                      "type": "Group"
+                                     }
+                                    ],
+                                    "content_required": false,
+                                    "custom_actions": [],
+                                    "enabled": true,
+                                    "frame": {
+                                     "height": 48,
+                                     "width": 48,
+                                     "x": 394,
+                                     "y": 234
+                                    },
+                                    "help": null,
+                                    "pid": 23529,
+                                    "role": "AXGroup",
+                                    "role_description": "group",
+                                    "subrole": null,
+                                    "title": null,
+                                    "traits": [],
+                                    "type": "Group"
+                                   }
+                                  ],
+                                  "content_required": false,
+                                  "custom_actions": [],
+                                  "enabled": true,
+                                  "frame": {
+                                   "height": 48,
+                                   "width": 48,
+                                   "x": 394,
+                                   "y": 234
+                                  },
+                                  "help": null,
+                                  "pid": 23529,
+                                  "role": "AXGroup",
+                                  "role_description": "group",
+                                  "subrole": null,
+                                  "title": null,
+                                  "traits": [],
+                                  "type": "Group"
+                                 }
+                                ],
+                                "content_required": false,
+                                "custom_actions": [],
+                                "enabled": true,
+                                "frame": {
+                                 "height": 0,
+                                 "width": 0,
+                                 "x": 0,
+                                 "y": 0
+                                },
+                                "help": null,
+                                "pid": 23529,
+                                "role": "AXGroup",
+                                "role_description": "group",
+                                "subrole": null,
+                                "title": null,
+                                "traits": [],
+                                "type": "Group"
+                               }
+                              ],
+                              "content_required": false,
+                              "custom_actions": [],
+                              "enabled": true,
+                              "frame": {
+                               "height": 678,
+                               "width": 466,
+                               "x": 0,
+                               "y": 0
+                              },
+                              "help": null,
+                              "pid": 23529,
+                              "role": "AXGroup",
+                              "role_description": "group",
+                              "subrole": null,
+                              "title": null,
+                              "traits": [],
+                              "type": "Group"
+                             }
+                            ],
+                            "content_required": false,
+                            "custom_actions": [],
+                            "enabled": true,
+                            "frame": {
+                             "height": 678,
+                             "width": 466,
+                             "x": 0,
+                             "y": 0
+                            },
+                            "help": null,
+                            "pid": 23529,
+                            "role": "AXGroup",
+                            "role_description": "group",
+                            "subrole": null,
+                            "title": null,
+                            "traits": [],
+                            "type": "Group"
+                           }
+                          ],
+                          "content_required": false,
+                          "custom_actions": [],
+                          "enabled": true,
+                          "frame": {
+                           "height": 678,
+                           "width": 466,
+                           "x": 0,
+                           "y": 0
+                          },
+                          "help": null,
+                          "pid": 23529,
+                          "role": "AXGroup",
+                          "role_description": "group",
+                          "subrole": null,
+                          "title": null,
+                          "traits": [],
+                          "type": "Group"
+                         }
+                        ],
+                        "content_required": false,
+                        "custom_actions": [],
+                        "enabled": true,
+                        "frame": {
+                         "height": 678,
+                         "width": 466,
+                         "x": 0,
+                         "y": 0
+                        },
+                        "help": null,
+                        "pid": 23529,
+                        "role": "AXGroup",
+                        "role_description": "group",
+                        "subrole": null,
+                        "title": null,
+                        "traits": [],
+                        "type": "Group"
+                       },
+                       {
+                        "AXFrame": "{{0, 0}, {466, 678}}",
+                        "AXLabel": null,
+                        "AXUniqueId": null,
+                        "AXValue": null,
+                        "children": [
+                         {
+                          "AXFrame": "{{0, 0}, {466, 678}}",
+                          "AXLabel": null,
+                          "AXUniqueId": null,
+                          "AXValue": null,
+                          "children": [
+                           {
+                            "AXFrame": "{{0, 0}, {466, 678}}",
+                            "AXLabel": null,
+                            "AXUniqueId": null,
+                            "AXValue": null,
+                            "children": [
+                             {
+                              "AXFrame": "{{0, 0}, {466, 678}}",
+                              "AXLabel": null,
+                              "AXUniqueId": null,
+                              "AXValue": null,
+                              "children": [
+                               {
+                                "AXFrame": "{{0, 0}, {466, 678}}",
+                                "AXLabel": null,
+                                "AXUniqueId": null,
+                                "AXValue": null,
+                                "children": [
+                                 {
+                                  "AXFrame": "{{16.132957458496094, 24.681102752685547}, {428, 325}}",
+                                  "AXLabel": null,
+                                  "AXUniqueId": null,
+                                  "AXValue": "Third page, where the caret is.",
+                                  "children": [
+                                   {
+                                    "AXFrame": "{{16.132957458496094, 24.681102752685547}, {0, 0}}",
+                                    "AXLabel": null,
+                                    "AXUniqueId": "_UITextSelectionRangeAdjustmentContainerView",
+                                    "AXValue": null,
+                                    "children": [
+                                     {
+                                      "AXFrame": "{{16.132957458496094, 24.681102752685547}, {0, 0}}",
+                                      "AXLabel": null,
+                                      "AXUniqueId": "com.apple.text.grabber.leading",
+                                      "AXValue": null,
+                                      "children": [
+                                       {
+                                        "AXFrame": "{{8.8829574584960938, 11.181102752685547}, {16.5, 16.5}}",
+                                        "AXLabel": null,
+                                        "AXUniqueId": null,
+                                        "AXValue": null,
+                                        "children": [],
+                                        "content_required": false,
+                                        "custom_actions": [],
+                                        "enabled": true,
+                                        "frame": {
+                                         "height": 16.5,
+                                         "width": 16.5,
+                                         "x": 8.882957458496094,
+                                         "y": 11.181102752685547
+                                        },
+                                        "help": null,
+                                        "pid": 23529,
+                                        "role": "AXGroup",
+                                        "role_description": "group",
+                                        "subrole": null,
+                                        "title": null,
+                                        "traits": [],
+                                        "type": "Group"
+                                       },
+                                       {
+                                        "AXFrame": "{{16.132957458496094, 24.681102752685547}, {2, 0}}",
+                                        "AXLabel": null,
+                                        "AXUniqueId": null,
+                                        "AXValue": null,
+                                        "children": [],
+                                        "content_required": false,
+                                        "custom_actions": [],
+                                        "enabled": true,
+                                        "frame": {
+                                         "height": 0,
+                                         "width": 2,
+                                         "x": 16.132957458496094,
+                                         "y": 24.681102752685547
+                                        },
+                                        "help": null,
+                                        "pid": 23529,
+                                        "role": "AXGroup",
+                                        "role_description": "group",
+                                        "subrole": null,
+                                        "title": null,
+                                        "traits": [],
+                                        "type": "Group"
+                                       }
+                                      ],
+                                      "content_required": false,
+                                      "custom_actions": [],
+                                      "enabled": true,
+                                      "frame": {
+                                       "height": 0,
+                                       "width": 0,
+                                       "x": 16.132957458496094,
+                                       "y": 24.681102752685547
+                                      },
+                                      "help": null,
+                                      "pid": 23529,
+                                      "role": "AXGroup",
+                                      "role_description": "group",
+                                      "subrole": null,
+                                      "title": null,
+                                      "traits": [],
+                                      "type": "Group"
+                                     },
+                                     {
+                                      "AXFrame": "{{16.132957458496094, 24.681102752685547}, {0, 0}}",
+                                      "AXLabel": null,
+                                      "AXUniqueId": "com.apple.text.grabber.leading",
+                                      "AXValue": null,
+                                      "children": [
+                                       {
+                                        "AXFrame": "{{8.8829574584960938, 11.181102752685547}, {16.5, 16.5}}",
+                                        "AXLabel": null,
+                                        "AXUniqueId": null,
+                                        "AXValue": null,
+                                        "children": [],
+                                        "content_required": false,
+                                        "custom_actions": [],
+                                        "enabled": true,
+                                        "frame": {
+                                         "height": 16.5,
+                                         "width": 16.5,
+                                         "x": 8.882957458496094,
+                                         "y": 11.181102752685547
+                                        },
+                                        "help": null,
+                                        "pid": 23529,
+                                        "role": "AXGroup",
+                                        "role_description": "group",
+                                        "subrole": null,
+                                        "title": null,
+                                        "traits": [],
+                                        "type": "Group"
+                                       },
+                                       {
+                                        "AXFrame": "{{16.132957458496094, 24.681102752685547}, {2, 0}}",
+                                        "AXLabel": null,
+                                        "AXUniqueId": null,
+                                        "AXValue": null,
+                                        "children": [],
+                                        "content_required": false,
+                                        "custom_actions": [],
+                                        "enabled": true,
+                                        "frame": {
+                                         "height": 0,
+                                         "width": 2,
+                                         "x": 16.132957458496094,
+                                         "y": 24.681102752685547
+                                        },
+                                        "help": null,
+                                        "pid": 23529,
+                                        "role": "AXGroup",
+                                        "role_description": "group",
+                                        "subrole": null,
+                                        "title": null,
+                                        "traits": [],
+                                        "type": "Group"
+                                       }
+                                      ],
+                                      "content_required": false,
+                                      "custom_actions": [],
+                                      "enabled": true,
+                                      "frame": {
+                                       "height": 0,
+                                       "width": 0,
+                                       "x": 16.132957458496094,
+                                       "y": 24.681102752685547
+                                      },
+                                      "help": null,
+                                      "pid": 23529,
+                                      "role": "AXGroup",
+                                      "role_description": "group",
+                                      "subrole": null,
+                                      "title": null,
+                                      "traits": [],
+                                      "type": "Group"
+                                     }
+                                    ],
+                                    "content_required": false,
+                                    "custom_actions": [],
+                                    "enabled": true,
+                                    "frame": {
+                                     "height": 0,
+                                     "width": 0,
+                                     "x": 16.132957458496094,
+                                     "y": 24.681102752685547
+                                    },
+                                    "help": null,
+                                    "pid": 23529,
+                                    "role": "AXGroup",
+                                    "role_description": "group",
+                                    "subrole": null,
+                                    "title": null,
+                                    "traits": [],
+                                    "type": "Group"
+                                   },
+                                   {
+                                    "AXFrame": "{{411.13295745849609, 67.01443608601889}, {30, 282.66666666666663}}",
+                                    "AXLabel": "Vertical scroll bar, 1 page",
+                                    "AXUniqueId": null,
+                                    "AXValue": "0%",
+                                    "children": [
+                                     {
+                                      "AXFrame": "{{438.13295745849609, 70.01443608601889}, {3, 118.33333333333331}}",
+                                      "AXLabel": null,
+                                      "AXUniqueId": null,
+                                      "AXValue": null,
+                                      "children": [],
+                                      "content_required": false,
+                                      "custom_actions": [],
+                                      "enabled": true,
+                                      "frame": {
+                                       "height": 118.33333333333331,
+                                       "width": 3,
+                                       "x": 438.1329574584961,
+                                       "y": 70.01443608601889
+                                      },
+                                      "help": null,
+                                      "pid": 23529,
+                                      "role": "AXGroup",
+                                      "role_description": "group",
+                                      "subrole": null,
+                                      "title": null,
+                                      "traits": [],
+                                      "type": "Group"
+                                     }
+                                    ],
+                                    "content_required": false,
+                                    "custom_actions": [],
+                                    "enabled": true,
+                                    "frame": {
+                                     "height": 282.66666666666663,
+                                     "width": 30,
+                                     "x": 411.1329574584961,
+                                     "y": 67.01443608601889
+                                    },
+                                    "help": null,
+                                    "pid": 23529,
+                                    "role": "AXSlider",
+                                    "role_description": "slider",
+                                    "subrole": null,
+                                    "title": null,
+                                    "traits": [],
+                                    "type": "Slider"
+                                   },
+                                   {
+                                    "AXFrame": "{{16.132957458496094, 316.68110275268555}, {428, 30}}",
+                                    "AXLabel": "Horizontal scroll bar, 1 page",
+                                    "AXUniqueId": null,
+                                    "AXValue": "0%",
+                                    "children": [
+                                     {
+                                      "AXFrame": "{{19.205904642740848, 343.68110275268555}, {387, 3}}",
+                                      "AXLabel": null,
+                                      "AXUniqueId": null,
+                                      "AXValue": null,
+                                      "children": [],
+                                      "content_required": false,
+                                      "custom_actions": [],
+                                      "enabled": true,
+                                      "frame": {
+                                       "height": 3,
+                                       "width": 387,
+                                       "x": 19.205904642740848,
+                                       "y": 343.68110275268555
+                                      },
+                                      "help": null,
+                                      "pid": 23529,
+                                      "role": "AXGroup",
+                                      "role_description": "group",
+                                      "subrole": null,
+                                      "title": null,
+                                      "traits": [],
+                                      "type": "Group"
+                                     }
+                                    ],
+                                    "content_required": false,
+                                    "custom_actions": [],
+                                    "enabled": true,
+                                    "frame": {
+                                     "height": 30,
+                                     "width": 428,
+                                     "x": 16.132957458496094,
+                                     "y": 316.68110275268555
+                                    },
+                                    "help": null,
+                                    "pid": 23529,
+                                    "role": "AXSlider",
+                                    "role_description": "slider",
+                                    "subrole": null,
+                                    "title": null,
+                                    "traits": [],
+                                    "type": "Slider"
+                                   }
+                                  ],
+                                  "content_required": false,
+                                  "custom_actions": [],
+                                  "enabled": true,
+                                  "frame": {
+                                   "height": 325,
+                                   "width": 428,
+                                   "x": 16.132957458496094,
+                                   "y": 24.681102752685547
+                                  },
+                                  "help": null,
+                                  "pid": 23529,
+                                  "role": "AXTextArea",
+                                  "role_description": "Group",
+                                  "subrole": null,
+                                  "title": null,
+                                  "traits": [],
+                                  "type": "TextArea"
+                                 },
+                                 {
+                                  "AXFrame": "{{440, 154}, {32, 66}}",
+                                  "AXLabel": "Paragraph 3 of 3",
+                                  "AXUniqueId": null,
+                                  "AXValue": null,
+                                  "children": [],
+                                  "content_required": false,
+                                  "custom_actions": [],
+                                  "enabled": true,
+                                  "frame": {
+                                   "height": 66,
+                                   "width": 32,
+                                   "x": 440,
+                                   "y": 154
+                                  },
+                                  "help": null,
+                                  "pid": 23529,
+                                  "role": "AXSlider",
+                                  "role_description": "slider",
+                                  "subrole": null,
+                                  "title": null,
+                                  "traits": [],
+                                  "type": "Slider"
+                                 }
+                                ],
+                                "content_required": false,
+                                "custom_actions": [],
+                                "enabled": true,
+                                "frame": {
+                                 "height": 678,
+                                 "width": 466,
+                                 "x": 0,
+                                 "y": 0
+                                },
+                                "help": null,
+                                "pid": 23529,
+                                "role": "AXGroup",
+                                "role_description": "group",
+                                "subrole": null,
+                                "title": null,
+                                "traits": [],
+                                "type": "Group"
+                               }
+                              ],
+                              "content_required": false,
+                              "custom_actions": [],
+                              "enabled": true,
+                              "frame": {
+                               "height": 678,
+                               "width": 466,
+                               "x": 0,
+                               "y": 0
+                              },
+                              "help": null,
+                              "pid": 23529,
+                              "role": "AXGroup",
+                              "role_description": "group",
+                              "subrole": null,
+                              "title": null,
+                              "traits": [],
+                              "type": "Group"
+                             }
+                            ],
+                            "content_required": false,
+                            "custom_actions": [],
+                            "enabled": true,
+                            "frame": {
+                             "height": 678,
+                             "width": 466,
+                             "x": 0,
+                             "y": 0
+                            },
+                            "help": null,
+                            "pid": 23529,
+                            "role": "AXGroup",
+                            "role_description": "group",
+                            "subrole": null,
+                            "title": null,
+                            "traits": [],
+                            "type": "Group"
+                           }
+                          ],
+                          "content_required": false,
+                          "custom_actions": [],
+                          "enabled": true,
+                          "frame": {
+                           "height": 678,
+                           "width": 466,
+                           "x": 0,
+                           "y": 0
+                          },
+                          "help": null,
+                          "pid": 23529,
+                          "role": "AXGroup",
+                          "role_description": "group",
+                          "subrole": null,
+                          "title": null,
+                          "traits": [],
+                          "type": "Group"
+                         }
+                        ],
+                        "content_required": false,
+                        "custom_actions": [],
+                        "enabled": true,
+                        "frame": {
+                         "height": 678,
+                         "width": 466,
+                         "x": 0,
+                         "y": 0
+                        },
+                        "help": null,
+                        "pid": 23529,
+                        "role": "AXGroup",
+                        "role_description": "group",
+                        "subrole": null,
+                        "title": null,
+                        "traits": [],
+                        "type": "Group"
+                       }
+                      ],
+                      "content_required": false,
+                      "custom_actions": [],
+                      "enabled": true,
+                      "frame": {
+                       "height": 678,
+                       "width": 466,
+                       "x": 0,
+                       "y": 0
+                      },
+                      "help": null,
+                      "pid": 23529,
+                      "role": "AXGroup",
+                      "role_description": "group",
+                      "subrole": null,
+                      "title": null,
+                      "traits": [],
+                      "type": "Group"
+                     }
+                    ],
+                    "content_required": false,
+                    "custom_actions": [],
+                    "enabled": true,
+                    "frame": {
+                     "height": 678,
+                     "width": 466,
+                     "x": 0,
+                     "y": 0
+                    },
+                    "help": null,
+                    "pid": 23529,
+                    "role": "AXGroup",
+                    "role_description": "group",
+                    "subrole": null,
+                    "title": null,
+                    "traits": [],
+                    "type": "Group"
+                   }
+                  ],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 678,
+                   "width": 466,
+                   "x": 0,
+                   "y": 0
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXGroup",
+                  "role_description": "group",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Group"
+                 }
+                ],
+                "content_required": false,
+                "custom_actions": [],
+                "enabled": true,
+                "frame": {
+                 "height": 678,
+                 "width": 466,
+                 "x": 0,
+                 "y": 0
+                },
+                "help": null,
+                "pid": 23529,
+                "role": "AXGroup",
+                "role_description": "group",
+                "subrole": null,
+                "title": null,
+                "traits": [],
+                "type": "Group"
+               },
+               {
+                "AXFrame": "{{0, 0}, {466, 678}}",
+                "AXLabel": null,
+                "AXUniqueId": null,
+                "AXValue": null,
+                "children": [
+                 {
+                  "AXFrame": "{{0, 0}, {466, 678}}",
+                  "AXLabel": null,
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 678,
+                   "width": 466,
+                   "x": 0,
+                   "y": 0
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXGroup",
+                  "role_description": "group",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Group"
+                 }
+                ],
+                "content_required": false,
+                "custom_actions": [],
+                "enabled": true,
+                "frame": {
+                 "height": 678,
+                 "width": 466,
+                 "x": 0,
+                 "y": 0
+                },
+                "help": null,
+                "pid": 23529,
+                "role": "AXGroup",
+                "role_description": "group",
+                "subrole": null,
+                "title": null,
+                "traits": [],
+                "type": "Group"
+               }
+              ],
+              "content_required": false,
+              "custom_actions": [],
+              "enabled": true,
+              "frame": {
+               "height": 678,
+               "width": 466,
+               "x": 0,
+               "y": 0
+              },
+              "help": null,
+              "pid": 23529,
+              "role": "AXGroup",
+              "role_description": "group",
+              "subrole": null,
+              "title": null,
+              "traits": [],
+              "type": "Group"
+             }
+            ],
+            "content_required": false,
+            "custom_actions": [],
+            "enabled": true,
+            "frame": {
+             "height": 678,
+             "width": 466,
+             "x": 0,
+             "y": 0
+            },
+            "help": null,
+            "pid": 23529,
+            "role": "AXGroup",
+            "role_description": "group",
+            "subrole": null,
+            "title": null,
+            "traits": [],
+            "type": "Group"
+           }
+          ],
+          "content_required": false,
+          "custom_actions": [],
+          "enabled": true,
+          "frame": {
+           "height": 678,
+           "width": 466,
+           "x": 0,
+           "y": 0
+          },
+          "help": null,
+          "pid": 23529,
+          "role": "AXGroup",
+          "role_description": "group",
+          "subrole": null,
+          "title": null,
+          "traits": [],
+          "type": "Group"
+         }
+        ],
+        "content_required": false,
+        "custom_actions": [],
+        "enabled": true,
+        "frame": {
+         "height": 678,
+         "width": 466,
+         "x": 0,
+         "y": 0
+        },
+        "help": null,
+        "pid": 23529,
+        "role": "AXGroup",
+        "role_description": "group",
+        "subrole": null,
+        "title": null,
+        "traits": [],
+        "type": "Group"
+       }
+      ],
+      "content_required": false,
+      "custom_actions": [],
+      "enabled": true,
+      "frame": {
+       "height": 678,
+       "width": 466,
+       "x": 0,
+       "y": 0
+      },
+      "help": null,
+      "pid": 23529,
+      "role": "AXGroup",
+      "role_description": "group",
+      "subrole": null,
+      "title": null,
+      "traits": [],
+      "type": "Group"
+     }
+    ],
+    "content_required": false,
+    "custom_actions": [],
+    "enabled": true,
+    "frame": {
+     "height": 678,
+     "width": 466,
+     "x": 0,
+     "y": 0
+    },
+    "help": null,
+    "pid": 23529,
+    "role": "AXGroup",
+    "role_description": "group",
+    "subrole": null,
+    "title": null,
+    "traits": [],
+    "type": "Group"
+   },
+   {
+    "AXFrame": "{{0, 0}, {466, 678}}",
+    "AXLabel": null,
+    "AXUniqueId": null,
+    "AXValue": null,
+    "children": [
+     {
+      "AXFrame": "{{0, 0}, {466, 678}}",
+      "AXLabel": null,
+      "AXUniqueId": null,
+      "AXValue": null,
+      "children": [
+       {
+        "AXFrame": "{{0, 0}, {466, 678}}",
+        "AXLabel": null,
+        "AXUniqueId": null,
+        "AXValue": null,
+        "children": [],
+        "content_required": false,
+        "custom_actions": [],
+        "enabled": true,
+        "frame": {
+         "height": 678,
+         "width": 466,
+         "x": 0,
+         "y": 0
+        },
+        "help": null,
+        "pid": 23529,
+        "role": "AXGroup",
+        "role_description": "group",
+        "subrole": null,
+        "title": null,
+        "traits": [],
+        "type": "Group"
+       },
+       {
+        "AXFrame": "{{0, 374}, {466, 304}}",
+        "AXLabel": null,
+        "AXUniqueId": null,
+        "AXValue": null,
+        "children": [
+         {
+          "AXFrame": "{{0, 374}, {466, 304}}",
+          "AXLabel": null,
+          "AXUniqueId": "inputView",
+          "AXValue": null,
+          "children": [],
+          "content_required": false,
+          "custom_actions": [],
+          "enabled": true,
+          "frame": {
+           "height": 304,
+           "width": 466,
+           "x": 0,
+           "y": 374
+          },
+          "help": null,
+          "pid": 23529,
+          "role": "AXGroup",
+          "role_description": "group",
+          "subrole": null,
+          "title": null,
+          "traits": [],
+          "type": "Group"
+         }
+        ],
+        "content_required": false,
+        "custom_actions": [],
+        "enabled": true,
+        "frame": {
+         "height": 304,
+         "width": 466,
+         "x": 0,
+         "y": 374
+        },
+        "help": null,
+        "pid": 23529,
+        "role": "AXGroup",
+        "role_description": "group",
+        "subrole": null,
+        "title": null,
+        "traits": [],
+        "type": "Group"
+       }
+      ],
+      "content_required": false,
+      "custom_actions": [],
+      "enabled": true,
+      "frame": {
+       "height": 678,
+       "width": 466,
+       "x": 0,
+       "y": 0
+      },
+      "help": null,
+      "pid": 23529,
+      "role": "AXGroup",
+      "role_description": "group",
+      "subrole": null,
+      "title": null,
+      "traits": [],
+      "type": "Group"
+     }
+    ],
+    "content_required": false,
+    "custom_actions": [],
+    "enabled": true,
+    "frame": {
+     "height": 678,
+     "width": 466,
+     "x": 0,
+     "y": 0
+    },
+    "help": null,
+    "pid": 23529,
+    "role": "AXGroup",
+    "role_description": "group",
+    "subrole": null,
+    "title": null,
+    "traits": [],
+    "type": "Group"
+   },
+   {
+    "AXFrame": "{{0, 0}, {466, 678}}",
+    "AXLabel": null,
+    "AXUniqueId": null,
+    "AXValue": null,
+    "children": [
+     {
+      "AXFrame": "{{0, 0}, {466, 678}}",
+      "AXLabel": null,
+      "AXUniqueId": null,
+      "AXValue": null,
+      "children": [
+       {
+        "AXFrame": "{{0, 374}, {466, 304}}",
+        "AXLabel": null,
+        "AXUniqueId": null,
+        "AXValue": null,
+        "children": [
+         {
+          "AXFrame": "{{0, 374}, {466, 44}}",
+          "AXLabel": null,
+          "AXUniqueId": "SystemInputAssistantView",
+          "AXValue": null,
+          "children": [
+           {
+            "AXFrame": "{{0, 374}, {466, 44}}",
+            "AXLabel": null,
+            "AXUniqueId": null,
+            "AXValue": null,
+            "children": [
+             {
+              "AXFrame": "{{0, 374}, {466, 44}}",
+              "AXLabel": null,
+              "AXUniqueId": "CenterPageView",
+              "AXValue": null,
+              "children": [
+               {
+                "AXFrame": "{{0, -226}, {466, 1244}}",
+                "AXLabel": null,
+                "AXUniqueId": null,
+                "AXValue": null,
+                "children": [
+                 {
+                  "AXFrame": "{{0, 374}, {466, 44}}",
+                  "AXLabel": null,
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 44,
+                   "width": 466,
+                   "x": 0,
+                   "y": 374
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXScrollArea",
+                  "role_description": "Group",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "ScrollArea"
+                 }
+                ],
+                "content_required": false,
+                "custom_actions": [],
+                "enabled": true,
+                "frame": {
+                 "height": 1244,
+                 "width": 466,
+                 "x": 0,
+                 "y": -226
+                },
+                "help": null,
+                "pid": 23529,
+                "role": "AXGroup",
+                "role_description": "group",
+                "subrole": null,
+                "title": null,
+                "traits": [],
+                "type": "Group"
+               },
+               {
+                "AXFrame": "{{0, 374}, {466, 44}}",
+                "AXLabel": null,
+                "AXUniqueId": null,
+                "AXValue": null,
+                "children": [
+                 {
+                  "AXFrame": "{{0, 374}, {466, 44}}",
+                  "AXLabel": null,
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [
+                   {
+                    "AXFrame": "{{0, 374}, {466, 44}}",
+                    "AXLabel": "Typing Predictions",
+                    "AXUniqueId": null,
+                    "AXValue": null,
+                    "children": [
+                     {
+                      "AXFrame": "{{0, 374}, {466, 44}}",
+                      "AXLabel": null,
+                      "AXUniqueId": null,
+                      "AXValue": null,
+                      "children": [
+                       {
+                        "AXFrame": "{{0, 374}, {466, 44}}",
+                        "AXLabel": null,
+                        "AXUniqueId": null,
+                        "AXValue": null,
+                        "children": [
+                         {
+                          "AXFrame": "{{0, 374}, {155.33333333333334, 44}}",
+                          "AXLabel": null,
+                          "AXUniqueId": null,
+                          "AXValue": null,
+                          "children": [],
+                          "content_required": false,
+                          "custom_actions": [],
+                          "enabled": true,
+                          "frame": {
+                           "height": 44,
+                           "width": 155.33333333333334,
+                           "x": 0,
+                           "y": 374
+                          },
+                          "help": null,
+                          "pid": 23529,
+                          "role": "AXButton",
+                          "role_description": "button",
+                          "subrole": null,
+                          "title": null,
+                          "traits": [],
+                          "type": "Button"
+                         },
+                         {
+                          "AXFrame": "{{155.33333333333331, 374}, {155.33333333333331, 44}}",
+                          "AXLabel": null,
+                          "AXUniqueId": null,
+                          "AXValue": null,
+                          "children": [],
+                          "content_required": false,
+                          "custom_actions": [],
+                          "enabled": true,
+                          "frame": {
+                           "height": 44,
+                           "width": 155.33333333333331,
+                           "x": 155.33333333333331,
+                           "y": 374
+                          },
+                          "help": null,
+                          "pid": 23529,
+                          "role": "AXButton",
+                          "role_description": "button",
+                          "subrole": null,
+                          "title": null,
+                          "traits": [],
+                          "type": "Button"
+                         },
+                         {
+                          "AXFrame": "{{310.66666666666669, 374}, {155.33333333333331, 44}}",
+                          "AXLabel": null,
+                          "AXUniqueId": null,
+                          "AXValue": null,
+                          "children": [],
+                          "content_required": false,
+                          "custom_actions": [],
+                          "enabled": true,
+                          "frame": {
+                           "height": 44,
+                           "width": 155.33333333333331,
+                           "x": 310.6666666666667,
+                           "y": 374
+                          },
+                          "help": null,
+                          "pid": 23529,
+                          "role": "AXButton",
+                          "role_description": "button",
+                          "subrole": null,
+                          "title": null,
+                          "traits": [],
+                          "type": "Button"
+                         }
+                        ],
+                        "content_required": false,
+                        "custom_actions": [],
+                        "enabled": true,
+                        "frame": {
+                         "height": 44,
+                         "width": 466,
+                         "x": 0,
+                         "y": 374
+                        },
+                        "help": null,
+                        "pid": 23529,
+                        "role": "AXGroup",
+                        "role_description": "group",
+                        "subrole": null,
+                        "title": null,
+                        "traits": [],
+                        "type": "Group"
+                       }
+                      ],
+                      "content_required": false,
+                      "custom_actions": [],
+                      "enabled": true,
+                      "frame": {
+                       "height": 44,
+                       "width": 466,
+                       "x": 0,
+                       "y": 374
+                      },
+                      "help": null,
+                      "pid": 23529,
+                      "role": "AXGroup",
+                      "role_description": "group",
+                      "subrole": null,
+                      "title": null,
+                      "traits": [],
+                      "type": "Group"
+                     }
+                    ],
+                    "content_required": false,
+                    "custom_actions": [],
+                    "enabled": true,
+                    "frame": {
+                     "height": 44,
+                     "width": 466,
+                     "x": 0,
+                     "y": 374
+                    },
+                    "help": null,
+                    "pid": 23529,
+                    "role": "AXGroup",
+                    "role_description": "group",
+                    "subrole": null,
+                    "title": null,
+                    "traits": [],
+                    "type": "Group"
+                   }
+                  ],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 44,
+                   "width": 466,
+                   "x": 0,
+                   "y": 374
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXGroup",
+                  "role_description": "group",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Group"
+                 }
+                ],
+                "content_required": false,
+                "custom_actions": [],
+                "enabled": true,
+                "frame": {
+                 "height": 44,
+                 "width": 466,
+                 "x": 0,
+                 "y": 374
+                },
+                "help": null,
+                "pid": 23529,
+                "role": "AXGroup",
+                "role_description": "group",
+                "subrole": null,
+                "title": null,
+                "traits": [],
+                "type": "Group"
+               }
+              ],
+              "content_required": false,
+              "custom_actions": [],
+              "enabled": true,
+              "frame": {
+               "height": 44,
+               "width": 466,
+               "x": 0,
+               "y": 374
+              },
+              "help": null,
+              "pid": 23529,
+              "role": "AXGroup",
+              "role_description": "group",
+              "subrole": null,
+              "title": null,
+              "traits": [],
+              "type": "Group"
+             }
+            ],
+            "content_required": false,
+            "custom_actions": [],
+            "enabled": true,
+            "frame": {
+             "height": 44,
+             "width": 466,
+             "x": 0,
+             "y": 374
+            },
+            "help": null,
+            "pid": 23529,
+            "role": "AXGroup",
+            "role_description": "group",
+            "subrole": null,
+            "title": null,
+            "traits": [],
+            "type": "Group"
+           }
+          ],
+          "content_required": false,
+          "custom_actions": [],
+          "enabled": true,
+          "frame": {
+           "height": 44,
+           "width": 466,
+           "x": 0,
+           "y": 374
+          },
+          "help": null,
+          "pid": 23529,
+          "role": "AXGroup",
+          "role_description": "group",
+          "subrole": null,
+          "title": null,
+          "traits": [],
+          "type": "Group"
+         },
+         {
+          "AXFrame": "{{0, 374}, {466, 305}}",
+          "AXLabel": null,
+          "AXUniqueId": null,
+          "AXValue": null,
+          "children": [
+           {
+            "AXFrame": "{{0, 374}, {466, 305}}",
+            "AXLabel": null,
+            "AXUniqueId": null,
+            "AXValue": null,
+            "children": [
+             {
+              "AXFrame": "{{0, 374}, {466, 305}}",
+              "AXLabel": null,
+              "AXUniqueId": null,
+              "AXValue": null,
+              "children": [],
+              "content_required": false,
+              "custom_actions": [],
+              "enabled": true,
+              "frame": {
+               "height": 305,
+               "width": 466,
+               "x": 0,
+               "y": 374
+              },
+              "help": null,
+              "pid": 23529,
+              "role": "AXGroup",
+              "role_description": "group",
+              "subrole": null,
+              "title": null,
+              "traits": [],
+              "type": "Group"
+             }
+            ],
+            "content_required": false,
+            "custom_actions": [],
+            "enabled": true,
+            "frame": {
+             "height": 305,
+             "width": 466,
+             "x": 0,
+             "y": 374
+            },
+            "help": null,
+            "pid": 23529,
+            "role": "AXGroup",
+            "role_description": "group",
+            "subrole": null,
+            "title": null,
+            "traits": [],
+            "type": "Group"
+           }
+          ],
+          "content_required": false,
+          "custom_actions": [],
+          "enabled": true,
+          "frame": {
+           "height": 305,
+           "width": 466,
+           "x": 0,
+           "y": 374
+          },
+          "help": null,
+          "pid": 23529,
+          "role": "AXGroup",
+          "role_description": "group",
+          "subrole": null,
+          "title": null,
+          "traits": [],
+          "type": "Group"
+         },
+         {
+          "AXFrame": "{{0, 418}, {466, 245}}",
+          "AXLabel": null,
+          "AXUniqueId": null,
+          "AXValue": null,
+          "children": [
+           {
+            "AXFrame": "{{0, 418}, {466, 245}}",
+            "AXLabel": null,
+            "AXUniqueId": null,
+            "AXValue": null,
+            "children": [
+             {
+              "AXFrame": "{{0, 418}, {466, 245}}",
+              "AXLabel": null,
+              "AXUniqueId": null,
+              "AXValue": null,
+              "children": [
+               {
+                "AXFrame": "{{0, 418}, {466, 245}}",
+                "AXLabel": null,
+                "AXUniqueId": "UIKeyboardLayoutStar Preview",
+                "AXValue": null,
+                "children": [
+                 {
+                  "AXFrame": "{{0, 418}, {0, 0}}",
+                  "AXLabel": "Padding-Left",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 0,
+                   "width": 0,
+                   "x": 0,
+                   "y": 418
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{0, 418}, {0, 0}}",
+                  "AXLabel": "Padding-Right",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 0,
+                   "width": 0,
+                   "x": 0,
+                   "y": 418
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{0, 418}, {0, 0}}",
+                  "AXLabel": "Padding-Left",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 0,
+                   "width": 0,
+                   "x": 0,
+                   "y": 418
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{0, 418}, {0, 0}}",
+                  "AXLabel": "Padding-Right",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 0,
+                   "width": 0,
+                   "x": 0,
+                   "y": 418
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{0, 418}, {0, 0}}",
+                  "AXLabel": "Padding-Left",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 0,
+                   "width": 0,
+                   "x": 0,
+                   "y": 418
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{0, 418}, {0, 0}}",
+                  "AXLabel": "Padding-Right",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 0,
+                   "width": 0,
+                   "x": 0,
+                   "y": 418
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{4.6666666666666572, 425}, {45.666666666666664, 56}}",
+                  "AXLabel": "q",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 45.666666666666664,
+                   "x": 4.666666666666657,
+                   "y": 425
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{50.333333333333329, 425}, {46, 56}}",
+                  "AXLabel": "w",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 46,
+                   "x": 50.33333333333333,
+                   "y": 425
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{96.333333333333314, 425}, {46, 56}}",
+                  "AXLabel": "e",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 46,
+                   "x": 96.33333333333331,
+                   "y": 425
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{142.33333333333334, 425}, {45.666666666666657, 56}}",
+                  "AXLabel": "r",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 45.66666666666666,
+                   "x": 142.33333333333334,
+                   "y": 425
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{188, 425}, {46, 56}}",
+                  "AXLabel": "t",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 46,
+                   "x": 188,
+                   "y": 425
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{234, 425}, {46, 56}}",
+                  "AXLabel": "y",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 46,
+                   "x": 234,
+                   "y": 425
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{280, 425}, {45.666666666666686, 56}}",
+                  "AXLabel": "u",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 45.666666666666686,
+                   "x": 280,
+                   "y": 425
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{325.66666666666663, 425}, {46, 56}}",
+                  "AXLabel": "i",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 46,
+                   "x": 325.66666666666663,
+                   "y": 425
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{371.66666666666663, 425}, {46, 56}}",
+                  "AXLabel": "o",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 46,
+                   "x": 371.66666666666663,
+                   "y": 425
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{417.66666666666663, 425}, {46, 56}}",
+                  "AXLabel": "p",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 46,
+                   "x": 417.66666666666663,
+                   "y": 425
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{27.333333333333321, 481}, {45.999999999999993, 56}}",
+                  "AXLabel": "a",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 45.99999999999999,
+                   "x": 27.33333333333332,
+                   "y": 481
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{73.333333333333314, 481}, {46, 56}}",
+                  "AXLabel": "s",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 46,
+                   "x": 73.33333333333331,
+                   "y": 481
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{119.33333333333333, 481}, {45.666666666666671, 56}}",
+                  "AXLabel": "d",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 45.66666666666667,
+                   "x": 119.33333333333333,
+                   "y": 481
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{165, 481}, {46, 56}}",
+                  "AXLabel": "f",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 46,
+                   "x": 165,
+                   "y": 481
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{211, 481}, {46, 56}}",
+                  "AXLabel": "g",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 46,
+                   "x": 211,
+                   "y": 481
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{257, 481}, {46, 56}}",
+                  "AXLabel": "h",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 46,
+                   "x": 257,
+                   "y": 481
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{303, 481}, {45.666666666666686, 56}}",
+                  "AXLabel": "j",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 45.666666666666686,
+                   "x": 303,
+                   "y": 481
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{348.66666666666663, 481}, {46, 56}}",
+                  "AXLabel": "k",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 46,
+                   "x": 348.66666666666663,
+                   "y": 481
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{394.66666666666663, 481}, {46, 56}}",
+                  "AXLabel": "l",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 46,
+                   "x": 394.66666666666663,
+                   "y": 481
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{4.6666666666666572, 537}, {59.666666666666657, 56}}",
+                  "AXLabel": "shift",
+                  "AXUniqueId": "shift",
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [
+                   "Caps Lock"
+                  ],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 59.66666666666666,
+                   "x": 4.666666666666657,
+                   "y": 537
+                  },
+                  "help": "Quadruple-tap to enter caps lock",
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{73.333333333333314, 537}, {46, 56}}",
+                  "AXLabel": "z",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 46,
+                   "x": 73.33333333333331,
+                   "y": 537
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{119.33333333333333, 537}, {45.666666666666671, 56}}",
+                  "AXLabel": "x",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 45.66666666666667,
+                   "x": 119.33333333333333,
+                   "y": 537
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{165, 537}, {46, 56}}",
+                  "AXLabel": "c",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 46,
+                   "x": 165,
+                   "y": 537
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{211, 537}, {46, 56}}",
+                  "AXLabel": "v",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 46,
+                   "x": 211,
+                   "y": 537
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{257, 537}, {46, 56}}",
+                  "AXLabel": "b",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 46,
+                   "x": 257,
+                   "y": 537
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{303, 537}, {45.666666666666686, 56}}",
+                  "AXLabel": "n",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 45.666666666666686,
+                   "x": 303,
+                   "y": 537
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{348.66666666666663, 537}, {46, 56}}",
+                  "AXLabel": "m",
+                  "AXUniqueId": null,
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 46,
+                   "x": 348.66666666666663,
+                   "y": 537
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{403.66666666666663, 537}, {60, 56}}",
+                  "AXLabel": "delete",
+                  "AXUniqueId": "delete",
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 60,
+                   "x": 403.66666666666663,
+                   "y": 537
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{4.6666666666666572, 593}, {68.666666666666671, 56}}",
+                  "AXLabel": "numbers",
+                  "AXUniqueId": "more",
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 68.66666666666667,
+                   "x": 4.666666666666657,
+                   "y": 593
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{73.333333333333314, 593}, {46, 56}}",
+                  "AXLabel": "Emoji",
+                  "AXUniqueId": "emoji",
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 46,
+                   "x": 73.33333333333331,
+                   "y": 593
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{119.3333333333333, 593}, {229.33333333333331, 56}}",
+                  "AXLabel": "space",
+                  "AXUniqueId": "space",
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 229.33333333333331,
+                   "x": 119.3333333333333,
+                   "y": 593
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{348.66666666666663, 593}, {46, 56}}",
+                  "AXLabel": "Dictate",
+                  "AXUniqueId": "dictation",
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 46,
+                   "x": 348.66666666666663,
+                   "y": 593
+                  },
+                  "help": "Double-tap to start dictation. Double-tap with two fingers when finished.",
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 },
+                 {
+                  "AXFrame": "{{394.66666666666663, 593}, {69, 56}}",
+                  "AXLabel": "return",
+                  "AXUniqueId": "Return",
+                  "AXValue": null,
+                  "children": [],
+                  "content_required": false,
+                  "custom_actions": [],
+                  "enabled": true,
+                  "frame": {
+                   "height": 56,
+                   "width": 69,
+                   "x": 394.66666666666663,
+                   "y": 593
+                  },
+                  "help": null,
+                  "pid": 23529,
+                  "role": "AXButton",
+                  "role_description": "button",
+                  "subrole": null,
+                  "title": null,
+                  "traits": [],
+                  "type": "Button"
+                 }
+                ],
+                "content_required": false,
+                "custom_actions": [],
+                "enabled": true,
+                "frame": {
+                 "height": 245,
+                 "width": 466,
+                 "x": 0,
+                 "y": 418
+                },
+                "help": null,
+                "pid": 23529,
+                "role": "AXGroup",
+                "role_description": "group",
+                "subrole": null,
+                "title": null,
+                "traits": [],
+                "type": "Group"
+               }
+              ],
+              "content_required": false,
+              "custom_actions": [],
+              "enabled": true,
+              "frame": {
+               "height": 245,
+               "width": 466,
+               "x": 0,
+               "y": 418
+              },
+              "help": null,
+              "pid": 23529,
+              "role": "AXGroup",
+              "role_description": "group",
+              "subrole": null,
+              "title": null,
+              "traits": [],
+              "type": "Group"
+             }
+            ],
+            "content_required": false,
+            "custom_actions": [],
+            "enabled": true,
+            "frame": {
+             "height": 245,
+             "width": 466,
+             "x": 0,
+             "y": 418
+            },
+            "help": null,
+            "pid": 23529,
+            "role": "AXGroup",
+            "role_description": "group",
+            "subrole": null,
+            "title": null,
+            "traits": [],
+            "type": "Group"
+           }
+          ],
+          "content_required": false,
+          "custom_actions": [],
+          "enabled": true,
+          "frame": {
+           "height": 245,
+           "width": 466,
+           "x": 0,
+           "y": 418
+          },
+          "help": null,
+          "pid": 23529,
+          "role": "AXGroup",
+          "role_description": "group",
+          "subrole": null,
+          "title": null,
+          "traits": [],
+          "type": "Group"
+         }
+        ],
+        "content_required": false,
+        "custom_actions": [],
+        "enabled": true,
+        "frame": {
+         "height": 304,
+         "width": 466,
+         "x": 0,
+         "y": 374
+        },
+        "help": null,
+        "pid": 23529,
+        "role": "AXGroup",
+        "role_description": "group",
+        "subrole": null,
+        "title": null,
+        "traits": [],
+        "type": "Group"
+       }
+      ],
+      "content_required": false,
+      "custom_actions": [],
+      "enabled": true,
+      "frame": {
+       "height": 678,
+       "width": 466,
+       "x": 0,
+       "y": 0
+      },
+      "help": null,
+      "pid": 23529,
+      "role": "AXGroup",
+      "role_description": "group",
+      "subrole": null,
+      "title": null,
+      "traits": [],
+      "type": "Group"
+     }
+    ],
+    "content_required": false,
+    "custom_actions": [],
+    "enabled": true,
+    "frame": {
+     "height": 678,
+     "width": 466,
+     "x": 0,
+     "y": 0
+    },
+    "help": null,
+    "pid": 23529,
+    "role": "AXGroup",
+    "role_description": "group",
+    "subrole": null,
+    "title": null,
+    "traits": [],
+    "type": "Group"
+   }
+  ],
+  "content_required": false,
+  "custom_actions": [],
+  "enabled": true,
+  "frame": {
+   "height": 678,
+   "width": 466,
+   "x": 0,
+   "y": 0
+  },
+  "help": null,
+  "pid": 23529,
+  "role": "AXApplication",
+  "role_description": "application",
+  "subrole": null,
+  "title": null,
+  "traits": [],
+  "type": "Application"
+ }
+]

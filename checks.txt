@@ -1,0 +1,106 @@
+closed/edit-large: rule 10: TextArea without a label, at 0,24 size 382×620 (value “The tide came in faster than the charts promised. Lantern o…”)
+closed/edit: rule 10: TextArea without a label, at 0,24 size 382×620 (value “The tide came in faster than the charts promised. Lantern o…”)
+closed/edit: rule 9: PopUpButton “Type” is 91×26, under 44 pt, at 20,81 size 91×26
+closed/fields-large: rule 10: TextArea without a label, at 0,24 size 382×620 (value “Keeps the lighthouse.”)
+closed/fields-large: rule 9: Button “Species” is 103×36, under 44 pt, at 20,151 size 103×36
+closed/fields-large: rule 9: PopUpButton “Species” is 115×40, under 44 pt, at 20,189 size 115×40
+closed/fields-large: rule 9: Button “Age” is 52×36, under 44 pt, at 20,241 size 52×36
+closed/fields-large: rule 10: TextField without a label, at 20,279 size 342×41 (value “61”)
+closed/fields-large: rule 9: Button “Home” is 78×36, under 44 pt, at 20,332 size 78×36
+closed/fields-large: rule 9: PopUpButton “Home” is 277×40, under 44 pt, at 20,370 size 277×40
+closed/fields-large: rule 9: Button “Open” is 32×30, under 44 pt, at 305,375 size 32×30
+closed/fields-large: rule 9: Button “First seen” is 125×36, under 44 pt, at 20,422 size 125×36
+closed/fields-large: rule 9: Button “Keeps a secret” is 189×36, under 44 pt, at 20,525 size 189×36
+closed/fields-large: rule 9: Button “Add Field” is 162×36, under 44 pt, at 20,601 size 162×36
+closed/fields: rule 10: TextArea without a label, at 0,24 size 382×620 (value “Keeps the lighthouse.”)
+closed/fields: rule 9: PopUpButton “Type” is 94×26, under 44 pt, at 20,81 size 94×26
+closed/fields: rule 9: Button “Species” is 54×18, under 44 pt, at 20,118 size 54×18
+closed/fields: rule 9: PopUpButton “Species” is 63×20, under 44 pt, at 137,117 size 63×20
+closed/fields: rule 9: Button “Age” is 27×18, under 44 pt, at 20,149 size 27×18
+closed/fields: rule 10: TextField without a label, at 137,147 size 225×22 (value “61”)
+closed/fields: rule 9: Button “Home” is 41×18, under 44 pt, at 20,180 size 41×18
+closed/fields: rule 9: PopUpButton “Home” is 150×20, under 44 pt, at 137,179 size 150×20
+closed/fields: rule 9: Button “Open” is 17×15, under 44 pt, at 295,182 size 17×15
+closed/fields: rule 9: Button “First seen” is 67×18, under 44 pt, at 20,218 size 67×18
+closed/fields: rule 9: Button “Keeps a secret” is 101×18, under 44 pt, at 20,259 size 101×18
+closed/fields: rule 9: Button “Add Field” is 89×18, under 44 pt, at 20,292 size 89×18
+closed/focus-controls: rule 10: TextArea without a label, at 16,25 size 428×325 (value “Third page, where the caret is.”)
+closed/focus-controls: rule 3: Slider “Paragraph 3 of 3” runs off the screen, at 440,154 size 32×66 (screen 466×678)
+closed/focus-controls: rule 9: Slider “Paragraph 3 of 3” is 32×66, under 44 pt, at 440,154 size 32×66
+closed/focus: rule 10: TextArea without a label, at 16,25 size 428×325 (value “Third page, where the caret is.”)
+closed/focus: rule 3: Slider “Paragraph 3 of 3” runs off the screen, at 440,154 size 32×66 (screen 466×678)
+closed/focus: rule 9: Slider “Paragraph 3 of 3” is 32×66, under 44 pt, at 440,154 size 32×66
+closed/mention: rule 10: TextArea without a label, at 0,24 size 382×620 (value “Ask @Map of the”)
+closed/mention: rule 9: PopUpButton “Type” is 91×26, under 44 pt, at 20,81 size 91×26
+closed/mentions: rule 10: TextArea without a label, at 0,24 size 382×620 (value “Keeps the lighthouse.”)
+closed/mentions: rule 9: PopUpButton “Type” is 94×26, under 44 pt, at 20,81 size 94×26
+closed/mentions: rule 9: Button “Species” is 54×18, under 44 pt, at 20,118 size 54×18
+closed/mentions: rule 9: PopUpButton “Species” is 63×20, under 44 pt, at 137,117 size 63×20
+closed/mentions: rule 9: Button “Age” is 27×18, under 44 pt, at 20,149 size 27×18
+closed/mentions: rule 10: TextField without a label, at 137,147 size 225×22 (value “61”)
+closed/mentions: rule 9: Button “Home” is 41×18, under 44 pt, at 20,180 size 41×18
+closed/mentions: rule 9: PopUpButton “Home” is 150×20, under 44 pt, at 137,179 size 150×20
+closed/mentions: rule 9: Button “Open” is 17×15, under 44 pt, at 295,182 size 17×15
+closed/mentions: rule 9: Button “First seen” is 67×18, under 44 pt, at 20,218 size 67×18
+closed/mentions: rule 9: Button “Keeps a secret” is 101×18, under 44 pt, at 20,259 size 101×18
+closed/mentions: rule 9: Button “Add Field” is 89×18, under 44 pt, at 20,292 size 89×18
+closed/mentions: rule 9: Button “Sheet Grabber” is 100×24, under 44 pt, at 183,317 size 100×24
+closed/mentions: rule 9: Button “Close” is 40×40, under 44 pt, at 28,341 size 40×40
+open/edit-large: rule 10: TextArea without a label, at 0,82 size 867×553 (value “The tide came in faster than the charts promised. Lantern o…”)
+open/edit: rule 10: TextArea without a label, at 0,82 size 867×553 (value “The tide came in faster than the charts promised. Lantern o…”)
+open/edit: rule 9: PopUpButton “Type” is 91×26, under 44 pt, at 120,139 size 91×26
+open/fields-large: rule 10: TextArea without a label, at 0,82 size 867×553 (value “Keeps the lighthouse.”)
+open/fields-large: rule 9: Button “Species” is 103×36, under 44 pt, at 20,211 size 103×36
+open/fields-large: rule 9: PopUpButton “Species” is 115×40, under 44 pt, at 225,209 size 115×40
+open/fields-large: rule 9: Button “Age” is 52×36, under 44 pt, at 20,261 size 52×36
+open/fields-large: rule 10: TextField without a label, at 225,259 size 622×41 (value “61”)
+open/fields-large: rule 9: Button “Home” is 78×36, under 44 pt, at 20,312 size 78×36
+open/fields-large: rule 9: PopUpButton “Home” is 277×40, under 44 pt, at 225,310 size 277×40
+open/fields-large: rule 9: Button “Open” is 32×30, under 44 pt, at 510,315 size 32×30
+open/fields-large: rule 9: Button “First seen” is 125×36, under 44 pt, at 20,368 size 125×36
+open/fields-large: rule 9: Button “Keeps a secret” is 189×36, under 44 pt, at 20,423 size 189×36
+open/fields-large: rule 9: Button “Add Field” is 162×36, under 44 pt, at 20,469 size 162×36
+open/fields: rule 10: TextArea without a label, at 0,82 size 867×553 (value “Keeps the lighthouse.”)
+open/fields: rule 9: PopUpButton “Type” is 94×26, under 44 pt, at 120,139 size 94×26
+open/fields: rule 9: Button “Species” is 54×18, under 44 pt, at 120,176 size 54×18
+open/fields: rule 9: PopUpButton “Species” is 63×20, under 44 pt, at 237,175 size 63×20
+open/fields: rule 9: Button “Age” is 27×18, under 44 pt, at 120,207 size 27×18
+open/fields: rule 10: TextField without a label, at 237,205 size 510×22 (value “61”)
+open/fields: rule 9: Button “Home” is 41×18, under 44 pt, at 120,238 size 41×18
+open/fields: rule 9: PopUpButton “Home” is 150×20, under 44 pt, at 237,237 size 150×20
+open/fields: rule 9: Button “Open” is 17×15, under 44 pt, at 395,240 size 17×15
+open/fields: rule 9: Button “First seen” is 67×18, under 44 pt, at 120,276 size 67×18
+open/fields: rule 9: Button “Keeps a secret” is 101×18, under 44 pt, at 120,317 size 101×18
+open/fields: rule 9: Button “Add Field” is 89×18, under 44 pt, at 120,350 size 89×18
+open/focus-controls: rule 3: TextArea “Third page, where the caret is.” runs off the screen, at 16,51 size 913×303 (screen 669×951)
+open/focus-controls: rule 10: TextArea without a label, at 16,51 size 913×303 (value “Third page, where the caret is.”)
+open/focus-controls: rule 3: Slider “Paragraph 3 of 3” runs off the screen, at 925,170 size 32×66 (screen 669×951)
+open/focus-controls: rule 9: Slider “Paragraph 3 of 3” is 32×66, under 44 pt, at 925,170 size 32×66
+open/focus: rule 3: TextArea “Third page, where the caret is.” runs off the screen, at 16,51 size 913×303 (screen 669×951)
+open/focus: rule 10: TextArea without a label, at 16,51 size 913×303 (value “Third page, where the caret is.”)
+open/focus: rule 3: Slider “Paragraph 3 of 3” runs off the screen, at 925,170 size 32×66 (screen 669×951)
+open/focus: rule 9: Slider “Paragraph 3 of 3” is 32×66, under 44 pt, at 925,170 size 32×66
+open/mention: rule 10: TextArea without a label, at 0,82 size 867×553 (value “Ask @Map of the”)
+open/mention: rule 9: PopUpButton “Type” is 91×26, under 44 pt, at 120,139 size 91×26
+open/mentions: rule 3: TextArea “Keeps the lighthouse.” runs off the screen, at 0,82 size 867×553 (screen 669×951)
+open/mentions: rule 10: TextArea without a label, at 0,82 size 867×553 (value “Keeps the lighthouse.”)
+open/mentions: rule 3: TextField “Title” runs off the screen, at 120,84 size 627×49 (screen 669×951)
+open/mentions: rule 9: PopUpButton “Type” is 94×26, under 44 pt, at 120,139 size 94×26
+open/mentions: rule 9: Button “Species” is 54×18, under 44 pt, at 120,176 size 54×18
+open/mentions: rule 9: PopUpButton “Species” is 63×20, under 44 pt, at 237,175 size 63×20
+open/mentions: rule 9: Button “Age” is 27×18, under 44 pt, at 120,207 size 27×18
+open/mentions: rule 3: TextField “61” runs off the screen, at 237,205 size 510×22 (screen 669×951)
+open/mentions: rule 10: TextField without a label, at 237,205 size 510×22 (value “61”)
+open/mentions: rule 9: Button “Home” is 41×18, under 44 pt, at 120,238 size 41×18
+open/mentions: rule 9: PopUpButton “Home” is 150×20, under 44 pt, at 237,237 size 150×20
+open/mentions: rule 9: Button “Open” is 17×15, under 44 pt, at 395,240 size 17×15
+open/mentions: rule 9: Button “First seen” is 67×18, under 44 pt, at 120,276 size 67×18
+open/mentions: rule 9: Button “Keeps a secret” is 101×18, under 44 pt, at 120,317 size 101×18
+open/mentions: rule 9: Button “Add Field” is 89×18, under 44 pt, at 120,350 size 89×18
+open/mentions: rule 9: Button “Sheet Grabber” is 100×24, under 44 pt, at 426,272 size 100×24
+open/mentions: rule 9: Button “Close” is 40×40, under 44 pt, at 169,296 size 40×40
+open/mentions: rule 3: Button “Harbour Notes, The tide came in faster than the charts prom…” runs off the screen, at 149,350 size 653×79 (screen 669×951)
+open/pages: rule 10: TextField without a label, at 188,586 size 543×22 (value “Message”)
+open/pages: rule 9: Button “My World, Actions Menu” is 75×21, under 44 pt, at 109,38 size 75×21
+104 findings in 18 screens
+(checks reported problems)
