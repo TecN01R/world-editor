@@ -67,7 +67,10 @@ only once it's on Kevin's phone and checked, or he has answered it.
 - The AI never authors content. It never rewrites the user's writing; it may put
   their own words from the conversation into a page, tidied only in capitalisation
   and punctuation, marked as placed, with Undo (Kevin, 2026-11-24: "I actually fully
-  desire it to fill my pages as long as it uses my own words"). See
+  desire it to fill my pages as long as it uses my own words"). When the user corrects
+  something in the conversation, their new words replace the sentence they contradict,
+  even one the user typed, marked as changed, with Undo bringing the old one back
+  (Kevin, 2026-11-27: "a"). See
   `docs/ai-charter.md`; enforcement lives in `Provenance` and `Guardrails`.
 - All inference on device. Never use server-backed Foundation Models.
 - Focus mode never scrolls; the last line stays clear of the keyboard. See

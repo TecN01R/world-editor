@@ -8,6 +8,17 @@ outgrowing the pace at which I can understand their development"): only fixes to
 Testing is using it: when a reply is bad or something feels off, he says so, and Claude pulls the
 conversation and the phone's log to find out why.
 
+## The conversation first (Kevin, 2026-11-27)
+Kevin: "I want to write it conversationally or in any messy way and be able to refine it back and
+forth and that populates my pages. I do want them to be structured. And they need to be malleable
+enough that everything about them can change and the system is smart enough to adapt." The app is
+pages first today; this makes the conversation the place he writes and the pages what comes out of it.
+- [ ] 1 The conversation as the home screen: opening a world lands in its conversation, no page or type to pick; the pages a tap away, where he reads his world (editing them by hand stays possible, never needed)
+- [ ] 2 New pages from what he says: each person, place or thing he talks about gets a page, in his words, its type and fields taken from what he said; a line under the reply shows what changed, with Undo
+- [ ] 3 Changes that stick: a correction replaces the sentence it contradicts, even one he typed (Kevin: "a"), marked, with Undo; renames everywhere; "those two are the same" merges pages
+- [ ] 4 Structure that reshapes itself: types and fields appear, rename and merge as the world grows
+- The risk: the phone's model is small, and "smart enough to adapt" rests on it; tried on his own world from step 2
+
 ## Try on purpose: a 10-minute walkthrough of the companion
 - [ ] 1 Open a page you've written on and ask what it thinks of something on it: it answers without searching first (it's given the open page)
 - [ ] 2 Tell it something new about that page ("she trained at the Iron Abbey"): after the reply, your sentence is in the page, highlighted, after your paragraph about the same thing, with Undo under the reply
