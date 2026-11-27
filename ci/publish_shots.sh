@@ -38,7 +38,9 @@ for dir in shots/*/; do
   [ -s "${dir}axe-errors.txt" ] && cp "${dir}axe-errors.txt" "publish/trees/$pose/axe-errors.txt"   # why a tree couldn't be read
   # A contact sheet: every screen of this pose, labelled, on the page's own grey.
   if ls "publish/$pose"/*.jpg >/dev/null 2>&1; then
-    montage -label '%t' "publish/$pose"/*.jpg -tile 6x -geometry '330x480>+10+10' \
+    # Folded screens are tall and unfolded ones wide: a cell to suit each.
+    if [ "$pose" = open ]; then cell='480x340>+10+10' across=4; else cell='330x480>+10+10' across=6; fi
+    montage -label '%t' "publish/$pose"/*.jpg -tile "${across}x" -geometry "$cell" \
       -background '#101012' -fill '#c2c2c7' -pointsize 15 "publish/sheets/$pose.jpg"
   fi
 done

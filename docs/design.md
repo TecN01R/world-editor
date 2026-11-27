@@ -83,6 +83,7 @@ Grey and white only, iOS's own dark greys one level up (never black), and no acc
 | `rule`, `ruleStrong` | ink at 20%, 35% | lines and borders |
 
 - Red only through iOS's delete role.
+- A switch keeps iOS's own colour when it's on: tinted white like the other controls, on and off couldn't be told apart (first render, 2026-11-27).
 - Links are underlined, not coloured.
 - With Increase Contrast on, `ink` is #FFFFFF and `ink2` #DEDEE3.
 - No glass in content, and no tint or background on bars: iOS draws its own. (Apple, Liquid Glass guidance.)
