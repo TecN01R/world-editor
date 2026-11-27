@@ -3,36 +3,29 @@
 The working list for World Editor. Kevin and Claude both edit it. Delete a line once
 it's on the phone and checked, or answered; git history keeps what's done.
 
-## Check on the phone
-- [ ] The companion reads the open page (Kevin, 2026-11-26: "obviously the companion should get the open page's text"): with each message it gets the page as it is then (title, type, filled fields, writing), so ask about something on the page without it searching first; edit the page and ask again, and it sees the change
-- [ ] Faster first words (Kevin, 2026-11-26: "work on the faster first words"): open the companion, wait a moment, then send; the reply starts sooner, as the model is loaded and has read the conversation while you typed. Memory warnings no longer throw the model out (they did before 11 of 13 replies); the log's WARM-UP and MEMORY WARNING lines show it
-- [ ] Your words into your pages, automatically (Kevin, 2026-11-26: "fill in the description based on things I said automatically"): tell the companion something about a page ("she trained at the Iron Abbey") and, once filing runs after the reply, your sentence goes on at the end of your paragraph about the same thing (sharing two telling words, or a name: "At twelve the Iron Abbey took her in. She trained at the Iron Abbey."), or at the end of the page if none is (Kevin, 2026-11-26: "Yes" to placing where it fits), case and punctuation tidied, highlighted as iOS highlights text; it's listed under the reply with the filed fields, each with Undo. Questions and "maybe"s stay out; typing inside placed words makes them yours; Undo takes back only what's still as placed
-- [ ] Swift 6 (Kevin, 2026-11-25: "everything should be using the latest tech stack"): the whole app in Swift 6 mode, and CI's actions on their latest versions. Nothing should look different: typing, Undo and Redo, a text size change in Settings, the keyboard in the title and fields, search and the companion's replies all work as before
-- [ ] Documents (Kevin, 2026-11-25): the paperclip beside the message field, a PDF or text file; ask about it; a long one is searched ("Searched your documents for …" in its thinking)
-- [ ] Scans and pictures of pages (Kevin, 2026-11-26: "do pictures and document upload next"): the paperclip is a menu now. Scan Documents opens iOS's own scanner (as in Notes; the camera's permission is asked once); Choose File also takes scanned PDFs, photos and screenshots of pages (read by iOS's own text recognition, on the phone), rich text and web pages. "Reading …" shows while it reads
-- [ ] Pictures (Kevin, 2026-11-26: "do pictures"): the paperclip's Photo Library or Take Photo. The first time, it offers a one-time 990 MB download (Gemma 4's vision projector for Nemotron, over Wi-Fi, shown under the message field while the conversation stays usable); after that, pick again and send. The picture shows in your bubble, and the companion sees it. NVIDIA trained Nemotron on words only: how well it sees is yours to judge. The log's EYES line shows the load
-- [ ] Limits lifted (Kevin, 2026-11-25: "you WILL lift the limits"): the whole conversation (16K context), no per-tool budgets (only a 10-call runaway guard), 4x larger Wikipedia and page-search results, all three articles read
-- [ ] The companion is the model stock now, with its tools (Kevin, 2026-11-25). Instructions… in its menu, blank at first: write your own, or tell it how to reply from now on and it adds one ("Added to Instructions: …" under the reply opens them)
-- [ ] More memory for the app (Kevin, 2026-11-25: "Yes" to the patched xtool): installed from d7a1eed on; the companion's next LOAD line should show about 5.8 GB left instead of 3.4
-- [ ] Wikipedia look-ups: ask a real-world question it might not know; "Searched Wikipedia for …" under the reply opens the articles; Look Things Up in the menu turns it off (Kevin, 2026-11-25)
-- [ ] The new companion model, Nemotron 3.5 Bolt (Kevin, 2026-11-25: "Yes"): downloaded, loads and replies, 26B freed (seen in the log). Left: how the replies feel, a search shown in its thinking
-- [ ] Type and field names in San Francisco everywhere; values stay New York (Kevin, 2026-11-24)
-- [ ] Empty fields hidden; Add Field's menu lists them, and one picked shows ready to fill in (Kevin, 2026-11-24)
-- [ ] Back from the app switcher with the companion open unfolded: the page keeps its normal margins
-- [ ] The companion's button after unfolding (asked for again once the fold settles)
+**No new companion features until Kevin has caught up** (Kevin, 2026-11-27: "all the features are
+outgrowing the pace at which I can understand their development"): only fixes to what he reports.
+Testing is using it: when a reply is bad or something feels off, he says so, and Claude pulls the
+conversation and the phone's log to find out why.
 
-## Stock-first audit (plan approved 2026-11-24): batches
-- [ ] 1 Data safety and filing accuracy (pushed 5931105; waiting for the phone)
-- [ ] 3 Open page in sync; editing crash risks (pushed 606a88a; waiting for the phone)
-- [ ] 4 Smooth typing (pushed; waiting for the phone. Not done: the open page observed on its own, Focus caching its measurements; only if typing still lags)
-- [ ] 5 Smooth replies (pushed 7c046d4; waiting for the phone)
-- [ ] 6 Faster replies (pushed: background kept per conversation, earlier replies as cached, filing on a pause; Kevin to try 4–5 messages, then read the CACHE/SPEED lines)
-- [ ] 7 One companion (needs Kevin's look on the phone; next after he's checked the current build)
-- [ ] 8 Format bar: kept as it was (Bold, Italic, lists; iOS's own Bold/Italic, undoable lists). iOS's Format panel, text styles and the keyboard toolbar were tried and dropped (Kevin, 2026-11-24)
+## Try on purpose: a 10-minute walkthrough of the companion
+- [ ] 1 Open a page you've written on and ask what it thinks of something on it: it answers without searching first (it's given the open page)
+- [ ] 2 Tell it something new about that page ("she trained at the Iron Abbey"): after the reply, your sentence is in the page, highlighted, after your paragraph about the same thing, with Undo under the reply
+- [ ] 3 Ask how this page connects to another one: it searches your pages ("Searched your pages" in its thinking)
+- [ ] 4 Ask a real-world question ("how did old lighthouses keep the flame lit?"): it looks it up on Wikipedia ("Searched Wikipedia for …" under the reply)
+- [ ] 5 Paperclip → Scan Documents, Choose File or a photo (pictures first ask for a one-time 990 MB download), then ask about it. How well it sees pictures is yours to judge: NVIDIA trained it on words only
+- [ ] 6 Say "from now on, keep your replies short": "Added to Instructions: …" shows under the reply
+
+## Tell Claude if anything looks or feels wrong
+- [ ] On the phone, nothing to check on purpose (Kevin, 2026-11-27: "Yes" to folding the list); each line's
+      details are in git history: faster first words (warm-up), Swift 6, the lifted limits, more memory
+      (5.8 GB), Nemotron's replies, fonts (San Francisco for names, New York for values), empty fields
+      hidden, margins after the app switcher, the companion's button after unfolding, and the stock-first
+      audit's batches 1, 3–8, 10 and 12 (docs/stock-deviations.md)
+
+## Stock-first audit (plan approved 2026-11-24): work left
 - [ ] 9 Stock swaps: bubbles and the menu's title done; left: a stack in the sidebar for conversations and filters, UIPageControl for Focus dots
-- [ ] 10 Focus with iOS's zoom (needs Kevin's look on the phone)
 - [ ] 11 Clean-up: download cancel/expiry and ordered progress done; TRIAL logging stays until the speed and Live Activity tests are read; thinking plumbing kept for search
-- [ ] 12 docs/stock-deviations.md (written; check it reads right)
 
 ## A companion for 8 GB+ phones, not just the Duo (Kevin, 2026-11-24; plan approved)
 - One model, for every iPhone from the 15 Pro on (≈6 GB app budget, whatever the RAM) and Android phones with 12 GB+; 8 GB Androids get no companion (Kevin, 2026-11-24). Budget: ≤4–4.5 GB of the app's own memory, ≤5–5.5 GB resident with the weights
@@ -45,7 +38,7 @@ it's on the phone and checked, or answered; git history keeps what's done.
 - [ ] Android app: later, its own native project
 
 ## Companion
-- [ ] As useful as ChatGPT is for Kevin (Kevin, 2026-11-26). Proposed, waiting for his pick: his ChatGPT export (kept in git-ignored private/) as the taste test's messages, and his ChatGPT instructions and memories carried into Instructions; first words faster (NVIDIA's DFlash drafter, the model kept warm); pictures (Nemotron's add-on, untested); search across past conversations
+- [ ] As useful as ChatGPT is for Kevin (Kevin, 2026-11-26). Waiting for his ChatGPT export (kept in git-ignored private/): about 20 things he actually asked ChatGPT, asked of the phone's companion too, side by side on one page, so he sees where it holds up (2026-11-27); his ChatGPT instructions and memories carried into Instructions. Done since: faster first words, pictures, the open page
 - [ ] Choose a test suite for the companion from an open standard, built around how the app is used (Kevin, 2026-11-25: he judges by using it)
   - [ ] Blind taste test for Kevin (Kevin, 2026-11-25: "I'm also ok with blind taste test for me"): pairs of anonymous replies to his own messages, fresh from each candidate; he picks or ties; ranked as Chatbot Arena does (Bradley–Terry); he is the only judge
 - [ ] Search: built on Nemotron (search_pages, thinking capped); check it finds things on the phone
