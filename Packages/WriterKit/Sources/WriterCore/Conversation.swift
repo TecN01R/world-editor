@@ -55,8 +55,8 @@ public struct Conversation: Codable, Hashable, Sendable {
     /// The page it's about; a conversation about the whole world has its own id here.
     public var page: UUID
     public var turns: [Turn]
-    /// About the whole world, not one page: one of the world's conversations listed
-    /// under the pages list's Companion (Kevin, 2026-11-24).
+    /// About the whole world, not one page: one of the world's conversations (Kevin,
+    /// 2026-11-24).
     public var aboutWorld: Bool
 
     public init(page: UUID, turns: [Turn] = [], aboutWorld: Bool = false) {

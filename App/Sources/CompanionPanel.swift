@@ -39,11 +39,13 @@ struct CompanionPanel: View {
     private static let margin: CGFloat = 20
     /// Folded, a sheet; unfolded, the inspector column beside the page.
     let inSheet: Bool
-    /// A conversation about the whole world, beside (unfolded) or over (folded) the
-    /// world's conversation list (`WorldConversationList`): its bar has Changes and the menu.
+    /// A conversation about the whole world, where the author starts (`RootView`): its bar
+    /// has Changes and the menu.
     var worldConversation: UUID? = nil
     /// Starts another world conversation (its menu's New Conversation).
     var newConversation: (() -> Void)? = nil
+    /// Shows the world's other conversations (its menu's Conversations…).
+    var conversations: (() -> Void)? = nil
     private var aboutWorld: Bool { worldConversation != nil }
 
     /// Folded, a stock sheet: a navigation bar with the title, Close, Changes
@@ -70,7 +72,7 @@ struct CompanionPanel: View {
             .toolbarVerticalBehavior(.disabled)
         } else if aboutWorld {
             conversation
-                .navigationTitle(companion.conversation.title ?? "New Conversation")
+                .navigationTitle(library.world.name)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     if ready {
@@ -486,8 +488,8 @@ struct CompanionPanel: View {
         switch companion.state {
         case .idle:
             if aboutWorld {
-                ContentUnavailableView("Talk About Your World", systemImage: "bubble.left.and.text.bubble.right",
-                                       description: Text("The companion knows all your pages. Talk with it about any of them, or all of them."))
+                ContentUnavailableView("Your World", systemImage: "bubble.left.and.text.bubble.right",
+                                       description: Text("Write about it however it comes out, and talk it through with the companion."))
             } else {
                 ContentUnavailableView("Talk About This Page", systemImage: "bubble.left.and.text.bubble.right",
                                        description: Text("Write a little on this page, and the companion will talk with you about it."))
@@ -786,6 +788,9 @@ struct CompanionPanel: View {
             if let newConversation { newConversation() } else { confirmingNew = true }
         }
         .disabled(companion.conversation.turns.isEmpty)
+        if let conversations {
+            Button("Conversations…", systemImage: "bubble.left.and.text.bubble.right", action: conversations)
+        }
         ShareLink("Share Conversation", item: transcript)
             .disabled(companion.conversation.turns.isEmpty)
         if !inSheet && !aboutWorld { changesButton }   // the sheet (Kevin, 2026-11-24) and the world's screen have it beside the menu

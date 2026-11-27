@@ -585,7 +585,7 @@ final class Companion {
         try? store?.save(talk)
         if talk.aboutWorld {
             // Newest first, as Messages keeps its list: the one just added to goes to the top,
-            // with its title and time as they are now (unfolded the list stays beside it).
+            // with its title and time as they are now.
             worldConversations.removeAll { $0.page == talk.page }
             worldConversations.insert(talk, at: 0)
         }

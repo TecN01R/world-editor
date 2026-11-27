@@ -4,23 +4,25 @@ import SwiftUI
 import WidgetKit   // NSUserActivityTypeLiveActivity
 import WriterCore
 
-/// Pages list beside the open page. Folded, it's a stack (list, then page);
-/// unfolded, the list sits alongside. Controls are standard toolbar items, so
-/// on iPhone Duo the system lays them out in the side column.
+/// The world's conversation, or the open page, with the pages list beside it. The
+/// conversation is where the author starts (Kevin, 2026-11-27: "I want to write it
+/// conversationally or in any messy way ... and that populates my pages"): it shows whenever
+/// no page is open, and the pages are where they read their world. Folded, it's a stack
+/// (list, then conversation or page); unfolded, the list is a drawer. Controls are standard
+/// toolbar items, so on iPhone Duo the system lays them out in the side column.
 struct RootView: View {
     @Environment(Library.self) private var library
     @Environment(Companion.self) private var companion
     @State private var column: NavigationSplitViewColumn = Screenshots.opensList ? .sidebar : .detail
     @State private var focusMode = Self.startsInFocus
     @State private var focusControls = false
-    /// The world's conversations are open: their list in the pages list's place, the one
-    /// chosen beside it unfolded (Kevin, 2026-11-24: the list next to the conversation, as
-    /// Messages has it) or over it folded.
-    @State private var conversationsShown = false
-    /// The world conversation open (a new one has its id before anything's said).
+    /// The world conversation shown when no page is open (a new one has its id before
+    /// anything's said): the last one open, else the newest, else a new one.
     @State private var worldConversation: UUID?
-    /// Unfolded, the drawer starts closed: the page in front, the drawer a tap away (open for
-    /// CI's shot of the pages list).
+    /// The world's other conversations, to go back to one (the conversation's menu).
+    @State private var showingConversations = false
+    /// Unfolded, the drawer starts closed: the conversation (or page) in front, the drawer a
+    /// tap away (open for CI's shot of the pages list).
     @State private var columns: NavigationSplitViewVisibility = Screenshots.opensList ? .all : .detailOnly
     /// The pages list as it was before Focus mode put it away, to put back after.
     @State private var columnsBeforeFocus: NavigationSplitViewVisibility?
@@ -39,11 +41,11 @@ struct RootView: View {
     /// indicator, pages list) until a tap outside the text brings it back.
     /// VoiceOver users keep the controls: hidden ones would be unreachable.
     private var chromeHidden: Bool { focusMode && !focusControls && !voiceOver }
-    /// A page is open: not the pages list (folded, going back to it clears the
-    /// selection), nor the world's conversations.
-    private var pageShown: Bool { !conversationsShown && library.selection != nil }
+    /// A page is open, not the world's conversation (folded, going back to the pages list
+    /// clears the selection).
+    private var pageShown: Bool { library.selection != nil }
     /// The page's companion is on screen: whenever it's open over a page. Never over the
-    /// pages list or the world's own conversations, which have the world's companion
+    /// pages list or the world's conversation, which is the world's companion
     /// (Kevin, 2026-11-24: a page's companion over the list is "weird"). It goes by this
     /// alone, never by where the pages list is: iOS moves both as the Duo rotates, and the
     /// two following each other mid-layout crashed iOS's split view (2026-11-24).
@@ -57,22 +59,13 @@ struct RootView: View {
     var body: some View {
         // Focus mode takes the whole display: the pages list steps aside when unfolded.
         NavigationSplitView(columnVisibility: $columns, preferredCompactColumn: $column) {
-            if conversationsShown {
-                WorldConversationList(selection: Binding { worldConversation } set: {
-                    worldConversation = $0
-                    if $0 != nil { closeDrawer() }
-                }, start: startConversation) {
-                    conversationsShown = false
-                }
-            } else {
-                PageList(selection: Binding { library.selection } set: {
-                    library.selection = $0
-                    if $0 != nil { closeDrawer() }
-                }, titleInBar: sizeClass == .regular, openWorldConversations: openWorldConversations) {
-                    library.newPage()
-                    column = .detail
-                    closeDrawer()
-                }
+            PageList(selection: Binding { library.selection } set: {
+                library.selection = $0
+                if $0 != nil { closeDrawer() }
+            }, titleInBar: sizeClass == .regular, openConversation: openConversation) {
+                library.newPage()
+                column = .detail
+                closeDrawer()
             }
         } detail: {
             detail
@@ -86,26 +79,42 @@ struct RootView: View {
         // Coming back to the app (its icon, the app switcher) opens nothing: it's where
         // the author left it, even while the companion's download runs. Only a tap on the
         // download's Live Activity shows the download (Kevin, 2026-11-24), in the companion
-        // of what's on screen: a page's own, or from the pages list the world's
-        // conversations. That Live Activity is iOS's own (the continued-processing task),
-        // which documents no signal for the tap; if iOS sends the Live Activity user
-        // activity, as for any Live Activity without a link, this catches it.
+        // of what's on screen: a page's own, or else the world's conversation. That Live
+        // Activity is iOS's own (the continued-processing task), which documents no signal
+        // for the tap; if iOS sends the Live Activity user activity, as for any Live
+        // Activity without a link, this catches it.
         .onContinueUserActivity(NSUserActivityTypeLiveActivity) { _ in
             trialLog("LIVE ACTIVITY tap, download \(companion.download != nil)")   // TRIAL: does iOS send it?
             guard companion.download != nil, !focusMode else { return }
             if pageShown {
                 companion.isOpen = true
                 putPagesListAway()   // as its button does
-            } else if !conversationsShown {
-                openWorldConversations()
+            } else {
+                openConversation()
             }
         }
-        // Folded, back from a world conversation to their list (iOS clears the list's
-        // selection): next time, the list, newest first again.
-        .onChange(of: worldConversation) { _, id in
-            guard conversationsShown, id == nil else { return }
-            library.lastWorldConversation = nil
+        // Each world has its own conversation, in front whenever no page is open.
+        .task(id: library.world.id) {
             companion.loadWorldConversations(in: library)
+            worldConversation = library.lastWorldConversation ?? companion.worldConversations.first?.page ?? UUID()
+        }
+        .sheet(isPresented: $showingConversations) {
+            NavigationStack {
+                WorldConversationList(selection: Binding { worldConversation } set: { id in
+                    if let id {
+                        worldConversation = id   // chosen: back to it
+                        showingConversations = false
+                    } else {
+                        worldConversation = UUID()   // the open one deleted: a new one in its place
+                    }
+                }, start: {
+                    startConversation()
+                    showingConversations = false
+                }, close: {
+                    showingConversations = false
+                })
+            }
+            .presentationDetents([.medium, .large])
         }
         // The pages list is left where iOS and the author put it as the Duo folds, unfolds
         // and rotates: moving it then too crashed iOS's split view (2026-11-24).
@@ -124,7 +133,6 @@ struct RootView: View {
         .onContinueUserActivity(CSSearchableItemActionType) { activity in
             if let id = (activity.userInfo?[CSSearchableItemActivityIdentifier] as? String).flatMap(UUID.init) {
                 library.open(page: id)   // switching to its world if need be
-                conversationsShown = false
                 column = .detail
             }
         }
@@ -152,21 +160,10 @@ struct RootView: View {
         }
     }
 
-    /// What's beside the pages list (unfolded) or over it (folded): the world conversation
-    /// chosen, or the open page.
+    /// What's beside the pages list (unfolded) or over it (folded): the open page, or else
+    /// the world's conversation.
     @ViewBuilder private var detail: some View {
-        if conversationsShown {
-            if let id = worldConversation {
-                CompanionPanel(inSheet: false, worldConversation: id, newConversation: startConversation)
-                    .task(id: id) {
-                        companion.open(library.worldSubject(id), in: library, aboutWorld: true)
-                        library.lastWorldConversation = id
-                    }
-            } else {
-                ContentUnavailableView("No Conversation Open", systemImage: "bubble.left.and.text.bubble.right",
-                                       description: Text("Choose a conversation or start a new one."))
-            }
-        } else if let id = library.selection {
+        if let id = library.selection {
             EditorView(focusMode: $focusMode, focusControls: $focusControls, chromeHidden: chromeHidden,
                        onCompanionOpened: putPagesListAway)
             .id(id)
@@ -201,9 +198,13 @@ struct RootView: View {
                     } set: { companionFullHeight = $0 == .large })
                     .presentationDragIndicator(.visible)
             }
-        } else {
-            ContentUnavailableView("No Page Open", systemImage: "doc.text",
-                                   description: Text("Choose a page or start a new one."))
+        } else if let id = worldConversation {
+            CompanionPanel(inSheet: false, worldConversation: id, newConversation: startConversation,
+                           conversations: { showingConversations = true })
+            .task(id: id) {
+                companion.open(library.worldSubject(id), in: library, aboutWorld: true)
+                library.lastWorldConversation = id
+            }
         }
     }
 
@@ -221,21 +222,17 @@ struct RootView: View {
         }
     }
 
-    /// The world's conversations: their list in the pages list's place, with the one last
-    /// open (even one not yet begun), or a new one when there are none yet.
-    private func openWorldConversations() {
-        companion.loadWorldConversations(in: library)
-        worldConversation = library.lastWorldConversation ?? (companion.worldConversations.isEmpty ? UUID() : nil)
-        conversationsShown = true
-        if sizeClass == .regular { withAnimation { columns = .all } }   // the list beside it
-        column = worldConversation == nil ? .sidebar : .detail
+    /// Back to the world's conversation, leaving the page (an empty one is discarded).
+    private func openConversation() {
+        library.selection = nil
+        column = .detail
+        closeDrawer()
     }
 
     /// A new world conversation, in place of the one open (which stays in the list).
     private func startConversation() {
         worldConversation = UUID()
-        column = .detail
-        closeDrawer()
+        openConversation()
     }
 
     /// Unfolded, a choice in the pages list's drawer (a page, a conversation, a new one)
@@ -248,13 +245,12 @@ struct RootView: View {
 
 struct PageList: View {
     @Environment(Library.self) private var library
-    @Environment(Companion.self) private var companion
     @Binding var selection: UUID?
     /// Unfolded, the title shares the top row with New Page; folded, the
     /// buttons move to the Duo's side column and the title heads the list.
     let titleInBar: Bool
-    /// The world's own conversations with the companion (its row at the top of the list).
-    let openWorldConversations: () -> Void
+    /// Back to the world's conversation (its row at the top of the list).
+    let openConversation: () -> Void
     let newPage: () -> Void
     @State private var searching = false
     /// Showing only one type's pages, or Recently Deleted.
@@ -292,23 +288,16 @@ struct PageList: View {
                 }
             }
             if query.isEmpty {
-                // The companion for the whole world, not one page, as a place in the list, as
+                // The world's conversation, where the author starts, as a place in the list, as
                 // Mail lists its mailboxes: the only chat button is a page's own companion
-                // (Kevin, 2026-11-24: with two alike, "which assistant is which?"). Its
-                // conversations take the list's place, the one open beside them unfolded.
+                // (Kevin, 2026-11-24: with two alike, "which assistant is which?").
                 Section {
-                    Button(action: openWorldConversations) {
-                        HStack {
-                            Label("Conversations", systemImage: "bubble.left.and.text.bubble.right")
-                            Spacer()
-                            if !companion.worldConversations.isEmpty {
-                                Text(companion.worldConversations.count, format: .number).foregroundStyle(.secondary)
-                            }
-                        }
+                    Button(action: openConversation) {
+                        Label("Conversation", systemImage: "bubble.left.and.text.bubble.right")
                     }
                     .tint(.primary)
                     .selectionDisabled()
-                    .accessibilityHint("Talk with the companion about your whole world.")
+                    .accessibilityHint("Back to your conversation about your world.")
                 }
                 // Types are managed here, as Notes manages folders; a page's
                 // own type menu only chooses its type.
@@ -379,7 +368,6 @@ struct PageList: View {
             if empty, filter == .deleted { filter = nil }   // its row is gone; back to all pages
         }
         .onChange(of: library.world.id) { filter = nil }   // a filter belongs to the world it was set in
-        .task(id: library.world.id) { companion.loadWorldConversations(in: library) }   // for the Conversations row's count
         .alert("Couldn’t Save the World", isPresented: Binding { worldError != nil } set: { if !$0 { worldError = nil } }) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -797,11 +785,8 @@ struct EditorView: View {
 }
 
 /// The world's conversations with the companion, about the whole world rather than
-/// one page (its row at the top of the pages list; Kevin, 2026-11-24), in the pages
-/// list's place: a stock list, newest first, each titled by the author's first words, the
-/// one chosen beside it unfolded and over it folded, as Messages has them (Kevin,
-/// 2026-11-24: "the conversation list next to the conversation itself"). Pages goes
-/// back to the pages list.
+/// one page, from the conversation's menu: a stock list in a sheet, newest first, each
+/// titled by the author's first words; choosing one goes back to it.
 struct WorldConversationList: View {
     @Environment(Library.self) private var library
     @Environment(Companion.self) private var companion
@@ -849,9 +834,12 @@ struct WorldConversationList: View {
             }
         }
         .navigationTitle("Conversations")
+        .navigationBarTitleDisplayMode(.inline)
+        // A stock sheet: its bar across the top, not in the folded Duo's side column.
+        .toolbarVerticalBehavior(.disabled)
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button("Pages", systemImage: "chevron.backward", action: close)
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Close", systemImage: "xmark", action: close)
             }
             ToolbarItem(placement: .primaryAction) {
                 Button("New Conversation", systemImage: "square.and.pencil", action: start)

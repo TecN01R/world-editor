@@ -271,8 +271,7 @@ final class Library {
         WriterCore.Document(id: conversation, title: world.name)
     }
 
-    /// The world conversation open when the author last left the companion's list, to go
-    /// back into (nil: they were at the list).
+    /// The world conversation last open, to open again (nil: none yet).
     var lastWorldConversation: UUID? {
         get { UserDefaults.standard.string(forKey: "worldConversation." + world.id.uuidString).flatMap(UUID.init) }
         set { UserDefaults.standard.set(newValue?.uuidString, forKey: "worldConversation." + world.id.uuidString) }
@@ -324,7 +323,7 @@ final class Library {
     /// "1 page", "2 pages".
     private static func count(_ n: Int, _ thing: String) -> String { "\(n) \(thing)\(n == 1 ? "" : "s")" }
 
-    /// Reads a world from disk and opens its most recent page.
+    /// Reads a world from disk. No page opens: its conversation is in front (`RootView`).
     private func load(_ world: World) {
         self.world = world
         UserDefaults.standard.set(world.id.uuidString, forKey: Self.openWorldKey)
@@ -347,7 +346,6 @@ final class Library {
         unreadable = unread
         searchQuery = ""
         PageIndex.start(with: pages.map { ($0, fieldText($0)) })
-        if pages.isEmpty { newPage() } else { selection = pages.first?.id }
     }
 
     /// Switches to another world, saving and leaving the open page first.
