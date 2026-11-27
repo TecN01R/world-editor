@@ -3,11 +3,11 @@ import SwiftUI
 import UIKit
 import WriterCore
 
-/// The companion, beside the page (a sheet when folded): the author's messages on the right,
-/// large and without bubbles (New York, their words, as on their page), the companion's
-/// replies on the left, smaller and in grey (San Francisco), newest at the bottom, and a
-/// message field below (typed, or dictated with the keyboard's microphone). iOS has no
-/// chat view: the conversation is stock text, arranged by the app.
+/// The companion, beside the page (a sheet when folded), laid out as ChatGPT and Claude are: the
+/// author's messages on the right in a bubble (New York, their words), the companion's replies on
+/// the left across the width (San Francisco), newest at the bottom, and a message field below
+/// (typed, or dictated with the keyboard's microphone) whose Send appears once there's something
+/// to send. iOS has no chat view: the conversation is stock text, arranged by the app.
 struct CompanionPanel: View {
     @Environment(Library.self) private var library
     @Environment(Companion.self) private var companion
@@ -29,7 +29,6 @@ struct CompanionPanel: View {
     @State private var confirmingNew = false
     @State private var showingChanges = false
     @State private var editingInstructions = false
-    @AppStorage(Look.key) private var look = Look.nightStudy
     /// Where the conversation is scrolled: the newest message, as in Messages.
     @State private var position = ScrollPosition(edge: .bottom)
     /// One height for the whole message bar: the HIG's minimum touch size,
@@ -164,11 +163,11 @@ struct CompanionPanel: View {
         var body: some View { content() }
     }
 
-    /// The companion's words: plain text, smaller and quieter than the author's (`mine`).
+    /// The companion's words: plain text across the width, as ChatGPT and Claude show replies, at
+    /// reading size and not dimmed, so a long one reads comfortably.
     private func words(_ text: String) -> some View {
         Text(Self.markdown(text))
-            .font(.callout)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Color(Look.ink))
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -270,8 +269,9 @@ struct CompanionPanel: View {
     }
 
     /// The author's words, under the files they attached to it (Kevin, 2026-11-25: "pdf or text
-    /// analysis"): no bubble, large in New York, like their page, as the cozy directions all had
-    /// it (Kevin, 2026-11-27: "they feel better than what we have today").
+    /// analysis"): in New York, their words, in a bubble one step lighter than the background, as
+    /// every chat app shows the author's side (a large column with no bubble was tried on
+    /// 2026-11-27; no successful chat app sets one without a shape).
     private func mine(_ text: String, attached: [Conversation.Attached]) -> some View {
         VStack(alignment: .trailing, spacing: 6) {
             ForEach(Array(attached.enumerated()), id: \.offset) { _, document in
@@ -285,14 +285,16 @@ struct CompanionPanel: View {
             }
             if !text.isEmpty {
                 Text(text)
-                    .font(.authored(.title3))
-                    .foregroundStyle(Color(PageEditor.ink))
+                    .font(.authored(.body))
+                    .foregroundStyle(Color(Look.ink))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color(Look.raised), in: .rect(cornerRadius: 20))
                     .contextMenu { copy(text) }
             }
         }
         // On the right, as every chat app has the author's side (Kevin, 2026-11-27, of them on
-        // the left: "A little odd seeing the side of the text reversed"); a long one's lines
-        // still read from the left.
+        // the left: "A little odd seeing the side of the text reversed").
         .padding(.leading, Self.authorInset)
         .frame(maxWidth: .infinity, alignment: .trailing)
     }
@@ -712,7 +714,7 @@ struct CompanionPanel: View {
                         }
                         Button("Choose File", systemImage: "folder") { attaching = true }
                     } label: {
-                        Label("Attach", systemImage: "paperclip")
+                        Label("Attach", systemImage: "plus")
                             .labelStyle(.iconOnly)
                             .frame(width: barHeight, height: barHeight)
                             .contentShape(.circle)
@@ -748,24 +750,27 @@ struct CompanionPanel: View {
                     }
                     // What they type is theirs (New York); the placeholder is the app's.
                     TextField("Message", text: $message, prompt: Text("Message").font(.body), axis: .vertical)
-                        .font(.authored(draftSize))
+                        .font(.authored(.body))
                         .lineLimit(1...6)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
                         .frame(minHeight: barHeight)
                         .glassEffect(.regular.interactive(), in: .rect(cornerRadius: barHeight / 2))
                         .disabled(!canWrite)
-                    Button(action: send) {
-                        Image(systemName: "arrow.up")
-                            .fontWeight(.semibold)
-                            // On a look's accent, its dark background (7.9:1 on amber, 6.8:1 on gold); on iOS's blue, white.
-                            .foregroundStyle(canSend ? AnyShapeStyle(Color(look.background ?? .white)) : AnyShapeStyle(.secondary))
-                            .frame(width: barHeight, height: barHeight)
+                    // Only when there's something to send, as ChatGPT and Messages have it.
+                    if canSend {
+                        Button(action: send) {
+                            Image(systemName: "arrow.up")
+                                .fontWeight(.semibold)
+                                .foregroundStyle(Color(Look.background))   // 7.7:1 on the accent
+                                .frame(width: barHeight, height: barHeight)
+                        }
+                        .glassEffect(.regular.tint(Color(Look.accent)).interactive(), in: .circle)
+                        .accessibilityLabel("Send")
+                        .transition(.scale.combined(with: .opacity))
                     }
-                    .glassEffect(canSend ? .regular.tint(look.accent.map(Color.init) ?? .accentColor).interactive() : .regular.interactive(), in: .circle)
-                    .disabled(!canSend)
-                    .accessibilityLabel("Send")
                 }
+                .animation(.smooth(duration: 0.2), value: canSend)   // Send grows in, rather than popping
             }
         }
         .alert("Couldn\u{2019}t Attach the File", isPresented: Binding { unreadable != nil } set: { if !$0 { unreadable = nil } }) {
@@ -807,13 +812,6 @@ struct CompanionPanel: View {
             Text("On Wikipedia, for questions about the real world")
         }
         Button("Instructions…", systemImage: "text.document") { editingInstructions = true }
-        // TRIAL: the looks to live with before choosing one (Kevin, 2026-11-27: "I can't decide").
-        Picker(selection: $look) {
-            ForEach(Look.allCases) { Text($0.name).tag($0) }
-        } label: {
-            Label("Look", systemImage: "paintpalette")
-        }
-        .pickerStyle(.menu)
     }
 
     /// "World Editor 0.1.0 (1)".
@@ -843,16 +841,6 @@ struct CompanionPanel: View {
     /// Its reply is waiting for an answer, or nothing has been said yet (the author may begin).
     private var canWrite: Bool {
         companion.conversation.waiting != nil || companion.conversation.turns.isEmpty
-    }
-
-    /// What they're writing, as large as a short message allows, smaller as it grows, as Focus
-    /// mode fills its page (Kevin, 2026-11-27, of Focus mode: "it fills the space").
-    private var draftSize: Font.TextStyle {
-        switch message.count {
-        case ..<60: .title
-        case ..<140: .title2
-        default: .title3
-        }
     }
 
     private var canSend: Bool {

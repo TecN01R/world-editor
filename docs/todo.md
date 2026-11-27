@@ -15,8 +15,13 @@ into a knowledge database essentially." Native, no Flutter; iOS's text engine ke
 cozy games, ChatGPT's chat, Focus mode ("it fills the space"; paper's blankness is intimidating); he
 writes "as if I were having a conversation"; his world seen as a wiki, a book, a web and a corkboard.
 - A Research: done 2026-11-27 (report in git-ignored private/reports/, sent to him). Coziness is mostly removal (nothing to fill in, owed, lost or flashing); structure suggested after writing, never demanded; four views each showing a neighbourhood; colour, if any, on every edge as one warm room under iOS's glass
-- [ ] B Three directions drawn at the folded Duo's size (Lamplight, Night Study, The World Book; a private canvas sent to him): waiting for his pick or mix; nothing built before that. If Lamplight: first check on the phone that a warm background reaches under the side column
-- [ ] C Build it a step at a time, with the conversation-first steps below as its engine. First (built, waiting for the phone to be reachable): the conversation restyled as all three directions had it (his words large in New York, no bubbles; the companion's smaller, set in; the message field's words large while short), and three looks in the companion's menu, colours only (Kevin: "themes ... I'm not trying to create a design or maintenance burden"): Night Study, Lamplight, World Book. Then: try filing on his real, messy writing (new pages, kinds and fields from what he says already exist; how well the phone's model does it is the open question)
+- [ ] C One design, decided from research and from successful apps, not by Kevin ("experience will be [the arbiter] and so will research and comparing to other apps"; "I don't need multiple themes"); built a step at a time:
+  - [ ] 1 One look (iOS's dark greys warmed slightly, one amber accent, every screen) and the conversation as ChatGPT has it (his words on the right in a bubble, the companion's across the width, Send only when there's something to send): built, installing; check on the phone that the background reaches under the folded Duo's side column
+  - [ ] 2 Three tabs, Talk, Pages, Map, a sidebar when unfolded (the stock tab view)
+  - [ ] 3 The world grows: the filed line's names tappable; new pages with an amber dot in Pages until opened
+  - [ ] 4 Map: the web around a page (new cards settling in once), and cards; names mentioned but not yet talked about as small dim cards
+  - [ ] 5 A page: title, picture, his lead, facts folded after three, the rest, "Mentioned in"
+  - Never: totals, streaks, progress bars, badges, notifications. A whole-world "A year ago" line in Pages, later
 
 ## What the app is for (Kevin, 2026-11-27)
 "Literally this app should enable me to finally write my novel, conceptualize how everything looks by
@@ -48,7 +53,7 @@ pages first today; this makes the conversation the place he writes and the pages
 - [ ] 2 Tell it something new about that page ("she trained at the Iron Abbey"): after the reply, your sentence is in the page, highlighted, after your paragraph about the same thing, with Undo under the reply
 - [ ] 3 Ask how this page connects to another one: it searches your pages ("Searched your pages" in its thinking)
 - [ ] 4 Ask a real-world question ("how did old lighthouses keep the flame lit?"): it looks it up on Wikipedia ("Searched Wikipedia for …" under the reply)
-- [ ] 5 Paperclip → Scan Documents, Choose File or a photo (pictures first ask for a one-time 990 MB download), then ask about it. How well it sees pictures is yours to judge: NVIDIA trained it on words only
+- [ ] 5 + beside the message field → Scan Documents, Choose File or a photo (pictures first ask for a one-time 990 MB download), then ask about it. How well it sees pictures is yours to judge: NVIDIA trained it on words only
 - [ ] 6 Say "from now on, keep your replies short": "Added to Instructions: …" shows under the reply
 
 ## Tell Claude if anything looks or feels wrong

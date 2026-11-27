@@ -31,7 +31,7 @@ struct PageEditor: UIViewRepresentable {
     func makeUIView(context: Context) -> PageView {
         let tv = PageTextView(usingTextLayoutManager: true)
         tv.delegate = context.coordinator
-        tv.backgroundColor = Self.paper
+        tv.backgroundColor = .clear   // the page's screen shows the look's background (`lookBackground`)
         tv.alwaysBounceVertical = true
         tv.keyboardDismissMode = .interactive
         tv.textContainer.lineFragmentPadding = 0   // the writing lines up under the title and fields
@@ -54,7 +54,6 @@ struct PageEditor: UIViewRepresentable {
 
     func updateUIView(_ view: PageView, context: Context) {
         context.coordinator.onFocus = onFocus
-        view.textView.backgroundColor = Self.paper
         // Renamed from elsewhere (the companion filing "Her name is Florica", or its Undo):
         // the title shows it, unless the author is typing in it.
         let title = context.coordinator.titleField
@@ -79,15 +78,8 @@ struct PageEditor: UIViewRepresentable {
         p.lineHeightMultiple = 1.35
         p.paragraphSpacing = kind.isList ? 4 : 14
         if let list = RichText.list(for: kind) { p.textLists = [list] }
-        return [.font: font, .foregroundColor: ink, .paragraphStyle: p]
+        return [.font: font, .foregroundColor: Look.ink, .paragraphStyle: p]
     }
-
-    /// The writing's colour, the look's (`Look.ink`).
-    static var ink: UIColor { Look.current.ink }
-
-    /// Behind the writing: iOS's own in Night Study; clear in a look with its own background,
-    /// which the page's whole screen shows (`lookBackground`).
-    static var paper: UIColor { Look.current.background == nil ? .systemBackground : .clear }
 
     @MainActor
     final class Coordinator: NSObject, UITextViewDelegate, UITextFieldDelegate {
@@ -108,7 +100,7 @@ struct PageEditor: UIViewRepresentable {
             let f = UITextField()
             f.font = PageEditor.titleFont
             f.adjustsFontForContentSizeCategory = true
-            f.textColor = PageEditor.ink   // the writing's colour: it's the user's too
+            f.textColor = Look.ink   // the writing's colour: it's the user's too
             f.placeholder = "Title"
             f.clearButtonMode = .never   // the fields' clear buttons are for short values, not the title
             f.text = library.document.title

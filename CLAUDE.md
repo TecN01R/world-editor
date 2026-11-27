@@ -42,8 +42,9 @@ only once it's on Kevin's phone and checked, or he has answered it.
 ## Conventions
 
 - Dark only (Kevin, 2026-11-27: "Let's stop offering a light mode I'll never use
-  it"): Info.plist's `UIUserInterfaceStyle` is Dark, in iOS's softer dark grey (the
-  elevated level). iOS's own colours: gruvbox was tried and reverted ("looks half assed").
+  it"): Info.plist's `UIUserInterfaceStyle` is Dark. One look, no themes (`Look`: iOS's
+  dark greys warmed slightly, one amber accent), on every screen. Kevin doesn't choose
+  between design options: decide from research and successful apps, ship one, adjust.
 - iOS defaults first: use stock components and take their default look and
   placement (titles, toolbars, sidebar, keyboard bar). Customise only where
   Kevin asks or a default clearly fails a stated rule, and say which is which.

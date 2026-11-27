@@ -1,58 +1,25 @@
 import SwiftUI
 import UIKit
 
-/// How the app looks, chosen in the companion's menu (Kevin, 2026-11-27, of three directions
-/// drawn: "I can't decide but they feel better than what we have today"; then "it'd be cool to
-/// have themes ... I'm not trying to create a design or maintenance burden either"). A look is
-/// colours only, the same screens in every one: Night Study, iOS's own soft grey; Lamplight, a
-/// warm, muted near-black with cream writing and amber; World Book, a deep green with cream and
-/// gold. Set only in iOS's own ways (a navigation container's background, the tint, the window's
-/// background and tint colours), on every edge.
-enum Look: String, CaseIterable, Identifiable {
-    case nightStudy, lamplight, worldBook
-
-    static let key = "look"
-    /// The look chosen, for UIKit, which can't watch `@AppStorage`.
-    static var current: Look { UserDefaults.standard.string(forKey: key).flatMap(Look.init) ?? .nightStudy }
-
-    var id: Self { self }
-
-    var name: String {
-        switch self {
-        case .nightStudy: "Night Study"
-        case .lamplight: "Lamplight"
-        case .worldBook: "World Book"
-        }
-    }
-
-    /// Behind everything; nil: iOS's own.
-    var background: UIColor? {
-        switch self {
-        case .nightStudy: nil
-        case .lamplight: Self.color(0x1E1915)
-        case .worldBook: Self.color(0x172220)
-        }
-    }
-
-    /// Buttons, links and the caret; nil: iOS's own blue.
-    /// Contrast on the background: amber 7.9:1, gold 6.8:1.
-    var accent: UIColor? {
-        switch self {
-        case .nightStudy: nil
-        case .lamplight: Self.color(0xD8A657)
-        case .worldBook: Self.color(0xC9A24A)
-        }
-    }
-
-    /// The author's words: cream in Lamplight and World Book (13.8:1 and 12.3:1 on their
-    /// backgrounds), a touch off-white in Night Study (pure white on black shimmers and reads heavy).
-    var ink: UIColor {
-        switch self {
-        case .nightStudy: UIColor(white: 1, alpha: 0.88)
-        case .lamplight: Self.color(0xEEE4D3)
-        case .worldBook: Self.color(0xE9DFC7)
-        }
-    }
+/// The app's one look (Kevin, 2026-11-27: "I don't need multiple themes we need to arrive at one
+/// layout"; "experience will be [the arbiter] and so will research and comparing to other apps").
+/// Apple's dark greys, warmed very slightly: between pure black, which ChatGPT's users called
+/// "painful to look at", and a brown that reads as muddy; off-white text, never pure white; one
+/// muted amber accent (private/reports/, and the comparison with writing and chat apps the same
+/// day). Set only in iOS's own ways (a navigation container's background, the window's background
+/// and tint colour, `tint`), on every screen, so nothing sits as a coloured panel inside grey bars,
+/// as gruvbox did ("The gruvbox looks half assed").
+enum Look {
+    /// Behind everything (Apple's elevated base grey #1C1C1E, warmed).
+    static let background = color(0x1C1A17)
+    /// A raised surface, such as the author's message bubble (Apple's #2C2C2E, warmed).
+    static let raised = color(0x2C2925)
+    /// The author's words (their pages' writing and titles, in Edit and Focus mode, and their
+    /// messages) and the companion's replies: 13.3:1 on the background.
+    static let ink = color(0xE6E1D8)
+    /// Buttons, links, the caret and what's new: 7.7:1 on the background, as is the background's
+    /// colour drawn on it (the Send arrow).
+    static let accent = color(0xD4A373)
 
     private static func color(_ hex: UInt32) -> UIColor {
         UIColor(red: CGFloat(hex >> 16 & 0xFF) / 255, green: CGFloat(hex >> 8 & 0xFF) / 255,
@@ -60,25 +27,13 @@ enum Look: String, CaseIterable, Identifiable {
     }
 }
 
-/// The look's background behind a screen: its whole navigation container (bars included) and
-/// whatever isn't one (the companion's column), with lists and forms showing it through. In
-/// Night Study, iOS's own, untouched.
-private struct LookBackground: ViewModifier {
-    @AppStorage(Look.key) private var look = Look.nightStudy
-
-    func body(content: Content) -> some View {
-        if let background = look.background.map(Color.init) {
-            content
-                .scrollContentBackground(.hidden)
-                .containerBackground(background, for: .navigation)
-                .background(background)
-        } else {
-            content
-        }
-    }
-}
-
 extension View {
-    /// The chosen look's background behind this screen (`Look`).
-    func lookBackground() -> some View { modifier(LookBackground()) }
+    /// The look's background behind this screen: its whole navigation container, bars included,
+    /// and whatever isn't one (the companion's column), with lists and forms showing it through.
+    func lookBackground() -> some View {
+        let background = Color(Look.background)
+        return scrollContentBackground(.hidden)
+            .containerBackground(background, for: .navigation)
+            .background(background)
+    }
 }
