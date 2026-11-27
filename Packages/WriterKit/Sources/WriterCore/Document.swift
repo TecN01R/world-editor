@@ -352,6 +352,12 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
         return name.map { String($0.prefix(80)) } ?? ""
     }
 
+    /// What a page with no name is called, wherever it's named.
+    public static let untitled = "Untitled"
+
+    /// The page's name wherever it's shown: its heading, or "Untitled" until it has one.
+    public var displayName: String { heading.isEmpty ? Self.untitled : heading }
+
     /// The first line of writing not already used as the heading.
     public var preview: String {
         let lines = trimmedTitle.isEmpty ? nonEmptyLines.dropFirst() : nonEmptyLines[...]

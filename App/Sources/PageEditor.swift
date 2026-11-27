@@ -35,6 +35,7 @@ struct PageEditor: UIViewRepresentable {
         tv.alwaysBounceVertical = true
         tv.keyboardDismissMode = .interactive
         tv.textContainer.lineFragmentPadding = 0   // the writing lines up under the title and fields
+        tv.linkTextAttributes = Look.link
         tv.allowsEditingTextAttributes = true      // ⌘B, ⌘I and the Format menu
         tv.textFormattingConfiguration = RichText.formatting
         tv.titleField = context.coordinator.titleField
@@ -73,12 +74,29 @@ struct PageEditor: UIViewRepresentable {
         return UIFontMetrics(forTextStyle: style).scaledFont(for: serif)
     }
 
+    /// A paragraph as the page shows it, read or edited: line height ×1.35, 14 pt between
+    /// paragraphs, light hyphenation (a long word breaks only where the ragged edge would
+    /// otherwise gape), ragged right, in the author's ink.
     static func attributes(_ kind: ParagraphKind) -> [NSAttributedString.Key: Any] {
         let p = NSMutableParagraphStyle()
         p.lineHeightMultiple = 1.35
         p.paragraphSpacing = kind.isList ? 4 : 14
+        p.hyphenationFactor = 0.4
         if let list = RichText.list(for: kind) { p.textLists = [list] }
         return [.font: font, .foregroundColor: Look.ink, .paragraphStyle: p]
+    }
+
+    /// `paragraphs` as the page sets them, read or edited: each made by `paragraph` from it and
+    /// its kind's `attributes`, with a line break in those attributes between one and the next.
+    static func text(of paragraphs: [Paragraph],
+                     _ paragraph: (Paragraph, [NSAttributedString.Key: Any]) -> NSAttributedString) -> NSAttributedString {
+        let s = NSMutableAttributedString()
+        for (i, p) in paragraphs.enumerated() {
+            let attrs = attributes(p.kind)
+            s.append(paragraph(p, attrs))
+            if i < paragraphs.count - 1 { s.append(NSAttributedString(string: "\n", attributes: attrs)) }
+        }
+        return s
     }
 
     @MainActor
@@ -175,12 +193,7 @@ struct PageEditor: UIViewRepresentable {
             isRendering = true
             defer { isRendering = false }
             let doc = library.document
-            let s = NSMutableAttributedString()
-            for (i, p) in doc.paragraphs.enumerated() {
-                let attrs = PageEditor.attributes(p.kind)
-                s.append(RichText.attributed(p, attributes: attrs))
-                if i < doc.paragraphs.count - 1 { s.append(NSAttributedString(string: "\n", attributes: attrs)) }
-            }
+            let s = PageEditor.text(of: doc.paragraphs) { RichText.attributed($0, attributes: $1) }
             tv.attributedText = s
             shown = doc.paragraphs
             if let selection {   // within the text, which may now be shorter
@@ -622,8 +635,21 @@ final class PageView: UIView {
     }
 }
 
+/// Where a page's parts sit, read (`EntryView`) or edited (`PageTextView`), so going between the
+/// two nothing moves (docs/design.md: "Read and Edit are the same page").
+enum PageLayout {
+    /// From the top of the page to the title's line.
+    static let titleTop: CGFloat = 6
+    /// From the title's line to the kind under it.
+    static let kindGap: CGFloat = 14
+    /// From what's above the writing to its first line.
+    static let writingGap: CGFloat = 14
+    /// Below the writing's last line.
+    static let bottom: CGFloat = 40
+}
+
 /// The page's text view. Lays out the title above the writing whenever its
-/// width changes (rotation, fold), in a readable column of ~33 em.
+/// width changes (rotation, fold), in the reading column (`Look.column`).
 final class PageTextView: PlainPasteTextView {
     /// HIG text fields: a Clear button at the trailing end. SwiftUI has no modifier for it,
     /// so the page's fields take UIKit's own, set once for every page.
@@ -686,25 +712,20 @@ final class PageTextView: PlainPasteTextView {
     override func layoutSubviews() {
         super.layoutSubviews()
         guard let title = titleField else { return }
-        let width = bounds.width
-        let column = min(width - 44, 33 * PageEditor.font.pointSize)   // at most ~66 characters a line
-        let side = max(22, (width - column) / 2)
-        // The title, fields and writing share a left edge, 7 px (2⅓ pt) in from
-        // `side`, where the pages list's title sits (measured on the Duo), so
-        // going into a page the title stays put.
-        let lead = side + 7.0 / 3
-        let lineWidth = max(0, width - lead - side)
+        // The title, fields and writing share the reading column's left edge.
+        let column = Look.column(bounds.width)
+        let side = (bounds.width - column) / 2
+        // The field centres the title's line in 8 pt more than its height.
         let titleHeight = ceil(title.font?.lineHeight ?? 34) + 8
-        // Offset so the title's letters, not its field, land on that edge and
-        // level with the list's title (also measured on the Duo).
-        title.frame = CGRect(x: lead - 1.0 / 3, y: 8 - 20.0 / 3, width: lineWidth, height: titleHeight)
-        var top = title.frame.maxY
+        title.frame = CGRect(x: side, y: PageLayout.titleTop - 4, width: column, height: titleHeight)
+        var top = title.frame.maxY - 4   // where the title's line ends
         if let fields = fieldsController?.view {
-            fields.frame = CGRect(x: lead, y: top + 6, width: lineWidth, height: fieldsHeight)
+            // The kind's line lands `kindGap` under the title; its menu has 4 pt above it.
+            fields.frame = CGRect(x: side, y: top + PageLayout.kindGap - 4, width: column, height: fieldsHeight)
             top = fields.frame.maxY
         }
 
-        let inset = UIEdgeInsets(top: top + 14, left: lead, bottom: 40, right: side)
+        let inset = UIEdgeInsets(top: top + PageLayout.writingGap, left: side, bottom: PageLayout.bottom, right: side)
         if textContainerInset != inset { textContainerInset = inset }
 
         // The format bar floats over the bottom of the page (which stops at the

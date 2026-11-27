@@ -120,11 +120,11 @@ struct Drawer: View {
         return row(marked: marked, action: { openConversation(talk.page) }) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(talk.title ?? "New Conversation")
-                    .font(.authored(.body))
+                    .font(.authored(.headline))
                     .lineLimit(1)
                 if let when = talk.lastActive {
                     Text(when, format: .relative(presentation: .named))
-                        .font(.caption)
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
             }

@@ -16,11 +16,11 @@ struct CompanionInstructions: View {
         NavigationStack {
             Form {
                 Section {
+                    // The author's words, so New York.
                     TextEditor(text: $instructions)
+                        .font(.authored(.body))
                         .frame(minHeight: 240)
                         .accessibilityLabel("Instructions")
-                } header: {
-                    Text("Instructions")
                 } footer: {
                     Text("The companion reads these before every reply, and adds to them when you tell it how to reply from now on. Blank, it’s the model as its maker ships it.")
                 }
@@ -36,6 +36,7 @@ struct CompanionInstructions: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel", systemImage: "xmark") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button("Done", systemImage: "checkmark", action: save) }
             }
+            .toolbarVerticalBehavior(.disabled)   // its bar across the top, not in the folded Duo's side column
         }
         .interactiveDismissDisabled(loaded && instructions != (companion.instructions ?? ""))   // a swipe doesn't throw away what's typed
         .onAppear {

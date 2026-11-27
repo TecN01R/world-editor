@@ -8,22 +8,23 @@ outgrowing the pace at which I can understand their development"): only fixes to
 Testing is using it: when a reply is bad or something feels off, he says so, and Claude pulls the
 conversation and the phone's log to find out why.
 
-## A cozy World Editor (Kevin, 2026-11-27; plan approved)
-Kevin: "we need deep research to come up with a very homey cozy UI that reduces friction, doesn't
-intimidate. Like our focus writer, that's so cozy. The goal is to get my thoughts out of my head and
-into a knowledge database essentially." Native, no Flutter; iOS's text engine kept. His references:
-cozy games, ChatGPT's chat, Focus mode ("it fills the space"; paper's blankness is intimidating); he
-writes "as if I were having a conversation"; his world seen as a wiki, a book, a web and a corkboard.
-- A Research: done 2026-11-27 (report in git-ignored private/reports/, sent to him). Coziness is mostly removal (nothing to fill in, owed, lost or flashing); structure suggested after writing, never demanded; four views each showing a neighbourhood; colour, if any, on every edge as one warm room under iOS's glass
-- [ ] C One design, decided from research and from successful apps, not by Kevin ("experience will be [the arbiter] and so will research and comparing to other apps"; "I don't need multiple themes"); built a step at a time:
-  - [ ] 1 One look and the conversation as ChatGPT lays it out: installed, to check (does the colour reach under the folded side column?)
-  - [ ] 2 The drawer, as ChatGPT's, in place of tabs (Kevin: "Shouldn't it be easier to get to the full conversation list?"): New Conversation, Connections, every conversation, then the pages; installed
-  - [ ] 3 The world grows: new pages marked until opened; filed names tappable; installed
-  - [ ] 4 Connections (Kevin, of a "map": "I'd have to know the geology and geography of the world and I don't yet"): cards, lines, faint dashed rumours, new ones glowing; installed. A geographic map only later, grown from where he says places are
-  - [ ] 5 Pages read as wiki entries (Kevin: "I do love reading a good wiki"): lead, facts box, links, "Mentioned in"; Edit and Read; installed
-  - [ ] 6 One companion (Kevin: "I don't feel this is radical enough or frictionless enough"): the conversation is the only one; a page has Talk; installed
-  - Next: whatever still feels like friction or "an app" once he has used it
-  - Never: totals, streaks, progress bars, badges, notifications. A whole-world "A year ago" line in Pages, later
+## The correction (Kevin, 2026-11-27; plan approved)
+Kevin, after a day of patch installs: "This is not at all reaching any of the goals of frictionless
+use, consistency, or professional development that I desire of this app. Please correct it using the
+latest techniques and research." His yardstick: "I can't know I'm using an app it has to be effortless
+and just flow"; "the text has to look gorgeous like it was printed but also be easy to read chapter
+upon chapter"; "I want to feel like my world is growing itself and I'm uncovering it". What was wrong
+underneath: filing waited two minutes and lost whatever was still waiting; "she", "he", "it" and "they"
+weren't filed in the world's conversation; screens were swapped rather than pushed; every screen set
+its own fonts and spacing; nothing was looked at on a screen before it reached him. Three installs,
+each rendered on the Duo simulator and reviewed before it reaches his phone.
+- [ ] 0 Groundwork, nothing on the phone: a sample world and a scene for every screen; the Mac jobs rendering them folded, unfolded and at large text; checks by script; named sizes, colours and text styles; test screens for the Duo's side column, tabs and panes
+- [ ] 1 Install 1, his words reach his pages and read like print: filed right after every reply ("Adding to your pages…"); nothing lost when the app closes; "she", "he", "it", "they" and "the guild" go to the page just talked about (only ever adding, with Undo); filing in its own lane so replies stay as fast; line spacing, grey text and the Read and Edit layouts corrected
+- [ ] 2 Install 2, one app: Talk and World tabs placed by iOS; real Back, swipe and trail; reopening where he left off; one quiet line of page names under a reply, a page peeked from it (beside the conversation when unfolded); Send becomes Stop; every screen rebuilt from the same parts. The drawer, the hand-made Back buttons and the ⋯ menus go. Then, by him: a minute of folding, unfolding and rotating in each tab
+- [ ] 3 Install 3, his world pulls him back (after he has used 2): what's new, and the names only mentioned so far, on World's front page; a new conversation showing one line of his own words; search in its own place
+- Changed with his approval: tabs in place of the drawer (the conversation list is Talk's first screen, one swipe back); "each discrete action has its own undo" kept one tap deeper (the line's own Undo takes back everything that message did)
+- Never: totals, streaks, progress bars, badges, notifications
+- The research behind it is in git-ignored private/reports/; Kevin doesn't choose between design options ("experience will be [the arbiter] and so will research and comparing to other apps")
 
 ## What the app is for (Kevin, 2026-11-27)
 "Literally this app should enable me to finally write my novel, conceptualize how everything looks by
@@ -80,8 +81,8 @@ pages first today; this makes the conversation the place he writes and the pages
 - [ ] Android app: later, its own native project
 
 ## Companion
-- [ ] His ChatGPT conversations into his world (proposed 2026-11-27): when the export arrives, file his own side of them (never ChatGPT's words) into pages as the companion files a message, each with Undo, so he starts with the world he has already talked out
-- [ ] As useful as ChatGPT is for Kevin (Kevin, 2026-11-26). Waiting for his ChatGPT export (kept in git-ignored private/): about 20 things he actually asked ChatGPT, asked of the phone's companion too, side by side on one page, so he sees where it holds up (2026-11-27); his ChatGPT instructions and memories carried into Instructions. Done since: faster first words, pictures, the open page
+- [ ] His ChatGPT conversations into his world (proposed 2026-11-27; the export arrived that day, kept in git-ignored private/; next after the correction): file his own side of them (never ChatGPT's words) into pages as the companion files a message, each with Undo, so he starts with the world he has already talked out
+- [ ] As useful as ChatGPT is for Kevin (Kevin, 2026-11-26). His ChatGPT export is here (git-ignored private/); after the correction: about 20 things he actually asked ChatGPT, asked of the phone's companion too, side by side on one page, so he sees where it holds up (2026-11-27); his ChatGPT instructions and memories carried into Instructions. Done since: faster first words, pictures, the open page
 - [ ] Choose a test suite for the companion from an open standard, built around how the app is used (Kevin, 2026-11-25: he judges by using it)
   - [ ] Blind taste test for Kevin (Kevin, 2026-11-25: "I'm also ok with blind taste test for me"): pairs of anonymous replies to his own messages, fresh from each candidate; he picks or ties; ranked as Chatbot Arena does (Bradley–Terry); he is the only judge
 - [ ] Search: built on Nemotron (search_pages, thinking capped); check it finds things on the phone

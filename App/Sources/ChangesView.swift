@@ -1,8 +1,8 @@
 import SwiftUI
 import WriterCore
 
-/// Everything the companion filed into the pages from this conversation (Changes,
-/// beside the menu), as a timeline (Kevin, 2026-11-24: "it should be a timeline"):
+/// Everything the companion filed into the pages from this conversation (Changes, in
+/// the conversation's More menu), as a timeline (Kevin, 2026-11-24: "it should be a timeline"):
 /// newest at the top, a point for each of the author's messages that changed
 /// something, with what it changed under it. A field's change shows the value it
 /// replaced, and opens that field's own timeline. Undo on a point takes back what
@@ -58,10 +58,12 @@ struct ChangesView: View {
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: FieldKey.self) { FieldTimeline(key: $0) }
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done", systemImage: "checkmark") { dismiss() }
+                // Undo applies at once: nothing to save, so Close.
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close", systemImage: "xmark") { dismiss() }
                 }
             }
+            .toolbarVerticalBehavior(.disabled)   // its bar across the top, not in the folded Duo's side column
         }
     }
 
@@ -126,7 +128,7 @@ struct FieldTimeline: View {
                         }
                     }
                     Text("“\(change.message)”").font(.authored(.footnote)).foregroundStyle(.secondary).lineLimit(3)
-                    Ago(date: change.date, current: i == 0 && !elsewhere).font(.caption).foregroundStyle(.secondary)
+                    Ago(date: change.date, current: i == 0 && !elsewhere).font(.subheadline).foregroundStyle(.secondary)
                 }
             }
             if let oldest = history.last {
@@ -142,6 +144,7 @@ struct FieldTimeline: View {
         .lookBackground()
         .navigationTitle(library.schema.fields.first { $0.id == key.field }?.name ?? "Field")
         .navigationSubtitle(library.pageName(key.page))
+        .toolbarVerticalBehavior(.disabled)   // as the Changes it's pushed from
         .overlay {
             if history.isEmpty {   // all undone while it's open
                 ContentUnavailableView("No Changes", systemImage: "clock.arrow.circlepath")
@@ -227,12 +230,12 @@ private struct Ago: View {
 
 extension Library {
     /// A filed page's name as Changes shows it: its title in New York at the size
-    /// around it; "New Page" while it has none (as the pages list says) and
-    /// "Deleted page" are the app's words, in San Francisco.
+    /// around it; "Untitled" while it has none (as everywhere) and "Deleted page"
+    /// are the app's words, in San Francisco.
     fileprivate func pageName(_ id: UUID) -> Text {
         switch (pages.first { $0.id == id } ?? recentlyDeleted.first { $0.id == id })?.heading {
         case nil: Text(Self.deletedPage)
-        case ""?: Text("New Page")
+        case ""?: Text(WriterCore.Document.untitled)
         case let heading?: Text(heading).fontDesign(.serif)
         }
     }
@@ -254,15 +257,13 @@ private struct UndoPointButton: View {
     @State private var blocked = false
 
     var body: some View {
-        Button(newest ? "Undo" : "Undo…") {
+        UndoButton {
             switch find() {
             case nil: blocked = true
             case let found? where found.count == 1: companion.undo(found, in: library)
             case let found?: chain = found
             }
         }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
         .accessibilityLabel(newest ? Text("Undo \(label)") : Text("Undo \(label), and everything after it"))
         .confirmationDialog(chain.map { "Undo \($0.count) changes?" } ?? "",
                             isPresented: Binding { chain != nil } set: { if !$0 { chain = nil } },
@@ -282,7 +283,7 @@ private struct UndoPointButton: View {
     private func summary(_ action: FilingRecord.Entry) -> String {
         guard let line = library.describe(FilingRecord(entries: [action])).first else { return "" }
         if line.isNew { return "New page: \(line.page)" + (line.type.map { " (\($0))" } ?? "") }
-        if case .renamed(_, let was, _) = action { return "\(line.page) · renamed, was \(was.isEmpty ? "untitled" : was)" }
+        if case .renamed(_, let was, _) = action { return "\(line.page) · renamed, was \(was.isEmpty ? WriterCore.Document.untitled : was)" }
         return line.detail.map { "\(line.page) · \($0)" } ?? line.page
     }
 }
@@ -320,7 +321,7 @@ private struct Change {
             spoken = Text("\(page), \(detail)")
         case .renamed(_, let was, let title):
             symbol = "character.cursor.ibeam"
-            let old = was.isEmpty ? Text("untitled") : authored(was)
+            let old = was.isEmpty ? Text(WriterCore.Document.untitled) : authored(was)
             detail = Text("Renamed: \(old) → \(authored(title))")
             spoken = Text("Renamed from \(old) to \(authored(title))")
         case .described(_, let text):

@@ -33,6 +33,14 @@ final class DocumentTests: XCTestCase {
         XCTAssertNotEqual(d.paragraphs[1].id, first)
     }
 
+    func testAPageIsNamedByItsHeadingOrUntitled() {
+        XCTAssertEqual(Document(title: "  Mira ").displayName, "Mira")
+        XCTAssertEqual(Document(paragraphs: [Paragraph(text: " "), Paragraph(text: "The salt road")]).displayName,
+                       "The salt road")   // its first line until it has a title
+        XCTAssertEqual(Document().displayName, "Untitled")
+        XCTAssertEqual(Document(title: " ", paragraphs: [Paragraph(text: "  ")]).displayName, "Untitled")
+    }
+
     func testEmptyDocumentAlwaysHasOneParagraph() {
         XCTAssertEqual(Document(paragraphs: []).paragraphs.count, 1)
     }

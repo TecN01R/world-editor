@@ -140,7 +140,7 @@ struct RootView: View {
                 if editing == id {
                     EditorView(focusMode: $focusMode, focusControls: $focusControls, chromeHidden: chromeHidden) { editing = nil }
                 } else {
-                    EntryView(page: library.document, talk: { open(.conversation) }) { editing = id }
+                    EntryView(page: library.document) { editing = id }
                 }
             }
             .id(id)
@@ -182,7 +182,7 @@ struct RootView: View {
     /// The world conversation in front.
     @ViewBuilder private var conversation: some View {
         if let id = worldConversation {
-            CompanionPanel(worldConversation: id, newConversation: startConversation, openMap: { open(.connections) })
+            CompanionPanel(worldConversation: id, newConversation: startConversation)
             .task(id: id) {
                 companion.open(library.worldSubject(id), in: library, aboutWorld: true)
                 library.lastWorldConversation = id
@@ -328,7 +328,12 @@ struct PageList: View {
             ForEach(library.searchSuggestions, id: \.self) { Text($0).searchCompletion($0) }
         }
         .overlay {
-            if !query.isEmpty, !searching, results.isEmpty { ContentUnavailableView.search(text: query) }
+            if !query.isEmpty {
+                if !searching, results.isEmpty { ContentUnavailableView.search(text: query) }
+            } else if library.pages.isEmpty, !showingDeleted {
+                ContentUnavailableView("No Pages Yet", systemImage: "books.vertical",
+                                       description: Text("Your world’s pages appear here as you talk about it in the conversation."))
+            }
         }
         .task(id: query) {
             searching = true
@@ -371,11 +376,12 @@ struct PageList: View {
             // Kevin, 2026-11-24: search at the very bottom, New Page in its usual place at the
             // top. Search where iOS puts it (he asked for the Duo's best practice): in the
             // bottom bar, which the folded Duo's side column shows as a button.
-            // New Page is pinned: as a primary action, even at high priority, iOS put it alone
-            // unfolded in a "•••" menu the same size as the button (Kevin, 2026-11-24); a
-            // pinned item goes there only while searching with no room.
+            // New Page is the screen's one main action, pinned (docs/design.md): as a primary
+            // action, even at high priority, iOS put it alone unfolded in a "•••" menu the same
+            // size as the button (Kevin, 2026-11-24); a pinned item goes there only while
+            // searching with no room.
             ToolbarItem(placement: .topBarPinnedTrailing) {
-                Button("New Page", systemImage: "square.and.pencil") {
+                Button("New Page", systemImage: "doc.badge.plus") {
                     showingDeleted = false   // the new page shows in the list
                     newPage()
                 }
@@ -385,37 +391,13 @@ struct PageList: View {
         }
     }
 
+    /// A page; searching, with the line that matched in place of how it begins.
     private func row(_ page: WriterCore.Document, snippet: String?) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 8) {
-                Text(highlighted(page.heading.isEmpty ? "New Page" : page.heading))
-                    .font(.authored(.headline))
-                    .lineLimit(1)
-                // New or added to by the companion, not yet opened (`Library.unseen`).
-                if library.unseen.contains(page.id) {
-                    Circle()
-                        .fill(Color(Look.emphasis))
-                        .frame(width: 8, height: 8)
-                        .accessibilityLabel("New")
-                }
+        PageRow(page: page, line: snippet, marking: Search.terms(library.searchQuery))
+            .calmRow()
+            .swipeActions {
+                Button("Delete", systemImage: "trash", role: .destructive) { library.delete(page.id) }
             }
-            if let snippet {
-                // Searching: the line that matched, in place of how it begins.
-                Text(highlighted(snippet)).lineLimit(1)
-                    .font(.authored(.subheadline))
-                    .foregroundStyle(.secondary)
-            } else if !page.preview.isEmpty {
-                // How it begins, in place of when it changed: what's on it, not its bookkeeping.
-                Text(page.preview).font(.authored(.subheadline)).lineLimit(1)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
-        .calmRow()
-        .swipeActions {
-            Button("Delete", systemImage: "trash", role: .destructive) { library.delete(page.id) }
-        }
     }
 
     /// A kind of page's own options, from its heading: its fields, its name, or it gone.
@@ -463,7 +445,7 @@ struct PageList: View {
     /// A page in Recently Deleted: tap for Recover or Delete Now; swipe
     /// right to recover.
     private func deletedRow(_ page: WriterCore.Document) -> some View {
-        let title = page.heading.isEmpty ? "New Page" : page.heading, days = page.daysLeft() ?? 0
+        let title = page.displayName, days = page.daysLeft() ?? 0
         return Button { choosing = page } label: {
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.authored(.headline)).lineLimit(1)
@@ -494,11 +476,50 @@ struct PageList: View {
         newName = type.name
         renaming = type
     }
+}
 
-    /// `text` with every search term in bold.
-    private func highlighted(_ text: String) -> AttributedString {
+/// A page as every list of pages shows it (Pages, Mentions, a page's "Mentioned In"): its name,
+/// then how it begins, or the line the list has for it in its place (a search's match, a quote);
+/// what's on it, not its bookkeeping. A white dot while the companion has made or added to it
+/// and the author hasn't opened it (`Library.unseen`).
+struct PageRow: View {
+    @Environment(Library.self) private var library
+    let page: WriterCore.Document
+    /// The line under the name in place of how the page begins.
+    var line: String?
+    /// Words to show in bold in the name and that line: a search's terms.
+    var marking: [String] = []
+    /// How many lines the line under the name may take; nil for as many as it needs.
+    var lineLimit: Int? = 1
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 8) {
+                Text(marked(page.displayName))
+                    .font(.authored(.headline))
+                    .lineLimit(1)
+                if library.unseen.contains(page.id) {
+                    Circle()
+                        .fill(Color(Look.emphasis))
+                        .frame(width: 8, height: 8)
+                        .accessibilityLabel("New")
+                }
+            }
+            if let line = line.map(marked) ?? (page.preview.isEmpty ? nil : AttributedString(page.preview)) {
+                Text(line)
+                    .font(.authored(.subheadline))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(lineLimit)
+            }
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// `text` with every word of `marking` in bold.
+    private func marked(_ text: String) -> AttributedString {
         var s = AttributedString(text)
-        for term in Search.terms(library.searchQuery) {
+        for term in marking {
             var from = s.startIndex
             while let r = s[from...].range(of: term, options: [.caseInsensitive, .diacriticInsensitive]) {
                 s[r].inlinePresentationIntent = .stronglyEmphasized
@@ -533,10 +554,6 @@ struct EditorView: View {
     @State private var editing = false
     /// The page's writing has the keyboard (not its title or a field).
     @State private var writing = false
-
-    private var mentionsButton: some View {
-        Button("Mentions", systemImage: "at") { showMentions = true }
-    }
 
     /// Closes the keyboard (the iPhone keyboard has no key for it) and, in
     /// Focus, leaves it: Focus is for editing, so there's nothing to stay for.
@@ -656,7 +673,7 @@ struct EditorView: View {
             } else if editing {
                 // Editing the page, folded and unfolded alike (Kevin, 2026-11-24): Back or the
                 // sidebar button, Focus, and Done (the iPhone keyboard has no key to close it),
-                // each its own button, never in "•••". Read and Mentions wait for
+                // each its own button, never in "•••". Read and More wait for
                 // the keyboard to go down: folded, the side column above the keyboard holds
                 // only three buttons (with a menu as well, iOS put Done in a "•••" of its own;
                 // "just looks terrible"). (Swapping the bar while any keyboard was up, search's
@@ -674,10 +691,13 @@ struct EditorView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) { doneButton }
             } else {
-                ToolbarItem(placement: .primaryAction) { Button("Read", systemImage: "book", action: read) }
-                // Shown when there's room; first into "•••" when there isn't.
-                ToolbarItem(placement: .primaryAction) { mentionsButton }
-                    .visibilityPriority(.low)
+                // Read is the screen's one main action, pinned; the rest in More (docs/design.md).
+                ToolbarItem(placement: .topBarPinnedTrailing) { Button("Read", systemImage: "book", action: read) }
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Button("Mentions", systemImage: "at") { showMentions = true }
+                    } label: { Label("More", systemImage: "ellipsis") }
+                }
             }
         }
     }
@@ -697,15 +717,12 @@ struct MentionsView: View {
                     dismiss()
                     library.selection = page.id
                 } label: {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(page.heading.isEmpty ? "New Page" : page.heading).font(.authored(.headline))
-                        if !page.preview.isEmpty {
-                            Text(page.preview).font(.authored(.subheadline)).foregroundStyle(.secondary).lineLimit(2)
-                        }
-                    }
+                    PageRow(page: page)
                 }
                 .tint(.primary)
+                .calmRow()
             }
+            .listStyle(.plain)   // as the pages list: plain, no lines between rows
             .overlay {
                 if mentions.isEmpty {
                     ContentUnavailableView("No Mentions", systemImage: "at",

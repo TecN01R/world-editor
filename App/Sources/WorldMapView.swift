@@ -17,7 +17,7 @@ struct WorldMapView: View {
     /// New cards whose arrival has been shown since Connections opened.
     @State private var arrived: Set<UUID> = []
     @ScaledMetric(relativeTo: .headline) private var cardWidth: CGFloat = 156
-    @ScaledMetric(relativeTo: .headline) private var cardHeight: CGFloat = 84
+    @ScaledMetric(relativeTo: .headline) private var cardHeight: CGFloat = 90   // the kind, then a name on two lines
     @ScaledMetric(relativeTo: .headline) private var gap: CGFloat = 28
     private let margin: CGFloat = 120
 
@@ -26,7 +26,7 @@ struct WorldMapView: View {
             if let map, !map.cards.isEmpty {
                 canvas(map)
             } else {
-                ContentUnavailableView("Connections", systemImage: "point.3.connected.trianglepath.dotted",
+                ContentUnavailableView("No Connections Yet", systemImage: "point.3.connected.trianglepath.dotted",
                                        description: Text("Talk about your world in the conversation. What you mention appears here, joined to what it's linked to."))
             }
         }
@@ -81,14 +81,14 @@ struct WorldMapView: View {
     }
 
     private func cardView(_ card: WorldMap.Card) -> some View {
-        let title = card.title.isEmpty ? "Untitled" : card.title
+        let title = card.title.isEmpty ? WriterCore.Document.untitled : card.title
         let new = library.unseen.contains(card.id)
         let shown = !new || reduceMotion || arrived.contains(card.id)
         let shape = RoundedRectangle(cornerRadius: 16)
         return Button { open(card.id) } label: {
             VStack(alignment: .leading, spacing: 3) {
                 if let kind = card.kind {
-                    Text(kind).font(.caption).foregroundStyle(.secondary)
+                    Text(kind).font(.subheadline).foregroundStyle(.secondary)
                 }
                 Text(title)
                     .font(.authored(card.isRumour ? .subheadline : .headline))

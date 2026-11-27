@@ -115,7 +115,7 @@ struct PageFields: View {
     /// menu, which also removes it from the type.
     private func name(_ field: FieldDefinition) -> some View {
         Button { library.fieldsRequest = .editField(field.id) } label: {
-            Text(field.name).font(.body).foregroundStyle(.secondary)
+            Text(field.name).font(.subheadline).foregroundStyle(.secondary)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(field.name)
@@ -295,7 +295,7 @@ struct TypeFieldsSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Close", systemImage: "xmark") { dismiss() } }
                 ToolbarItem(placement: .primaryAction) { EditButton() }
             }
-            .toolbarVerticalBehavior(.disabled)   // a horizontal bar on the folded Duo, as the other sheets
+            .toolbarVerticalBehavior(.disabled)   // its bar across the top, not in the folded Duo's side column
             .sheet(item: $editing) { FieldSheet(editing: $0) }
             .sheet(isPresented: $adding) { FieldSheet(type: self.type) }
         }
@@ -370,6 +370,7 @@ struct FieldSheet: View {
                     Button("Done", systemImage: "checkmark", action: save).disabled(trimmed(name).isEmpty)
                 }
             }
+            .toolbarVerticalBehavior(.disabled)   // its bar across the top, not in the folded Duo's side column
         }
         .presentationDetents([.medium, .large])
     }

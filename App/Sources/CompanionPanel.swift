@@ -5,7 +5,7 @@ import WriterCore
 
 /// The companion, in the world's conversation (`RootView`), laid out as ChatGPT and Claude are: the
 /// author's messages on the right in a bubble (New York, their words), the companion's replies on
-/// the left across the width (San Francisco), newest at the bottom, and a message field below
+/// the left across the reading column (San Francisco), newest at the bottom, and a message field below
 /// (typed, or dictated with the keyboard's microphone) whose Send appears once there's something
 /// to send. iOS has no chat view: the conversation is stock text, arranged by the app.
 struct CompanionPanel: View {
@@ -33,25 +33,22 @@ struct CompanionPanel: View {
     /// One height for the whole message bar: the HIG's minimum touch size,
     /// growing with Dynamic Type.
     @ScaledMetric(relativeTo: .body) private var barHeight: CGFloat = 44
-    /// The system's standard margin, for the conversation and the message bar.
-    private static let margin: CGFloat = 20
     /// The world conversation shown, where the author starts (`RootView`).
     let worldConversation: UUID
-    /// Starts another world conversation (the menu's New Conversation).
+    /// Starts another world conversation.
     let newConversation: () -> Void
-    /// Shows the world's connections (`WorldMapView`), from the bar.
-    let openMap: () -> Void
 
-    /// The world's name in the bar, with Connections and the menu.
+    /// The world's name in the bar, with New Conversation, the screen's one main action, pinned,
+    /// and everything else in More (docs/design.md). Connections is in the drawer.
     var body: some View {
         conversation
             .navigationTitle(library.world.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                // The world growing, a tap away; Changes is in the menu (no more than three
-                // buttons on a screen, as Apple advises).
-                ToolbarItem(placement: .primaryAction) {
-                    Button("Connections", systemImage: "point.3.connected.trianglepath.dotted", action: openMap)
+                // Another world conversation, this one kept in the drawer.
+                ToolbarItem(placement: .topBarPinnedTrailing) {
+                    Button("New Conversation", systemImage: "square.and.pencil", action: newConversation)
+                        .disabled(companion.conversation.turns.isEmpty)
                 }
                 if ready {
                     ToolbarItem(placement: .primaryAction) { more }
@@ -83,7 +80,7 @@ struct CompanionPanel: View {
                 }
                 Live { status }   // as the reply is written, only this redraws, not every message
             }
-            .padding(.horizontal, Self.margin)   // the system's standard margin
+            .readingColumn()   // a reading line, not across the whole unfolded screen
             .padding(.vertical)
         }
         .scrollEdgeEffectStyle(.soft, for: [.top, .bottom])   // softened under the bars, as the page is
@@ -126,7 +123,7 @@ struct CompanionPanel: View {
         var body: some View { content() }
     }
 
-    /// The companion's words: plain text across the width, as ChatGPT and Claude show replies, at
+    /// The companion's words: plain text across the reading column, as ChatGPT and Claude show replies, at
     /// reading size and not dimmed, so a long one reads comfortably.
     private func words(_ text: String) -> some View {
         Text(Self.markdown(text))
@@ -398,13 +395,10 @@ struct CompanionPanel: View {
     /// Undo goes newest first: what a later message changed waits until that's undone (Kevin, 2026-11-24).
     private func undo(_ line: FilingLine, from turn: UUID) -> some View {
         let waits = companion.conversation.changedLater(line.action, in: turn, elsewhere: companion.others)
-        return Button("Undo", systemImage: "arrow.uturn.backward") {
-            companion.undoFiling(line.action, from: turn, in: library)
-        }
-        .labelStyle(.iconOnly)
-        .disabled(waits)
-        .accessibilityLabel(Text("Undo: \(filed(line))"))
-        .accessibilityHint(waits ? Text("Something filed since changed this. Undo that first.") : Text(""))
+        return UndoButton { companion.undoFiling(line.action, from: turn, in: library) }
+            .disabled(waits)
+            .accessibilityLabel(Text("Undo: \(filed(line))"))
+            .accessibilityHint(waits ? Text("Something filed since changed this. Undo that first.") : Text(""))
     }
 
     /// A filed line, saying so when a later message changed it.
@@ -446,7 +440,7 @@ struct CompanionPanel: View {
         func authored(_ s: String) -> Text { Text(s).font(.authored(.footnote)) }
         let page: Text = authored(line.page).underline()   // it opens the page, as a link would
         if case .renamed(_, let was, _) = line.action {
-            return Text("\(page) · renamed, was \(was.isEmpty ? Text("untitled") : authored(was))")
+            return Text("\(page) · renamed, was \(was.isEmpty ? Text(WriterCore.Document.untitled) : authored(was))")
         }
         if line.isNew {
             return Text("New page: \(page)\(line.type.map { " (\($0))" } ?? "")")
@@ -512,7 +506,7 @@ struct CompanionPanel: View {
                     words(writing)
                     if companion.reading == nil {
                         Image(systemName: "circle.fill")
-                            .font(.caption2)
+                            .font(.footnote)
                             .foregroundStyle(.secondary)
                             .symbolEffect(.pulse, options: .repeating)
                             .accessibilityLabel("Writing")
@@ -553,7 +547,7 @@ struct CompanionPanel: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         } label: {
             Label(done ? "Thought" : "Thinking…", systemImage: "lightbulb")
-                .font(.subheadline)
+                .font(.footnote)
                 .foregroundStyle(.secondary)
                 .symbolEffect(.pulse, options: .repeating, isActive: !done)
         }
@@ -577,7 +571,7 @@ struct CompanionPanel: View {
         }
         return ProgressView(value: fraction) {
             Text(label)
-                .font(.subheadline)
+                .font(.footnote)
                 .foregroundStyle(.secondary)
         }
         .frame(minWidth: 0, idealWidth: 240, maxWidth: 240, alignment: .leading)
@@ -585,7 +579,7 @@ struct CompanionPanel: View {
 
     private var thinking: some View {
         Image(systemName: "ellipsis")
-            .font(.title2)
+            .font(.footnote)
             .foregroundStyle(.secondary)
             .symbolEffect(.variableColor.iterative, options: .repeating)
             .accessibilityLabel("Thinking")
@@ -731,7 +725,7 @@ struct CompanionPanel: View {
         } message: {
             Text(unreadable ?? "")
         }
-        .padding(.horizontal, Self.margin)
+        .readingColumn()   // under the conversation's column
         .padding(.vertical)
     }
 
@@ -746,9 +740,6 @@ struct CompanionPanel: View {
     }
 
     @ViewBuilder private var items: some View {
-        // Another world conversation, this one kept in the drawer.
-        Button("New Conversation", systemImage: "square.and.pencil", action: newConversation)
-            .disabled(companion.conversation.turns.isEmpty)
         ShareLink("Share Conversation", item: transcript)
             .disabled(companion.conversation.turns.isEmpty)
         changesButton
