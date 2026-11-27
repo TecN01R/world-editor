@@ -18,6 +18,14 @@ writes "as if I were having a conversation"; his world seen as a wiki, a book, a
 - [ ] B Three directions drawn at the folded Duo's size (Lamplight, Night Study, The World Book; a private canvas sent to him): waiting for his pick or mix; nothing built before that. If Lamplight: first check on the phone that a warm background reaches under the side column
 - [ ] C Build it a step at a time, with the conversation-first steps below as its engine. First (built, waiting for the phone to be reachable): the conversation restyled as all three directions had it (his words large in New York, no bubbles; the companion's smaller, set in; the message field's words large while short), and three looks in the companion's menu, colours only (Kevin: "themes ... I'm not trying to create a design or maintenance burden"): Night Study, Lamplight, World Book. Then: try filing on his real, messy writing (new pages, kinds and fields from what he says already exist; how well the phone's model does it is the open question)
 
+## What the app is for (Kevin, 2026-11-27)
+"Literally this app should enable me to finally write my novel, conceptualize how everything looks by
+the art it generates, help me with prompts and refinements, and make it so writing doesn't seem scary
+and no brainblocks exist." Order proposed: the world filling itself from talk (now), then art from his
+pages (on the phone), then the novel itself (chapters drafted in Focus mode with the world and the
+companion at hand). Open: what "refinements" means (of pictures, of prompts, or of his prose, which
+the AI never rewrites)
+
 ## The conversation first (Kevin, 2026-11-27)
 The goal, in his words: "I'll just usually talk with ChatGPT and never actually formalize anything so
 as long as it feels like that experience but things are actually created frictionlessly then that's
