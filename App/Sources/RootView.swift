@@ -13,7 +13,7 @@ import WriterCore
 struct RootView: View {
     @Environment(Library.self) private var library
     @Environment(Companion.self) private var companion
-    @State private var column: NavigationSplitViewColumn = Screenshots.opensList ? .sidebar : .detail
+    @State private var column: NavigationSplitViewColumn = Self.opensOnList ? .sidebar : .detail
     @State private var focusMode = Self.startsInFocus
     @State private var focusControls = false
     /// The world conversation shown when no page is open (a new one has its id before
@@ -21,9 +21,11 @@ struct RootView: View {
     @State private var worldConversation: UUID?
     /// The world's other conversations, to go back to one (the conversation's menu).
     @State private var showingConversations = false
-    /// Unfolded, the drawer starts closed: the conversation (or page) in front, the drawer a
-    /// tap away (open for CI's shot of the pages list).
-    @State private var columns: NavigationSplitViewVisibility = Screenshots.opensList ? .all : .detailOnly
+    /// Unfolded, the drawer is closed once the app has opened: the conversation (or page) in
+    /// front, the drawer a tap away (open for CI's shot of the pages list).
+    @State private var columns: NavigationSplitViewVisibility = Self.opensOnList ? .all : .detailOnly
+    /// `settleList` has run, or isn't wanted: CI's shots stay where they open.
+    @State private var listSettled = Screenshots.isActive
     /// The pages list as it was before Focus mode put it away, to put back after.
     @State private var columnsBeforeFocus: NavigationSplitViewVisibility?
     /// Folded, the companion's sheet keeps the height it was left at, half or full,
@@ -36,6 +38,10 @@ struct RootView: View {
     @State private var windowWidth: CGFloat = 0
 
     private static var startsInFocus: Bool { UserDefaults.standard.bool(forKey: "startInFocus") }
+    /// The app opens on the pages list, for its first layout before the conversation takes
+    /// its place (`settleList`). CI's shots open where they're taken: on the list only for
+    /// the list's own shot.
+    private static var opensOnList: Bool { !Screenshots.isActive || Screenshots.opensList }
 
     /// In Focus mode everything but the writing hides (bars, status, home
     /// indicator, pages list) until a tap outside the text brings it back.
@@ -67,6 +73,7 @@ struct RootView: View {
                 column = .detail
                 closeDrawer()
             }
+            .onAppear(perform: settleList)
         } detail: {
             detail
         }
@@ -219,6 +226,22 @@ struct RootView: View {
             withAnimation { columns = .detailOnly }
         } else {
             columns = .detailOnly
+        }
+    }
+
+    /// The pages list's rows grew and wobbled into place the first time it slid in after
+    /// launch (Kevin, 2026-11-27: "all the menu entries wobble and grow and oscillate", the
+    /// rows, the first time only): iOS sized them for the first time inside the slide's
+    /// animation. So the app opens on the list, and once it's laid out (the next turn of the
+    /// main loop, within the launch's own animation) the conversation takes its place at once.
+    private func settleList() {
+        guard !listSettled else { return }
+        listSettled = true
+        DispatchQueue.main.async {
+            withTransaction(\.disablesAnimations, true) {
+                column = .detail
+                columns = .detailOnly
+            }
         }
     }
 

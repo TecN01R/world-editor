@@ -8,11 +8,22 @@ struct WorldEditorApp: App {
     @State private var companion = Companion()
     @Environment(\.scenePhase) private var phase
 
+    /// Dark mode in iOS's softer dark grey, its sheets' and popovers' own, rather than its black
+    /// (Kevin, 2026-11-27: "maybe it's all the black it doesn't feel soothing or welcoming but I
+    /// also don't want to ascribe a theme"): iOS's own colours, one level up, everywhere in the
+    /// app. Light mode is unchanged.
+    private static func softenDark() {
+        for case let scene as UIWindowScene in UIApplication.shared.connectedScenes {
+            scene.traitOverrides.userInterfaceLevel = .elevated
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(library)
                 .environment(companion)
+                .onAppear(perform: Self.softenDark)
         }
         .onChange(of: phase) { _, phase in
             if phase != .active { library.flushAll() }   // never lose the last edits
