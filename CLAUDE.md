@@ -21,26 +21,33 @@ only once it's on Kevin's phone and checked, or he has answered it.
    logic, tighten names, keep comments accurate. Never change behaviour in
    this pass.
 3. Add or update tests in `Packages/WriterKit/Tests` for logic changes.
-4. **Try it on the Duo first** (this Fedora machine): run the tests with
-   `swift test --package-path Packages/WriterKit`, then `scripts/run-on-phone.sh`
-   builds, installs and launches the app (seconds when little changed). Kevin
-   tries it on the phone; iterate here, then push.
-5. Push to `main`. CI runs the WriterKit tests on Linux on every push; check
-   they passed before starting the next change. The Mac jobs (building the app
-   with XcodeGen and the xtool package layout, and screenshots on the iPhone Duo
-   simulator) run only on demand (`gh workflow run CI`), since the repo is
-   private and Mac minutes are expensive. The simulator build uses Apple's
-   model: llama.cpp's framework, the companion's engine, has no simulator
-   build. Screenshots live only on the
-   `ci-screenshots` branch: CI force-pushes the latest set there as a single
-   orphan commit (never on `main`, never as artifacts). Kevin tests on the Duo
-   himself, so don't run them or send screenshots by default; run them (then
-   `ci/fetch_screenshots.sh`, delete local copies after) only when he asks or a
-   change touches something he can't see on his phone (the other fold state,
-   large Dynamic Type).
+4. Run the tests (`swift test --package-path Packages/WriterKit`) and the design lint
+   (`ci/lint_design.sh`), then push to `main`. CI runs both on Linux on every push; check
+   they passed before starting the next change.
+5. **Anything that changes a screen is looked at before it's installed** (Kevin,
+   2026-11-27, after a day of patch installs: "This is not at all reaching any of the
+   goals of frictionless use, consistency, or professional development that I desire of
+   this app"). On every push that touches the app, CI's Macs build it and render its
+   scenes (`ci/scenes.txt`) on the iPhone Duo simulator, folded, unfolded and at large
+   text; the repo is public, so they cost nothing. Fetch them
+   (`ci/fetch_screenshots.sh`), review them against `docs/design.md` by
+   `docs/design-review.md`, and only then install: `scripts/run-on-phone.sh` builds and
+   installs (seconds when little changed). The simulator build uses Apple's model:
+   llama.cpp's framework, the companion's engine, has no simulator build. Screenshots
+   live only on the `ci-screenshots` branch: CI force-pushes the latest set there as a
+   single orphan commit (never on `main`). They are Claude's check: don't send them to
+   Kevin unless he asks. A change no screen shows (the companion's engine) is checked by
+   its tests and the phone's log instead.
+6. Few, complete installs: an install is a finished step Kevin can use, not a patch for
+   what he just pointed at. When he reports something, trace its cause in the code and
+   the phone's log before changing anything.
 
 ## Conventions
 
+- The design has a specification, `docs/design.md`, and it comes first: a screen is
+  specified there, then built only from the design system (`App/Sources/Design/`, with
+  its numbers in WriterKit's `DesignTokens`). Nothing outside it sets a font, colour,
+  spacing, duration, bar or symbol of its own; `ci/lint_design.sh` fails the push.
 - Dark only (Kevin, 2026-11-27: "Let's stop offering a light mode I'll never use
   it"): Info.plist's `UIUserInterfaceStyle` is Dark. One look (`Look`), grey and white
   only, as ChatGPT has it: iOS's own elevated greys and text colours, every control
@@ -61,8 +68,8 @@ only once it's on Kevin's phone and checked, or he has answered it.
   2026-11-24). System-drawn text (menus, alerts, iOS's own
   navigation titles, as the unfolded pages list's) keeps the system font:
   iOS ignores the app's fonts there.
-- Naming: a note is a **page**; projects are **worlds**; the two ways to
-  view a page are **Edit** and **Focus** mode.
+- Naming: a note is a **page**; projects are **worlds**; the app's two places are
+  **Talk** and **World**; a page is read, or in **Edit** or **Focus** mode.
 - Push straight to `main`. Don't create branches: this environment can't
   delete them, so they pile up.
 

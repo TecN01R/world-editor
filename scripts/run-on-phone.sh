@@ -6,9 +6,21 @@
 #   scripts/run-on-phone.sh --no-launch  build and install only: the phone stays
 #                                        locked and asleep (Kevin, 2026-11-24: the
 #                                        launch asked him to unlock it)
+#   scripts/run-on-phone.sh --unreviewed …  skip the review gate below, for a build Kevin
+#                                        asked for as it is
+#
+# What goes on the phone has passed the design lint and been rendered by CI and reviewed
+# (ci/review_gate.sh, docs/design-review.md; Kevin, 2026-11-27: nothing had been looked at
+# on a screen before it reached him).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 git pull --ff-only --quiet || echo "(couldn't pull; building what's here)"
+if [[ "${1:-}" == "--unreviewed" ]]; then
+    shift
+else
+    ci/lint_design.sh
+    ci/review_gate.sh check
+fi
 # The private netmuxd (docs/fedora.md) when it runs: the system one loses the phone, and a
 # shell without USBMUXD_SOCKET_ADDRESS set reported it unreachable while it was on the Wi-Fi.
 if [[ -z "${USBMUXD_SOCKET_ADDRESS:-}" ]] && pgrep -u "$USER" -f "netmuxd .*-p 27099" >/dev/null; then

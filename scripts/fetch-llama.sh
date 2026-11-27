@@ -10,7 +10,8 @@ cache="${XDG_CACHE_HOME:-$HOME/.cache}/llama-xcframework"
 zip="$cache/llama-$build-xcframework.zip"
 mkdir -p "$cache" Vendor
 [ -f "$zip" ] || curl -fsSL --retry 3 -o "$zip" "https://github.com/ggml-org/llama.cpp/releases/download/$build/llama-$build-xcframework.zip"
-if command -v sha256sum >/dev/null; then echo "$sum  $zip" | sha256sum -c --quiet
-else echo "$sum  $zip" | shasum -a 256 -c >/dev/null; fi   # macOS (CI's Macs)
+# Compared by hand: macOS's sha256sum (CI's Macs) has no --quiet, and older ones have only shasum.
+actual=$( (sha256sum "$zip" 2>/dev/null || shasum -a 256 "$zip") | cut -d' ' -f1)
+[ "$actual" = "$sum" ] || { echo "llama.cpp's framework failed its checksum: $zip" >&2; exit 1; }
 rm -rf Vendor/llama.xcframework "$cache/x" && unzip -q "$zip" -d "$cache/x"
 mv "$cache/x/build-apple/llama.xcframework" Vendor/ && rm -rf "$cache/x" && echo "$build" > Vendor/llama.build

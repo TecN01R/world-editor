@@ -1,0 +1,20 @@
+# Files not yet moved onto the design system (App/Sources/Design/): ci/lint_design.sh
+# counts their findings instead of failing on them. A file leaves this list when it has
+# none left; the list only shrinks.
+App/Sources/AttachedPicture.swift
+App/Sources/ChangesView.swift
+App/Sources/CompanionInstructions.swift
+App/Sources/CompanionPanel.swift
+App/Sources/Drawer.swift
+App/Sources/EntryView.swift
+App/Sources/FocusEditor.swift
+App/Sources/Look.swift
+App/Sources/MentionMenu.swift
+App/Sources/PageEditor.swift
+App/Sources/PageFields.swift
+App/Sources/RichText.swift
+App/Sources/RootView.swift
+App/Sources/TitleMenu.swift
+App/Sources/Typography.swift
+App/Sources/WorldEditorApp.swift
+App/Sources/WorldMapView.swift

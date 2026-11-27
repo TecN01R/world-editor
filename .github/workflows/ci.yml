@@ -11,34 +11,49 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Fast, cheap feedback: the shared logic (document model, fitting, provenance,
-  # guardrails, model catalogue) is Foundation-only and tests on Linux.
+  # Fast feedback: the design lint (screens are built only from the design system,
+  # docs/design.md), then the shared logic (document model, fitting, provenance,
+  # guardrails, design tokens), which is Foundation-only and tests on Linux.
   core-tests-linux:
     runs-on: ubuntu-latest
     container: swift:6.2
     steps:
       - uses: actions/checkout@v7
+      - name: Design lint
+        run: bash ci/lint_design.sh
       - name: Test WriterKit
         run: swift test --package-path Packages/WriterKit
 
-  # The iOS build and the simulator run on two Macs at once: a cold Duo boot
-  # takes 1-2 min and, on the same 3-core runner, slows the build to match.
-  # The build hands the app over as an artifact as soon as it exists.
-  # On demand only (Run workflow): the repo is private, and Mac minutes count
-  # tenfold against its allowance; Kevin tests on the Duo itself.
+  # Does this push change the app? Then the Macs build it and render its scenes. The
+  # repository is public, so the Mac jobs cost nothing; they run on every push that
+  # touches the app, and on a manual run (Run workflow), which renders every scene.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.what.outputs.changed }}
+      tier: ${{ steps.what.outputs.tier }}
+      only: ${{ steps.what.outputs.only }}
+      layout: ${{ steps.what.outputs.layout }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: What changed?
+        id: what
+        run: ci/changes.sh "${{ github.event.before }}" "${{ github.sha }}" "${{ github.event_name }}"
+
+  # The iOS build and the simulators run on separate Macs at once: a cold Duo boot takes
+  # 1-2 min and, on the same 3-core runner, slows the build to match. The build hands the
+  # app over as an artifact as soon as it exists.
   ios-build:
-    if: github.event_name == 'workflow_dispatch'
+    needs: changes
+    if: needs.changes.outputs.changed == 'true'
     runs-on: xcode-27
     env:
       APPLE_TEAM_ID: ""
       BUNDLE_ID: com.tecn01r.worldeditor
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - name: What changed?
-        id: ui
-        run: ci/changes.sh "${{ github.event.before }}" "${{ github.sha }}" "${{ github.event_name }}"
       - name: Restore XcodeGen
         id: xcodegen
         uses: actions/cache@v6
@@ -65,11 +80,9 @@ jobs:
             CLANG_ENABLE_MODULE_DEBUGGING=NO \
             CODE_SIGNING_ALLOWED=NO > build.log || { grep -E ': (error|warning):' build.log | sort -u; tail -20 build.log; exit 1; }
           tail -2 build.log
-      - name: Hand the app to the screenshot job
-        if: steps.ui.outputs.changed == 'true'
+      - name: Hand the app to the screenshot jobs
         run: tar -czf app.tar.gz -C build/Build/Products/Debug-iphonesimulator WorldEditor.app
-      - if: steps.ui.outputs.changed == 'true'
-        uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@v7
         with:
           name: app
           path: app.tar.gz
@@ -78,7 +91,7 @@ jobs:
       # Checks the root Package.swift (what xtool builds on Fedora) still
       # compiles. Runs after the app is handed over, so it never delays it.
       - name: Check the xtool package layout builds
-        if: steps.ui.outputs.layout == 'true'
+        if: needs.changes.outputs.layout == 'true'
         # Without the generated .xcodeproj, so xcodebuild builds Package.swift;
         # for a device, as xtool does (llama.cpp's framework has no simulator build).
         run: |
@@ -89,35 +102,33 @@ jobs:
             ARCHS=arm64 ONLY_ACTIVE_ARCH=YES COMPILER_INDEX_STORE_ENABLE=NO \
             CODE_SIGNING_ALLOWED=NO > spm.log || { tail -40 spm.log; exit 1; }
 
-  # Boots the Duo while the other Mac builds, then installs the app and
-  # publishes dark-mode screenshots as the only commit on ci-screenshots.
-  screenshots:
-    if: github.event_name == 'workflow_dispatch'   # with the build, on demand
+  # Boots the Duo while the other Mac builds, then renders the scenes (ci/scenes.txt) in
+  # one pose each: the outer display, and the inner one.
+  shots:
+    needs: changes
+    if: needs.changes.outputs.changed == 'true'
     runs-on: xcode-27
+    strategy:
+      fail-fast: false
+      matrix:
+        pose: [closed, open]
     permissions:
       actions: read
-      contents: write
+      contents: read
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - name: What changed?
-        id: ui
-        run: ci/changes.sh "${{ github.event.before }}" "${{ github.sha }}" "${{ github.event_name }}"
       - name: Boot the Duo simulator
-        if: steps.ui.outputs.changed == 'true'
         run: |
           python3 ci/pick_devices.py > devices.txt
           while IFS='|' read -r UDID NAME; do xcrun simctl boot "$UDID"; done < devices.txt
-      # Unfolds the Duo for the inner-display shots (simctl can't). Installed
-      # while the app builds; if it fails, only the unfolded shots are skipped.
-      # Homebrew's own overhead made installing take ~9 min, so the installed
-      # keg and its compiled helper are cached. Bump the key to update hinge.
+      # Unfolds the Duo for the inner display (simctl can't). Homebrew's own overhead made
+      # installing take ~9 min, so the installed keg and its compiled helper are cached.
+      # Bump the key to update hinge.
       - name: Restore hinge
         id: hinge
-        if: steps.ui.outputs.changed == 'true'
+        if: matrix.pose == 'open'
         uses: actions/cache@v6
         with:
           path: |
@@ -125,36 +136,31 @@ jobs:
             ~/.cache/hinge
           key: hinge-0.3.1-xcode27.1
       - name: Install hinge (cache miss only)
-        if: steps.ui.outputs.changed == 'true' && steps.hinge.outputs.cache-hit != 'true'
-        continue-on-error: true
+        if: matrix.pose == 'open' && steps.hinge.outputs.cache-hit != 'true'
         env:
           HOMEBREW_NO_AUTO_UPDATE: "1"
           HOMEBREW_NO_INSTALL_CLEANUP: "1"
         run: brew install artemnovichkov/tap/hinge
-      - if: steps.ui.outputs.changed == 'true'
+      - if: matrix.pose == 'open'
         run: ls -d /opt/homebrew/Cellar/hinge/*/bin 2>/dev/null | head -1 >> "$GITHUB_PATH" || true
-      # Taps a control by its VoiceOver label (simctl can't tap), for shots of
-      # open menus. Cached like hinge; if it fails, only those shots are skipped.
+      # Reads the screen's accessibility tree and taps a control by its label (simctl can
+      # do neither). Cached like hinge.
       - name: Restore axe
         id: axe
-        if: steps.ui.outputs.changed == 'true'
         uses: actions/cache@v6
         with:
           path: /opt/homebrew/Cellar/axe
           key: axe-xcode27.1
       - name: Install axe (cache miss only)
-        if: steps.ui.outputs.changed == 'true' && steps.axe.outputs.cache-hit != 'true'
-        continue-on-error: true
+        if: steps.axe.outputs.cache-hit != 'true'
         env:
           HOMEBREW_NO_AUTO_UPDATE: "1"
           HOMEBREW_NO_INSTALL_CLEANUP: "1"
         run: brew install cameroncooke/axe/axe
-      - if: steps.ui.outputs.changed == 'true'
-        run: ls -d /opt/homebrew/Cellar/axe/*/bin 2>/dev/null | head -1 >> "$GITHUB_PATH" || true
+      - run: ls -d /opt/homebrew/Cellar/axe/*/bin 2>/dev/null | head -1 >> "$GITHUB_PATH" || true
       # The public artifact list lags minutes behind an upload, so wait on
       # the build job's upload step instead, then fetch through the runner.
       - name: Wait for the app from the build job
-        if: steps.ui.outputs.changed == 'true'
         run: |
           jobs="repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs"
           for i in $(seq 1 200); do
@@ -166,26 +172,53 @@ jobs:
             sleep 3
           done
           exit 1
-      - if: steps.ui.outputs.changed == 'true'
-        uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@v8
         with:
           name: app
-      - if: steps.ui.outputs.changed == 'true'
-        run: mkdir -p app && tar -xzf app.tar.gz -C app
-      - name: Screenshots in the simulator
-        if: steps.ui.outputs.changed == 'true'
+      - run: mkdir -p app && tar -xzf app.tar.gz -C app
+      - name: Render the scenes
         env:
-          SHOTS: ${{ steps.ui.outputs.shots }}
-        run: ci/screenshots.sh app/WorldEditor.app
-      # Force-pushed as a single orphan commit, so the branch only ever holds
-      # the latest set and main's history never contains images.
+          TIER: ${{ needs.changes.outputs.tier }}
+          ONLY: ${{ needs.changes.outputs.only }}
+        run: ci/screenshots.sh app/WorldEditor.app ${{ matrix.pose }}
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: shots-${{ matrix.pose }}
+          path: shots
+          retention-days: 1
+          compression-level: 0
+
+  # Gathers both poses, checks the screens' accessibility trees (ci/check_ui.py) and
+  # publishes the pictures as the only commit on ci-screenshots: force-pushed as a single
+  # orphan commit, so the branch only ever holds the latest set and main's history never
+  # contains images.
+  publish:
+    needs: [changes, shots]
+    if: always() && needs.changes.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: shots-*
+          path: shots
+          merge-multiple: true
+      - name: ImageMagick, if the runner has none
+        run: command -v montage >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick; }
+      - name: Pictures, contact sheets and checks
+        run: ci/publish_shots.sh "${{ github.sha }}"
       - name: Publish to the ci-screenshots branch
-        if: steps.ui.outputs.changed == 'true'
         run: |
-          cd screenshots/jpg
+          cd publish
           git init -q -b ci-screenshots
-          echo "${{ github.sha }}" > SOURCE_COMMIT
           git add -A
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit -qm "Screenshots for ${GITHUB_SHA::7}"
           git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" ci-screenshots
+      - name: Fail if a shot is missing
+        run: test ! -s publish/missing.txt
