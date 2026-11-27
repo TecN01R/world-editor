@@ -8,6 +8,16 @@ outgrowing the pace at which I can understand their development"): only fixes to
 Testing is using it: when a reply is bad or something feels off, he says so, and Claude pulls the
 conversation and the phone's log to find out why.
 
+## A cozy World Editor (Kevin, 2026-11-27; plan approved)
+Kevin: "we need deep research to come up with a very homey cozy UI that reduces friction, doesn't
+intimidate. Like our focus writer, that's so cozy. The goal is to get my thoughts out of my head and
+into a knowledge database essentially." Native, no Flutter; iOS's text engine kept. His references:
+cozy games, ChatGPT's chat, Focus mode ("it fills the space"; paper's blankness is intimidating); he
+writes "as if I were having a conversation"; his world seen as a wiki, a book, a web and a corkboard.
+- [ ] A Research: what makes a UI cozy, writing without a blank page, seeing a knowledge base in his four views, what native iOS allows on the Duo; a report he can read on his phone
+- [ ] B Two or three design directions as pictures at the Duo's sizes; he picks or mixes; nothing built before that
+- [ ] C Build it a step at a time, with the conversation-first steps below as its engine
+
 ## The conversation first (Kevin, 2026-11-27)
 Kevin: "I want to write it conversationally or in any messy way and be able to refine it back and
 forth and that populates my pages. I do want them to be structured. And they need to be malleable
