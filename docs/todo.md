@@ -17,7 +17,7 @@ pages first today; this makes the conversation the place he writes and the pages
 - [ ] 2 New pages from what he says: each person, place or thing he talks about gets a page, in his words, its type and fields taken from what he said; a line under the reply shows what changed, with Undo
 - [ ] 3 Changes that stick: a correction replaces the sentence it contradicts, even one he typed (Kevin: "a"), marked, with Undo; renames everywhere; "those two are the same" merges pages
 - [ ] 4 Structure that reshapes itself: types and fields appear, rename and merge as the world grows
-- [ ] Welcoming, not intimidating, everywhere (Kevin, 2026-11-27: "the pages and any area should look welcoming"; what's wrong is "cold and plain", "maybe it's all the black", no theme wanted): dark mode in iOS's softer grey (installed); how it feels is his call, then light mode or a little warmth if not. The pages list's first-time wobble is back with the conversation-first launch; fixed by laying it out at launch (installed, to check)
+- [ ] Welcoming, not intimidating, everywhere (Kevin, 2026-11-27: "the pages and any area should look welcoming"; what's wrong is "cold and plain", "maybe it's all the black", no theme wanted): dark mode in iOS's softer grey (Kevin: "Better but color or warmth might be better"). Proposed, waiting for his yes: a warm default (warmer grey, amber accent), then each world's colours drawn from its own art, a picture he gives it
 - The risk: the phone's model is small, and "smart enough to adapt" rests on it; tried on his own world from step 2
 
 ## Try on purpose: a 10-minute walkthrough of the companion
