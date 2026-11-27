@@ -23,8 +23,10 @@ writes "as if I were having a conversation"; his world seen as a wiki, a book, a
 the art it generates, help me with prompts and refinements, and make it so writing doesn't seem scary
 and no brainblocks exist." Order proposed: the world filling itself from talk (now), then art from his
 pages (on the phone), then the novel itself (chapters drafted in Focus mode with the world and the
-companion at hand). Open: what "refinements" means (of pictures, of prompts, or of his prose, which
-the AI never rewrites)
+companion at hand). "Refinements", answered: "I want it to help me when I am stuck, not by giving me
+ideas, but by coaxing it out of me": questions that draw his own ideas out, never ideas of its own.
+The companion runs stock with blank instructions, so this goes in as his own instruction (he tells it
+"from now on…", and it adds it to Instructions)
 
 ## The conversation first (Kevin, 2026-11-27)
 The goal, in his words: "I'll just usually talk with ChatGPT and never actually formalize anything so
