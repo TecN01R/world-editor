@@ -3,9 +3,9 @@ import SwiftUI
 import UIKit
 import WriterCore
 
-/// The companion, beside the page (a sheet when folded): the author's messages large and
-/// without bubbles (New York, their words, as on their page), the companion's replies
-/// smaller, in grey and set in from them (San Francisco), newest at the bottom, and a
+/// The companion, beside the page (a sheet when folded): the author's messages on the right,
+/// large and without bubbles (New York, their words, as on their page), the companion's
+/// replies on the left, smaller and in grey (San Francisco), newest at the bottom, and a
 /// message field below (typed, or dictated with the keyboard's microphone). iOS has no
 /// chat view: the conversation is stock text, arranged by the app.
 struct CompanionPanel: View {
@@ -30,8 +30,6 @@ struct CompanionPanel: View {
     @State private var showingChanges = false
     @State private var editingInstructions = false
     @AppStorage(Look.key) private var look = Look.nightStudy
-    /// How far the companion's replies, and what was filed, sit in from the author's words.
-    @ScaledMetric(relativeTo: .callout) private var replyIndent: CGFloat = 18
     /// Where the conversation is scrolled: the newest message, as in Messages.
     @State private var position = ScrollPosition(edge: .bottom)
     /// One height for the whole message bar: the HIG's minimum touch size,
@@ -256,7 +254,6 @@ struct CompanionPanel: View {
                 .accessibilityAdjustableAction { show($0 == .increment ? at + 1 : at - 1) }
             }
         }
-        .padding(.leading, replyIndent)   // as notes in the margin beside the author's words
     }
 
     /// The models write Markdown: bold, italics, code and links show as such
@@ -276,7 +273,7 @@ struct CompanionPanel: View {
     /// analysis"): no bubble, large in New York, like their page, as the cozy directions all had
     /// it (Kevin, 2026-11-27: "they feel better than what we have today").
     private func mine(_ text: String, attached: [Conversation.Attached]) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .trailing, spacing: 6) {
             ForEach(Array(attached.enumerated()), id: \.offset) { _, document in
                 if let picture = document.picture {
                     PictureThumbnail(url: companion.pictures?.appendingPathComponent(picture))
@@ -293,8 +290,15 @@ struct CompanionPanel: View {
                     .contextMenu { copy(text) }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // On the right, as every chat app has the author's side (Kevin, 2026-11-27, of them on
+        // the left: "A little odd seeing the side of the text reversed"); a long one's lines
+        // still read from the left.
+        .padding(.leading, Self.authorInset)
+        .frame(maxWidth: .infinity, alignment: .trailing)
     }
+
+    /// How far in from the left the author's messages start, leaving the left to the companion.
+    private static let authorInset: CGFloat = 48
 
     /// The files waiting to go with the next message, each with a way to take it off.
     @ViewBuilder private var waitingFiles: some View {
@@ -460,7 +464,6 @@ struct CompanionPanel: View {
         .font(.footnote)
         .foregroundStyle(.secondary)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.leading, replyIndent)
     }
 
     /// "New page: Myriddea (Place)", "Casperica · Character", "Casperica · Origin: Myriddea":
@@ -546,7 +549,6 @@ struct CompanionPanel: View {
                             .accessibilityLabel("Writing")
                     }
                 }
-                .padding(.leading, replyIndent)   // where the finished reply sits, so it doesn't move
             }
             if let fraction = companion.reading {
                 reading(fraction)
@@ -587,7 +589,6 @@ struct CompanionPanel: View {
                 .symbolEffect(.pulse, options: .repeating, isActive: !done)
         }
         .tint(.secondary)
-        .padding(.leading, replyIndent)   // with the reply it's for
     }
 
     /// The reply so far, once it has any words.
