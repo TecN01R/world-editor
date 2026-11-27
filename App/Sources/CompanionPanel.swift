@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 import WriterCore
 
-/// The companion, beside the page (a sheet when folded), laid out as ChatGPT and Claude are: the
+/// The companion, in the world's conversation (`RootView`), laid out as ChatGPT and Claude are: the
 /// author's messages on the right in a bubble (New York, their words), the companion's replies on
 /// the left across the width (San Francisco), newest at the bottom, and a message field below
 /// (typed, or dictated with the keyboard's microphone) whose Send appears once there's something
@@ -26,7 +26,6 @@ struct CompanionPanel: View {
     /// Files being read (a picture of a page takes a moment), by name.
     @State private var beingRead: [String] = []
     @State private var unreadable: String?
-    @State private var confirmingNew = false
     @State private var showingChanges = false
     @State private var editingInstructions = false
     /// Where the conversation is scrolled: the newest message, as in Messages.
@@ -36,65 +35,32 @@ struct CompanionPanel: View {
     @ScaledMetric(relativeTo: .body) private var barHeight: CGFloat = 44
     /// The system's standard margin, for the conversation and the message bar.
     private static let margin: CGFloat = 20
-    /// Folded, a sheet; unfolded, the inspector column beside the page.
-    let inSheet: Bool
-    /// A conversation about the whole world, where the author starts (`RootView`): its bar
-    /// has Connections and the menu (Changes is in the menu).
-    var worldConversation: UUID? = nil
-    /// Starts another world conversation (its menu's New Conversation).
-    var newConversation: (() -> Void)? = nil
-    /// Shows the world's connections (`WorldMapView`), from the world conversation's bar.
-    var openMap: (() -> Void)? = nil
-    private var aboutWorld: Bool { worldConversation != nil }
+    /// The world conversation shown, where the author starts (`RootView`).
+    let worldConversation: UUID
+    /// Starts another world conversation (the menu's New Conversation).
+    let newConversation: () -> Void
+    /// Shows the world's connections (`WorldMapView`), from the bar.
+    let openMap: () -> Void
 
-    /// Folded, a stock sheet: a navigation bar with the title, Close, Changes
-    /// and the menu. On the folded Duo a sheet's bar would otherwise go into the side
-    /// column (tried 2026-11-23); with a couple of controls Apple's advice is to
-    /// keep it horizontal (iOS 27.1, `toolbarVerticalBehavior`). Unfolded, the
-    /// column has no bar of its own (see below).
+    /// The world's name in the bar, with Connections and the menu.
     var body: some View {
-        if inSheet {
-            NavigationStack {
-                conversation
-                    .navigationTitle("Companion")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Close", systemImage: "xmark") { companion.isOpen = false }
-                        }
-                        if ready {
-                            ToolbarItem(placement: .primaryAction) { changesButton }
-                            ToolbarItem(placement: .primaryAction) { more }
-                        }
-                    }
-            }
-            .toolbarVerticalBehavior(.disabled)
-        } else if aboutWorld {
-            conversation
-                .navigationTitle(library.world.name)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    // The world growing, a tap away; Changes is in the menu (no more than three
-                    // buttons on a screen, as Apple advises).
-                    if let openMap {
-                        ToolbarItem(placement: .primaryAction) {
-                            Button("Connections", systemImage: "point.3.connected.trianglepath.dotted", action: openMap)
-                        }
-                    }
-                    if ready {
-                        ToolbarItem(placement: .primaryAction) { more }
-                    }
+        conversation
+            .navigationTitle(library.world.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                // The world growing, a tap away; Changes is in the menu (no more than three
+                // buttons on a screen, as Apple advises).
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Connections", systemImage: "point.3.connected.trianglepath.dotted", action: openMap)
                 }
-        } else {
-            // No toolbar in the column: merged into the split view's bar, it
-            // crashed UIKit's layout while the Duo folded (2026-11-23, twice).
-            // The menu sits beside the message field instead.
-            conversation
-        }
+                if ready {
+                    ToolbarItem(placement: .primaryAction) { more }
+                }
+            }
     }
 
-    /// What the conversation is about: the open page, or the world as a whole.
-    private var subject: WriterCore.Document { worldConversation.map(library.worldSubject) ?? library.document }
+    /// What the conversation is about: the world as a whole (a stand-in page, `Library.worldSubject`).
+    private var subject: WriterCore.Document { library.worldSubject(worldConversation) }
 
     /// The model is on the phone: until then there's nothing the menu could do.
     private var ready: Bool { companion.download == nil && companion.state != .downloadPaused && !companion.needsDownload }
@@ -120,7 +86,7 @@ struct CompanionPanel: View {
             .padding(.horizontal, Self.margin)   // the system's standard margin
             .padding(.vertical)
         }
-        .scrollEdgeEffectStyle(.soft, for: [.top, .bottom])   // softened under the bar and the grab handle, as the page is
+        .scrollEdgeEffectStyle(.soft, for: [.top, .bottom])   // softened under the bars, as the page is
         .defaultScrollAnchor(.bottom)
         .defaultScrollAnchor(.top, for: .alignment)          // a short conversation starts at the top
         // Sending brings the conversation to the bottom (send()); the reply
@@ -151,15 +117,6 @@ struct CompanionPanel: View {
         }
         .sheet(isPresented: $showingChanges) { ChangesView().environment(library).environment(companion) }
         .sheet(isPresented: $editingInstructions) { CompanionInstructions().environment(companion) }
-        .confirmationDialog("Start a new conversation about this page?", isPresented: $confirmingNew,
-                            titleVisibility: .visible) {
-            Button("New Conversation", role: .destructive) {
-                message = ""
-                companion.startOver(page: subject, in: library)
-            }
-        } message: {
-            Text("This conversation, and your messages in it, will be deleted.")
-        }
     }
 
     /// Content that reads what changes as a reply is written (each word, the reading bar)
@@ -464,9 +421,9 @@ struct CompanionPanel: View {
             Label("Added to Your Pages", systemImage: "square.stack.3d.up")
             ForEach(library.describe(record), id: \.self) { line in
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    // In the world's conversation, a line opens its page: what was just added,
-                    // where it now lives (Kevin, 2026-11-27, of watching the world grow).
-                    if aboutWorld, let id = line.action.page, library.pages.contains(where: { $0.id == id }) {
+                    // A line opens its page: what was just added, where it now lives (Kevin,
+                    // 2026-11-27, of watching the world grow).
+                    if let id = line.action.page, library.pages.contains(where: { $0.id == id }) {
                         Button { library.selection = id } label: { filed(line, from: turn) }
                             .buttonStyle(.plain)
                             .accessibilityHint("Opens \(line.page)")
@@ -483,11 +440,11 @@ struct CompanionPanel: View {
     }
 
     /// "New page: Myriddea (Place)", "Casperica · Character", "Casperica · Origin: Myriddea":
-    /// page names and filed words in New York, types and fields in San Francisco. In the
-    /// world's conversation the page name is in the accent colour, as a tap opens the page.
+    /// page names and filed words in New York, types and fields in San Francisco. The page
+    /// name is in the accent colour, as a tap opens the page.
     private func filed(_ line: FilingLine) -> Text {
         func authored(_ s: String) -> Text { Text(s).font(.authored(.footnote)) }
-        let page = aboutWorld ? authored(line.page).foregroundStyle(Color(Look.accent)) : authored(line.page)
+        let page: Text = authored(line.page).foregroundStyle(Color(Look.accent))
         if case .renamed(_, let was, _) = line.action {
             return Text("\(page) · renamed, was \(was.isEmpty ? Text("untitled") : authored(was))")
         }
@@ -511,13 +468,8 @@ struct CompanionPanel: View {
     @ViewBuilder private var empty: some View {
         switch companion.state {
         case .idle:
-            if aboutWorld {
-                ContentUnavailableView("Your World", systemImage: "bubble.left.and.text.bubble.right",
-                                       description: Text("Write about it however it comes out, and talk it through with the companion."))
-            } else {
-                ContentUnavailableView("Talk About This Page", systemImage: "bubble.left.and.text.bubble.right",
-                                       description: Text("Write a little on this page, and the companion will talk with you about it."))
-            }
+            ContentUnavailableView("Your World", systemImage: "bubble.left.and.text.bubble.right",
+                                   description: Text("Write about it however it comes out, and talk it through with the companion."))
         case .downloadPaused:
             ContentUnavailableView {
                 Label("Download Paused", systemImage: "arrow.down.circle")
@@ -620,10 +572,8 @@ struct CompanionPanel: View {
     private func reading(_ fraction: Double) -> some View {
         let label: LocalizedStringKey = if partialReply != nil || partialReasoning != nil {
             "Picking up where it left off…"
-        } else if aboutWorld {
-            "Reading your world…"
         } else {
-            "Reading your page…"
+            "Reading your world…"
         }
         return ProgressView(value: fraction) {
             Text(label)
@@ -694,26 +644,14 @@ struct CompanionPanel: View {
     private func retry() { companion.retry(page: subject, in: library) }
     private func resume() { companion.startDownload(page: subject, in: library) }
 
-    /// The message field in Liquid Glass: (unfolded) the menu, attach, the field and
-    /// send, one height (the stock glass button styles each come in a different one); the
-    /// files waiting to go above it.
+    /// The message field in Liquid Glass: attach, the field and send, one height (the
+    /// stock glass button styles each come in a different one); the files waiting to go
+    /// above it.
     private var composer: some View {
         VStack(alignment: .leading, spacing: 8) {
             waitingFiles
             GlassEffectContainer {
                 HStack(alignment: .bottom, spacing: 8) {
-                    if !inSheet && !aboutWorld {
-                        // The whole circle is the menu's to tap, not only its dots (Kevin, 2026-11-24:
-                        // sized from outside, taps beside the dots did nothing while the glass reacted).
-                        Menu { moreItems } label: {
-                            Label("More", systemImage: "ellipsis")
-                                .labelStyle(.iconOnly)
-                                .frame(width: barHeight, height: barHeight)
-                                .contentShape(.circle)
-                        }
-                        .glassEffect(.regular.interactive(), in: .circle)
-                        .tint(.primary)   // a menu's label takes the tint, not a foreground style
-                    }
                     // Something for it to see or read (Kevin, 2026-11-25; 2026-11-26: pictures,
                     // scans and pictures of pages too): pictures from Photos or the camera, pages
                     // scanned with iOS's own scanner, or a file from iOS's picker.
@@ -797,28 +735,23 @@ struct CompanionPanel: View {
         .padding(.vertical)
     }
 
-    /// Everything that isn't the conversation itself.
+    /// Everything that isn't the conversation itself. What it's running heads the menu, as a
+    /// menu's own title (a line to read; a menu has no plain text).
     private var more: some View {
-        Menu { moreItems } label: { Label("More", systemImage: "ellipsis") }
-    }
-
-    /// The menu's items: in the bar's menu, and in the one beside the message field. What
-    /// it's running heads them, as a menu's own title (a line to read; a menu has no plain text).
-    @ViewBuilder private var moreItems: some View {
-        Section([Companion.modelName, companion.modelVersion, Self.appVersion].compactMap { $0 }.joined(separator: " · ")) {
-            items
-        }
+        Menu {
+            Section([Companion.modelName, companion.modelVersion, Self.appVersion].compactMap { $0 }.joined(separator: " · ")) {
+                items
+            }
+        } label: { Label("More", systemImage: "ellipsis") }
     }
 
     @ViewBuilder private var items: some View {
-        Button("New Conversation", systemImage: "square.and.pencil") {
-            // A world conversation: another one, this one kept in the list; a page's: after confirming.
-            if let newConversation { newConversation() } else { confirmingNew = true }
-        }
-        .disabled(companion.conversation.turns.isEmpty)
+        // Another world conversation, this one kept in the list.
+        Button("New Conversation", systemImage: "square.and.pencil", action: newConversation)
+            .disabled(companion.conversation.turns.isEmpty)
         ShareLink("Share Conversation", item: transcript)
             .disabled(companion.conversation.turns.isEmpty)
-        if !inSheet { changesButton }   // the sheet has it beside the menu (Kevin, 2026-11-24)
+        changesButton
         Toggle(isOn: Binding { companion.looksUp } set: { companion.looksUp = $0 }) {
             Label("Look Things Up", systemImage: "globe")
             Text("On Wikipedia, for questions about the real world")
@@ -836,13 +769,7 @@ struct CompanionPanel: View {
     /// The conversation as plain text, to paste anywhere: who said what, and
     /// which model replied (to compare how it's going).
     private var transcript: String {
-        let title: String
-        if aboutWorld {
-            title = library.world.name
-        } else {
-            title = library.document.title.isEmpty ? "Untitled page" : library.document.title
-        }
-        let header = "World Editor companion on “\(title)” (\(Companion.modelName))"
+        let header = "World Editor companion on “\(library.world.name)” (\(Companion.modelName))"
         let turns = companion.conversation.turns.flatMap { turn -> [String] in
             let files = (turn.attached ?? []).map { "[Attached: \($0.name)] " }.joined()
             return (turn.question.isEmpty ? [] : ["Companion: \(turn.question)"]) + (turn.answer.map { ["Me: " + files + $0] } ?? [])

@@ -32,17 +32,15 @@ final class Companion {
     /// version keeps its own), for this session only: shown collapsed, never saved
     /// or sent back to the model (its makers' advice).
     private(set) var thoughts: [String: String] = [:]
-    /// The panel is showing: beside the page unfolded, a sheet folded. Opening it
-    /// prepares the open page's reply, if one is due (`prepareSoon`); closing it pauses
-    /// the conversation, so what the author said is filed (`fileWaiting`).
+    /// Its conversation is on screen (the world's, in `RootView`). Opening it prepares the
+    /// open conversation's reply, if one is due (`prepareSoon`); closing it pauses the
+    /// conversation, so what the author said is filed (`fileWaiting`).
     var isOpen = false {
         didSet {
             if isOpen, !oldValue { prepareSoon() }
             if !isOpen, oldValue { fileWaiting() }
         }
     }
-    /// The Duo is folded (compact width): the companion is a sheet, not a column.
-    var folded = true
 
     /// The model's first download, while it runs.
     private(set) var download: Download?
@@ -362,15 +360,6 @@ final class Companion {
         if library.lastWorldConversation == id { library.lastWorldConversation = nil }
         others.removeAll { $0.page == id }   // so it no longer holds Undo back
         loadWorldConversations(in: library)
-    }
-
-    /// Forgets this page's conversation and starts afresh.
-    func startOver(page: WriterCore.Document, in library: Library) {
-        store?.delete(page.id)
-        conversation = Conversation(page: page.id, aboutWorld: conversation.aboutWorld)
-        retracted = nil
-        state = .idle
-        askNow(about: page, in: library)
     }
 
     /// The author's answer, in their words, with any documents they `attached`; then the

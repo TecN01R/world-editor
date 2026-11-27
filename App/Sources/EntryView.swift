@@ -10,6 +10,9 @@ import WriterCore
 struct EntryView: View {
     @Environment(Library.self) private var library
     let page: WriterCore.Document
+    /// Back to the conversation, where the companion is: one companion, not one per page
+    /// (Kevin, 2026-11-27: "I don't feel this is radical enough or frictionless enough").
+    let talk: () -> Void
     let edit: () -> Void
 
     var body: some View {
@@ -59,6 +62,9 @@ struct EntryView: View {
             return .handled
         })
         .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Talk", systemImage: "bubble.left.and.text.bubble.right", action: talk)
+            }
             ToolbarItem(placement: .primaryAction) { Button("Edit", action: edit) }
         }
     }

@@ -29,7 +29,7 @@ enum Look {
 
 extension View {
     /// The look's background behind this screen: its whole navigation container, bars included,
-    /// and whatever isn't one (the companion's column), with lists and forms showing it through.
+    /// and whatever isn't one, with lists and forms showing it through.
     func lookBackground() -> some View {
         let background = Color(Look.background)
         return scrollContentBackground(.hidden)
