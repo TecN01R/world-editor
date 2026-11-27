@@ -82,9 +82,12 @@ pages first today; this makes the conversation the place he writes and the pages
 
 ## Companion
 - [ ] His ChatGPT conversations into his world (proposed 2026-11-27; the export arrived that day, kept in git-ignored private/; next after the correction): file his own side of them (never ChatGPT's words) into pages as the companion files a message, each with Undo, so he starts with the world he has already talked out
-- [ ] As useful as ChatGPT is for Kevin (Kevin, 2026-11-26). His ChatGPT export is here (git-ignored private/); after the correction: about 20 things he actually asked ChatGPT, asked of the phone's companion too, side by side on one page, so he sees where it holds up (2026-11-27); his ChatGPT instructions and memories carried into Instructions. Done since: faster first words, pictures, the open page
-- [ ] Choose a test suite for the companion from an open standard, built around how the app is used (Kevin, 2026-11-25: he judges by using it)
-  - [ ] Blind taste test for Kevin (Kevin, 2026-11-25: "I'm also ok with blind taste test for me"): pairs of anonymous replies to his own messages, fresh from each candidate; he picks or ties; ranked as Chatbot Arena does (Bradley–Terry); he is the only judge
+- [ ] Pick the model that best reproduces his ChatGPT on the phone (Kevin, 2026-11-27: "now that we have all the data from my ChatGPT we should pick the model that best reproduces those results and that user experience on device"; 2026-11-26: as useful as ChatGPT is for him). Under way beside the correction; his data and every result stay in git-ignored private/
+  - [ ] His real world-building turns replayed through every stock model that fits the phone, each run as the app runs its model (its own template, its maker's settings)
+  - [ ] Scored against what ChatGPT actually replied, by reference-based measures in an open evaluation framework, with no AI judge and no rubric of ours (Kevin, 2026-11-25, of the lab he had deleted: "who is to say you're not gaming the scoring system with your prompt"); beside that, the shape of the replies, and speed and memory on the Duo
+  - [ ] His blind taste test on the finalists, with ChatGPT's real reply hidden among them (Kevin, 2026-11-25: "I'm also ok with blind taste test for me"): pairs of anonymous replies to his own messages; he picks or ties; ranked as Chatbot Arena does; he is the only judge
+  - [ ] Whichever model wins, the conversation has to show what such replies contain (headings, lists, tables), and the bar to replace Nemotron stays faster and stronger (Kevin, 2026-11-25)
+  - The suite stays afterwards as the companion's test suite (Kevin, 2026-11-25: "an open standard or way to properly set up a test suite for our own app and the way our app is meant to be used"). His ChatGPT instructions and memories would go into Instructions; the export holds none
 - [ ] Search: built on Nemotron (search_pages, thinking capped); check it finds things on the phone
 - [ ] Filing through tools (make page, set field, rename, set page text), each with Undo
 - [ ] Live Activity: does tapping it reach the app? If never, our own Live Activity

@@ -47,6 +47,7 @@ jobs:
   # app over as an artifact as soon as it exists.
   ios-build:
     needs: changes
+    timeout-minutes: 20
     if: needs.changes.outputs.changed == 'true'
     runs-on: xcode-27
     env:
@@ -106,6 +107,7 @@ jobs:
   # one pose each: the outer display, and the inner one.
   shots:
     needs: changes
+    timeout-minutes: 25
     if: needs.changes.outputs.changed == 'true'
     runs-on: xcode-27
     strategy:
@@ -195,6 +197,7 @@ jobs:
   # contains images.
   publish:
     needs: [changes, shots]
+    timeout-minutes: 10
     if: always() && needs.changes.outputs.changed == 'true'
     runs-on: ubuntu-latest
     permissions:

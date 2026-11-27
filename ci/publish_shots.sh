@@ -35,6 +35,7 @@ for dir in shots/*/; do
       convert "$png" -gravity North -crop '1400x1000+0+120' +repage "publish/crops/$pose-$name.png" || true
     fi
   done < "$dir/expected.txt"
+  [ -s "${dir}axe-errors.txt" ] && cp "${dir}axe-errors.txt" "publish/trees/$pose/axe-errors.txt"   # why a tree couldn't be read
   # A contact sheet: every screen of this pose, labelled, on the page's own grey.
   if ls "publish/$pose"/*.jpg >/dev/null 2>&1; then
     montage -label '%t' "publish/$pose"/*.jpg -tile 6x -geometry '330x480>+10+10' \

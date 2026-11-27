@@ -113,8 +113,8 @@ His words are New York wherever they show; the app's own words are San Francisco
 The page, read or edited, and the conversation share one column.
 
 - **Column:** the width less a 20 pt margin each side, at most 33 em of the body size (627 pt at the default size): about 36 to 40 characters a line folded, 60 to 66 unfolded.
-- **Line height by line length** (a longer line needs more room to find the next one): under 14 em, 1.30 times the type size; 14 to 26 em (folded), 1.40; over 26 em (unfolded), 1.47. Set as an exact line height on a whole pixel, never as a multiple of the font's own.
-- **Hyphenation** more freely on short lines (0.9, 0.6, 0.4 for those three); ragged right; a lone last word pushed out where possible.
+- **Line height by line length** (a longer line needs more room to find the next one): 1.30 times the type size on lines up to 12 em, 1.40 from 16 to 24 em (folded), 1.47 from 28 em (unfolded), easing in a straight line between, so larger text never sets shorter lines. Set as an exact line height on a whole pixel, never as a multiple of the font's own.
+- **Hyphenation** more freely on short lines (0.9, 0.6, 0.4 for those three, eased the same way); ragged right; a lone last word pushed out where possible.
 - **Between paragraphs** half a line of type (0.5 em); list items a quarter, half after the last.
 - **Punctuation** shown as print sets it (`Typeset`: curly quotes, true dashes, ellipses). What he typed is kept as typed.
 - **The page, top to bottom:** 8 above the title; 8 to its kind; 16 to its facts (rows 12 apart, columns 16); 24 to the writing; 32 before a heading in the content and 12 after; 32 at the bottom. Read and Edit use the same numbers, and the title wraps in both.

@@ -54,33 +54,51 @@ if [ "$POSE" = open ]; then
   DISPLAY_ID="$INNER"
 fi
 
-# The screen's accessibility tree, as JSON. Folded, axe can first see the Duo's displays
-# mid-change ("inconsistent screen layout. Try again."), so it is asked again.
+# The screen's accessibility tree, as JSON with its keys in order: axe writes them in no
+# fixed order, so two dumps of the same screen differed byte for byte. Folded, axe can
+# first see the Duo's displays mid-change ("inconsistent screen layout. Try again."), so
+# it is asked again; what it said when it failed is kept in axe-errors.txt.
 tree() {
   local tries=0
-  until axe describe-ui --udid "$UDID" > "$1" 2>/dev/null && [ -s "$1" ]; do
-    (( ++tries < 4 )) || return 1
-    sleep 0.5
+  until axe describe-ui --udid "$UDID" 2> "$OUT/axe.err" \
+        | python3 -c 'import json, sys; json.dump(json.load(sys.stdin), sys.stdout, sort_keys=True, indent=1)' > "$1" 2>/dev/null \
+        && [ -s "$1" ]; do
+    if (( ++tries >= ${2:-3} )); then
+      { echo "== $1"; cat "$OUT/axe.err"; } >> "$OUT/axe-errors.txt"; rm -f "$1"
+      return 1
+    fi
+    sleep 1
   done
 }
 
-# Waits until the app has drawn (its tree is more than a launch screen's) and has stopped
-# changing (the same tree three times running, half a second apart), for at most 40 s.
+# Whether axe can read this pose's tree at all (it couldn't when folded, 2026-11-27): if
+# not, a shot settles by its picture instead, and has no tree to check.
+TREES=unknown
+
+# Waits, for at most 25 s, until the app has drawn and has stopped changing: the same tree
+# twice running with more in it than a launch screen has; or, without trees, the same
+# picture twice running that is more than a black screen.
 settle() {
-  local shot="$1" previous="" same=0 n size sum
-  for n in $(seq 1 80); do
-    if tree "$shot.tmp"; then
+  local shot="$1" previous="" start=$SECONDS size sum
+  if [ "$TREES" = unknown ]; then
+    sleep 2
+    if tree "$shot.tmp" 6; then TREES=yes; else TREES=no; echo "   (no accessibility trees in this pose: see axe-errors.txt)"; fi
+  fi
+  while (( SECONDS - start < 25 )); do
+    if [ "$TREES" = yes ]; then
+      tree "$shot.tmp" 2 || { sleep 0.5; continue; }
+      size=$(grep -c '"role":' "$shot.tmp" || true)
+      sum=$(shasum "$shot.tmp" | cut -d' ' -f1)
+      min=${MIN_ELEMENTS:-6}
+    else
+      xcrun simctl io "$UDID" screenshot --display="$DISPLAY_ID" "$shot.tmp" >/dev/null 2>&1 || { sleep 0.5; continue; }
       size=$(wc -c < "$shot.tmp" | tr -d ' ')
       sum=$(shasum "$shot.tmp" | cut -d' ' -f1)
-      echo "$n $size $sum" >> "$shot.settle"
-      if [ "$size" -ge "${MIN_TREE:-1500}" ] && [ "$sum" = "$previous" ]; then
-        same=$((same + 1))
-        [ "$same" -ge 2 ] && { rm -f "$shot.tmp"; return 0; }
-      else
-        same=0
-      fi
-      previous="$sum"
+      min=${MIN_PICTURE:-60000}
     fi
+    echo "$((SECONDS - start)) $size $sum" >> "$shot.settle"
+    if [ "$size" -ge "$min" ] && [ "$sum" = "$previous" ]; then rm -f "$shot.tmp"; return 0; fi
+    previous="$sum"
     sleep 0.5
   done
   rm -f "$shot.tmp"
@@ -93,6 +111,7 @@ shoot() {
   local name="$1" tap="$2"; shift 2
   local shot="$OUT/$name"
   echo "$name" >> "$OUT/expected.txt"
+  local began=$SECONDS
   xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE" "$@" >/dev/null
   if ! settle "$shot"; then echo "   $name: never settled (see $name.settle)"; fi
   if [ -n "$tap" ]; then
@@ -105,8 +124,8 @@ shoot() {
   fi
   sleep 0.7   # the last animation (the keyboard, a push)
   xcrun simctl io "$UDID" screenshot --display="$DISPLAY_ID" "$shot.png" >/dev/null 2>&1 || echo "   $name: no screenshot"
-  tree "$shot.json" || echo "   $name: no tree"
-  echo "   $name"
+  if [ "$TREES" = yes ]; then tree "$shot.json" || echo "   $name: no tree"; fi
+  echo "   $name ($((SECONDS - began)) s)"
 }
 
 wanted() {   # scene tier

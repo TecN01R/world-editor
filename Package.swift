@@ -19,6 +19,7 @@ let package = Package(
             dependencies: [
                 .product(name: "WriterCore", package: "WriterKit"),
                 .product(name: "FocusLayout", package: "WriterKit"),
+                .product(name: "DesignTokens", package: "WriterKit"),
                 .product(name: "Provenance", package: "WriterKit"),
                 .product(name: "Guardrails", package: "WriterKit"),
                 "llama",
