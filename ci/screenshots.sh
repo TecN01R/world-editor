@@ -8,12 +8,15 @@
 #   TIER=core|full    which scenes (default full); core is the quick set
 #   ONLY="a b c"      only these scenes, whatever their tier
 #
-# Output: shots/<pose>/<scene>[-<variant>].png and .json, and shots/<pose>/expected.txt
-# (every shot that should exist, so a missing one is noticed).
+# Output: shots/<pose>/<scene>[-<variant>].png and .json, .metrics.json where the scene shows a
+# page (its type, as the app measured it), and shots/<pose>/expected.txt (every shot that
+# should exist, so a missing one is noticed).
 #
-# A shot is taken when the screen has stopped changing, not after a fixed wait: on a busy
-# runner the app can take longer than any fixed wait to draw its first frame, and the shot
-# was then of the black launch screen (2026-11-27: five of eight).
+# A shot is taken when the app says its scene is on screen (it makes Documents/scene-ready in
+# its data container, App/Sources/Scenes/SceneStage.swift), or else when the screen has
+# stopped changing; never after a fixed wait: on a busy runner the app can take longer than
+# any fixed wait to draw its first frame, and the shot was then of the black launch screen
+# (2026-11-27: five of eight). Each shot's .settle file says which way it settled.
 set -euo pipefail
 
 APP="${1:?the built app}"
@@ -75,15 +78,40 @@ tree() {
 # not, a shot settles by its picture instead, and has no tree to check.
 TREES=unknown
 
-# Waits, for at most 25 s, until the app has drawn and has stopped changing: the same tree
-# twice running with more in it than a launch screen has; or, without trees, the same
-# picture twice running that is more than a black screen.
+# The app's data container, where its scene-ready marker is made (empty if it can't be found).
+container() { xcrun simctl get_app_container "$UDID" "$BUNDLE" data 2>/dev/null || true; }
+
+# Waits, for at most 25 s, for the scene's readiness marker. Folded, where the trees can't be
+# read, it's the only way to know the screen is final rather than merely still.
+ready() {
+  local shot="$1" start=$SECONDS data
+  data=$(container)
+  [ -n "$data" ] || { echo "no app container: no marker" >> "$shot.settle"; return 1; }
+  while (( SECONDS - start < 25 )); do
+    if [ -e "$data/Documents/scene-ready" ]; then
+      echo "$((SECONDS - start)) settled: the app's scene-ready marker" >> "$shot.settle"
+      return 0
+    fi
+    sleep 0.25
+  done
+  echo "$((SECONDS - start)) no scene-ready marker: by the tree or picture" >> "$shot.settle"
+  return 1
+}
+
+# Waits until the app's scene is ready (`ready`); if it never says so, for at most 25 s more,
+# until the app has drawn and has stopped changing: the same tree twice running with more in
+# it than a launch screen has; or, without trees, the same picture twice running that is more
+# than a black screen.
 settle() {
-  local shot="$1" previous="" start=$SECONDS size sum
+  local shot="$1" previous="" start size sum marked=no
+  ready "$shot" && marked=yes
+  start=$SECONDS
   if [ "$TREES" = unknown ]; then
     sleep 2
     if tree "$shot.tmp" 6; then TREES=yes; else TREES=no; echo "   (no accessibility trees in this pose: see axe-errors.txt)"; fi
+    rm -f "$shot.tmp"
   fi
+  [ "$marked" = yes ] && return 0
   while (( SECONDS - start < 25 )); do
     if [ "$TREES" = yes ]; then
       tree "$shot.tmp" 2 || { sleep 0.5; continue; }
@@ -97,10 +125,14 @@ settle() {
       min=${MIN_PICTURE:-60000}
     fi
     echo "$((SECONDS - start)) $size $sum" >> "$shot.settle"
-    if [ "$size" -ge "$min" ] && [ "$sum" = "$previous" ]; then rm -f "$shot.tmp"; return 0; fi
+    if [ "$size" -ge "$min" ] && [ "$sum" = "$previous" ]; then
+      echo "$((SECONDS - start)) settled: the same $([ "$TREES" = yes ] && echo tree || echo picture) twice" >> "$shot.settle"
+      rm -f "$shot.tmp"; return 0
+    fi
     previous="$sum"
     sleep 0.5
   done
+  echo "$((SECONDS - start)) never settled" >> "$shot.settle"
   rm -f "$shot.tmp"
   return 1
 }
@@ -111,7 +143,11 @@ shoot() {
   local name="$1" tap="$2"; shift 2
   local shot="$OUT/$name"
   echo "$name" >> "$OUT/expected.txt"
-  local began=$SECONDS
+  local began=$SECONDS data
+  rm -f "$shot.settle"
+  data=$(container)
+  # The last scene's marker and measurements (the app removes them too, but CI may look first).
+  [ -z "$data" ] || rm -f "$data/Documents/scene-ready" "$data/Documents/scene-metrics.json"
   xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE" "$@" >/dev/null || { echo "   $name: didn't launch"; return 1; }
   if ! settle "$shot"; then echo "   $name: never settled (see $name.settle)"; fi
   if [ -n "$tap" ]; then
@@ -125,6 +161,11 @@ shoot() {
   sleep 0.7   # the last animation (the keyboard, a push)
   xcrun simctl io "$UDID" screenshot --display="$DISPLAY_ID" "$shot.png" >/dev/null 2>&1 || echo "   $name: no screenshot"
   if [ "$TREES" = yes ]; then tree "$shot.json" || echo "   $name: no tree"; fi
+  # The page's measurements, written with the marker (what ci/check_ui.py checks of the type).
+  data=${data:-$(container)}
+  if [ -n "$data" ] && [ -s "$data/Documents/scene-metrics.json" ]; then
+    cp "$data/Documents/scene-metrics.json" "$shot.metrics.json"
+  fi
   echo "   $name ($((SECONDS - began)) s)"
 }
 

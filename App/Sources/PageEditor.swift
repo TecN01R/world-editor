@@ -415,8 +415,7 @@ struct PageEditor: UIViewRepresentable {
             // Notes; any other page opens where you left off, keyboard down
             // until you tap (Kevin, 2026-11-23), unless it was already up (back
             // from Focus, which hands it over).
-            let startInTitle = doc.isEmpty && !Screenshots.isActive
-            guard !Screenshots.opensMara || Screenshots.showsMentions else { return }   // CI: the page at rest
+            let startInTitle = doc.isEmpty
             DispatchQueue.main.async { [titleView, keepsKeyboard] in
                 if startInTitle { titleView.becomeFirstResponder(); return }
                 if keepsKeyboard { tv.becomeFirstResponder() }
@@ -677,6 +676,9 @@ final class PageTextView: PlainPasteTextView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        #if DEBUG
+        SceneMetrics.report(self, as: .writing)   // measured in a scene (Scenes/)
+        #endif
         guard let title = titleView else { return }
         // The title, fields and writing share the reading column's left edge.
         let column = Look.column(bounds.width)

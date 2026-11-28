@@ -26,6 +26,9 @@ struct WorldEditorApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                #if DEBUG
+                .sceneDirector()   // a scene's set-up after launch (Scenes/)
+                #endif
                 .environment(library)
                 .environment(companion)
                 .tint(.primary)   // every control white (`Look`)
@@ -91,7 +94,7 @@ final class Library {
     /// Caret position shared by both editors so switching modes keeps your place.
     var cursor = (paragraph: 0, offset: 0)
     /// The pages list's search, so a result opens at its match, not the top.
-    var searchQuery = Screenshots.searchQuery ?? ""
+    var searchQuery = ""
     /// Spotlight's results for it, best first, and its suggested completions.
     var searchResults: [PageIndex.Result] = []
     var searchSuggestions: [String] = []
@@ -336,32 +339,35 @@ final class Library {
         pages.first { $0.id == selection } ?? WriterCore.Document()
     }
 
-    /// Where the open world keeps the companion's conversations; nil in CI.
+    /// Where the open world keeps the companion's conversations; nil if the worlds' folder couldn't be made.
     var conversationsDirectory: URL? { worldStore?.conversations(world.id) }
 
     private var conversationStore: ConversationStore? {
         conversationsDirectory.flatMap { try? ConversationStore(directory: $0) }
     }
 
-    init() {
-        if Screenshots.isActive {
-            worldStore = nil                   // CI runs never touch saved pages
-            worlds = [world]
-            (pages, schema) = Screenshots.pages()
-            PageIndex.start(with: pages.map { ($0, fieldText($0)) })   // the simulator's own index
-            if !Screenshots.opensList, let open = Screenshots.opensMara ? pages[1] : pages.first {
-                selection = open.id
-                // Typed text: caret at its end. Rich sample: at the top, title in view.
-                let last = open.paragraphs.count - 1
-                if !Screenshots.isRich { cursor = (last, open.paragraphs[last].length) }
-            }
+    /// The author's worlds, in Application Support; a scene's own (Scenes/), in a debug build in
+    /// the simulator.
+    convenience init() {
+        #if DEBUG
+        if let scene = LaunchScene.current {
+            self.init(root: scene.writeWorld())
+            scene.open(in: self)
             return
         }
+        #endif
         let support = URL.applicationSupportDirectory
-        worldStore = try? WorldStore(root: support.appendingPathComponent("Worlds", isDirectory: true))
-        // Pages saved before worlds existed become the first world.
-        _ = try? worldStore?.adoptLegacy(documents: support.appendingPathComponent("Documents", isDirectory: true),
-                                         schema: support.appendingPathComponent("Schema.json"))
+        self.init(root: support.appendingPathComponent("Worlds", isDirectory: true), legacy: support)
+    }
+
+    /// The worlds kept in `root`, with the one open last loaded.
+    /// - Parameter legacy: where pages were saved before worlds existed, to become the first world.
+    init(root: URL, legacy: URL? = nil) {
+        worldStore = try? WorldStore(root: root)
+        if let legacy {
+            _ = try? worldStore?.adoptLegacy(documents: legacy.appendingPathComponent("Documents", isDirectory: true),
+                                             schema: legacy.appendingPathComponent("Schema.json"))
+        }
         worlds = worldStore?.all() ?? []
         if worlds.isEmpty {
             try? worldStore?.save(world)
@@ -575,68 +581,6 @@ final class Library {
     func flushAll() {
         for id in Array(pendingSaves.keys) { flush(id) }
         disk.sync {}
-    }
-}
-
-/// Launch arguments for CI screenshots (never used otherwise):
-/// - `-screenshotText "para one\npara two"`: a page with that text (`EMPTY` for blank)
-/// - `-screenshotRich YES`: one page showing bold, italic and both kinds of list
-/// - `-screenshotMentions YES`: with `-screenshotRich`, Mara's page with its Mentions sheet open
-/// - `-screenshotMara YES`: with `-screenshotRich`, Mara's page: a Character with fields
-/// - `-screenshotPages YES`: showing the pages list
-/// - `-screenshotSearch "about the bell"`: with `-screenshotPages`, searching the list
-/// Each seeds two more pages, so `@` has something to find.
-/// - `-startInFocus YES`: open the page in Focus mode (read by `RootView`)
-/// - `-focusControls YES`: with Focus mode's controls showing (read by `RootView`)
-enum Screenshots {
-    private static var defaults: UserDefaults { .standard }
-    static var isActive: Bool { defaults.string(forKey: "screenshotText") != nil || isRich || opensList }
-    static var opensList: Bool { defaults.bool(forKey: "screenshotPages") }
-    static var isRich: Bool { defaults.bool(forKey: "screenshotRich") }
-    static var showsMentions: Bool { defaults.bool(forKey: "screenshotMentions") }
-    /// Mara's page: a Character, which Harbour Notes links to.
-    static var opensMara: Bool { showsMentions || defaults.bool(forKey: "screenshotMara") }
-    static var searchQuery: String? { defaults.string(forKey: "screenshotSearch") }
-
-    /// Sample pages: Harbour Notes, Mara (a Character), Map of the Coast.
-    static func pages() -> ([WriterCore.Document], Schema) {
-        let place = PageType(name: "Place")
-        let fields = [
-            FieldDefinition(name: "Species", kind: .choice, options: ["Human", "Elf", "Selkie"]),
-            FieldDefinition(name: "Age", kind: .number),
-            FieldDefinition(name: "Home", kind: .page, pageType: place.id),
-            FieldDefinition(name: "First seen", kind: .date),
-            FieldDefinition(name: "Keeps a secret", kind: .toggle),
-        ]
-        let character = PageType(name: "Character", fields: fields.map(\.id))
-        let schema = Schema(fields: fields, types: [character, place])
-        let day: TimeInterval = 86_400
-        let map = WriterCore.Document(title: "Map of the Coast", paragraphs: [Paragraph(text: "Three coves, one road.")],
-                                      modified: Date().addingTimeInterval(-3 * day), type: place.id)
-        let mara = WriterCore.Document(title: "Mara", paragraphs: [Paragraph(text: "Keeps the lighthouse.")],
-                                       modified: Date().addingTimeInterval(-day), type: character.id, values: [
-                                           fields[0].id: .text("Selkie"),
-                                           fields[1].id: .number(61),
-                                           fields[2].id: .page(map.id),
-                                           fields[3].id: .date(Date(timeIntervalSince1970: 1_790_000_000)),
-                                           fields[4].id: .toggle(true),
-                                       ])
-        if let seeded = defaults.string(forKey: "screenshotText") {
-            let text = seeded == "EMPTY" ? "" : seeded.replacingOccurrences(of: "\\n", with: "\n")
-            return ([WriterCore.Document(paragraphs: text.components(separatedBy: "\n").map { Paragraph(text: $0) }), mara, map],
-                    schema)
-        }
-        let rich = WriterCore.Document(title: "Harbour Notes", paragraphs: [
-            Paragraph(text: "The tide came in faster than the charts promised.",
-                      runs: [StyleRun(location: 17, length: 6, style: .italic)]),
-            Paragraph(text: "Lantern oil", kind: .bullet),
-            Paragraph(text: "Rope, two coils", kind: .bullet),
-            Paragraph(text: "Check the north mooring", kind: .numbered,
-                      runs: [StyleRun(location: 10, length: 5, style: .bold)]),
-            Paragraph(text: "Ask Mara about the bell", kind: .numbered,
-                      links: [PageLink(location: 4, length: 4, page: mara.id)]),
-        ])
-        return ([rich, mara, map], schema)
     }
 }
 

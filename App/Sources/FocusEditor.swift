@@ -209,10 +209,18 @@ final class FocusViewController: UIViewController, UITextViewDelegate {
         if visible { scheduleHide() } else { hideTimer?.invalidate() }
     }
 
+    /// How long the controls stay: 4 s; 30 in a scene (Scenes/), so its picture catches them.
+    private static var controlsShown: TimeInterval {
+        #if DEBUG
+        if LaunchScene.current != nil { return 30 }
+        #endif
+        return 4
+    }
+
     /// Shown for a moment, like video controls, unless you use them.
     private func scheduleHide() {
         hideTimer?.invalidate()
-        hideTimer = .scheduledTimer(withTimeInterval: Screenshots.isActive ? 30 : 4, repeats: false) { [weak self] _ in
+        hideTimer = .scheduledTimer(withTimeInterval: Self.controlsShown, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { self?.onControlsChange?(false) }
         }
     }

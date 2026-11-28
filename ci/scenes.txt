@@ -6,19 +6,57 @@
 #             the design system or ci/ changes, or on a manual run
 #   poses     closed (the outer display), open (the inner one)
 #   variants  default; large (the accessibility-large text size); contrast (Increase Contrast)
+#   launch arguments  `-scene <name>`: the app opens that scene (App/Sources/Scenes/Scene.swift,
+#             debug builds in the simulator only), from the sample world, Breakwater
+#             (SampleWorld), with the companion playing a script; `-fixture empty` for a world
+#             with nothing in it, `-keyboard YES` for the keyboard up as well. A scene presents
+#             its own sheet, alert or keyboard after launch, and makes Documents/scene-ready in
+#             the app's container when its screen is final, which is when the shot is taken,
+#             with Documents/scene-metrics.json beside it: the page's type, measured.
 #   tap       a control's label to tap before the shot, for an open menu (optional)
-#
-# Until every screen has a scene (`-scene <name>`), these are the old launch flags.
 
-pages          | core | closed open | default       | -screenshotPages YES
-edit           | core | closed open | default large | -screenshotRich YES
-fields         | core | closed open | default large | -screenshotRich YES -screenshotMara YES
-focus          | core | closed open | default       | -screenshotText 'First page.\nSecond page.\nThird page, where the caret is.' -startInFocus YES
-focus-controls | core | closed open | default       | -screenshotText 'First page.\nSecond page.\nThird page, where the caret is.' -startInFocus YES -focusControls YES
-mention        | full | closed open | default       | -screenshotText 'Ask @Map of the'
-mentions       | full | closed open | default       | -screenshotRich YES -screenshotMentions YES
-fields-home    | full | closed open | default       | -screenshotRich YES -screenshotMara YES | Home
-search         | full | closed open | default       | -screenshotPages YES -screenshotSearch 'about the bell'
-focus-empty    | full | closed open | default       | -screenshotText EMPTY -startInFocus YES
-focus-g        | full | closed open | default       | -screenshotText g -startInFocus YES
-focus-long     | full | closed open | default       | -screenshotText 'Hi. This is exactly what I wanted. Can we keep this design while vertically centering?' -startInFocus YES
+talk                 | core | closed open | default large contrast | -scene talk
+talk-empty           | full | closed open | default                | -scene talk-empty
+talk-thinking        | full | closed open | default                | -scene talk-thinking
+talk-streaming       | full | closed open | default                | -scene talk-streaming
+talk-failed          | full | closed open | default                | -scene talk-failed
+talk-download-offer  | full | closed open | default                | -scene talk-download-offer
+talk-downloading     | full | closed open | default                | -scene talk-downloading
+talk-filing          | core | closed open | default large          | -scene talk-filing
+talk-composing       | full | closed open | default                | -scene talk-composing
+talk-long            | full | closed open | default                | -scene talk-long
+
+drawer               | core | closed open | default large          | -scene drawer
+pages                | core | closed open | default large contrast | -scene pages
+pages-empty          | full | closed open | default                | -scene pages-empty
+pages-deleted        | full | closed open | default                | -scene pages-deleted
+pages-search         | full | closed open | default                | -scene pages-search
+connections          | core | closed open | default large          | -scene connections
+connections-empty    | full | closed open | default                | -scene connections-empty
+
+page-read            | core | closed open | default large contrast | -scene page-read
+page-read-chapter    | core | closed open | default large          | -scene page-read-chapter
+page-read-rumour     | full | closed open | default                | -scene page-read-rumour
+page-read-long-title | core | closed open | default large          | -scene page-read-long-title
+page-read-notes      | core | closed open | default large          | -scene page-read-notes
+
+page-edit            | core | closed open | default large contrast | -scene page-edit
+page-edit-typing     | core | closed open | default large          | -scene page-edit-typing
+page-edit-chapter    | core | closed open | default large          | -scene page-edit-chapter
+page-edit-long-title | core | closed open | default large          | -scene page-edit-long-title
+page-new             | full | closed open | default                | -scene page-new
+page-mention         | full | closed open | default                | -scene page-mention
+
+focus                | core | closed open | default large          | -scene focus
+focus-controls       | core | closed open | default large          | -scene focus-controls
+focus-empty          | full | closed open | default                | -scene focus-empty
+focus-long           | full | closed open | default                | -scene focus-long
+
+sheet-changes        | core | closed open | default large          | -scene sheet-changes
+sheet-instructions   | full | closed open | default                | -scene sheet-instructions
+sheet-mentions       | full | closed open | default                | -scene sheet-mentions
+sheet-type-fields    | full | closed open | default                | -scene sheet-type-fields
+sheet-field          | full | closed open | default                | -scene sheet-field
+sheet-field-timeline | full | closed open | default                | -scene sheet-field-timeline
+
+alert-new-world      | full | closed open | default                | -scene alert-new-world

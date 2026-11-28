@@ -149,6 +149,10 @@ final class Companion {
             }
         }
         #endif
+        #if DEBUG
+        // A scene (Scenes/) has its script play the model; never on a phone.
+        if let scene = LaunchScene.current { model = ScriptedModel(script: scene.script) { [weak self] in self?.download = $0 } }
+        #endif
         // Cancelled from the download's Live Activity (or iOS ended it) while away: it stops
         // where it got to, and Download goes on from there.
         BackgroundDownload.onCancel = { [weak self] in self?.downloading?.cancel() }
@@ -691,7 +695,7 @@ final class Companion {
     }
 
     private var selfCheckDue: Bool {
-        guard modelWarm else { return false }
+        guard modelWarm, LaunchScene.current == nil else { return false }   // a scene's model plays a script
         return FileManager.default.fileExists(atPath: Self.selfCheckFile.path)
             || (!selfCheckFailed && UserDefaults.standard.double(forKey: Self.selfCheckKey) != Self.build)
     }

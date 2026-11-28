@@ -7,6 +7,8 @@
 #   sheets/<pose>.jpg      every screen of a pose side by side: the same title, buttons,
 #                          margins, headings and rows should show on every one
 #   trees/<pose>/<scene>.json  each screen's accessibility tree (what ci/check_ui.py read)
+#   trees/<pose>/<scene>.metrics.json  the page's title, kind and writing, measured by the app
+#                          (App/Sources/Scenes/SceneMetrics.swift; ci/check_ui.py reads them too)
 #   checks.txt             what the checks found
 #   missing.txt            shots that should exist and don't (empty when all are there)
 #
@@ -18,7 +20,7 @@ echo "$commit" > publish/SOURCE_COMMIT
 : > publish/missing.txt
 
 # Screens whose type is judged up close.
-READING='^(edit|fields|page-|talk|focus)'
+READING='^(page-|talk|focus)'
 
 for dir in shots/*/; do
   pose=$(basename "$dir")
@@ -29,6 +31,7 @@ for dir in shots/*/; do
     if [ ! -s "$png" ]; then echo "$pose/$name" >> publish/missing.txt; continue; fi
     convert "$png" -resize '1400x1400>' -quality 82 "publish/$pose/$name.jpg"
     [ -s "$dir$name.json" ] && cp "$dir$name.json" "publish/trees/$pose/$name.json"
+    [ -s "$dir$name.metrics.json" ] && cp "$dir$name.metrics.json" "publish/trees/$pose/$name.metrics.json"   # the page's type, measured
     [ -s "$dir$name.settle" ] && cp "$dir$name.settle" "publish/trees/$pose/$name.settle"   # how long it took to settle
     if [[ "$name" =~ $READING ]]; then
       # The upper middle of the screen, as large as it was drawn.

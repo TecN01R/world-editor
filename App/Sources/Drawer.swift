@@ -91,6 +91,9 @@ struct Drawer: View {
         } message: {
             Text(worldError ?? "")
         }
+        #if DEBUG
+        .sceneShows(.newWorld, $creatingWorld)   // a scene's (Scenes/)
+        #endif
     }
 
     /// A row that opens something, the whole width a button, with no line under it, on a

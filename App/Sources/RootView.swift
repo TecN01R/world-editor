@@ -17,32 +17,33 @@ struct RootView: View {
 
     @Environment(Library.self) private var library
     @Environment(Companion.self) private var companion
-    @State private var column: NavigationSplitViewColumn = Self.opensOnList ? .sidebar : .detail
-    @State private var focusMode = Self.startsInFocus
+    @State private var column: NavigationSplitViewColumn = Self.opensOnDrawer ? .sidebar : .detail
+    @State private var focusMode = LaunchStart.current.mode == .focus
     @State private var focusControls = false
     /// The world conversation shown when no page is open (a new one has its id before
     /// anything's said): the last one open, else the newest, else a new one.
     @State private var worldConversation: UUID?
     /// The page being edited; any other opens to be read, as a wiki entry (`EntryView`).
-    @State private var editing: UUID?
+    @State private var editing: UUID? = LaunchStart.current.mode == .read ? nil : LaunchStart.current.page
     /// What's in front when no page is open, and what a page opened from it goes back to.
-    @State private var screen = Screen.conversation
+    @State private var screen = LaunchStart.current.screen
     /// Unfolded, the drawer is closed once the app has opened: the conversation (or page) in
-    /// front, the drawer a tap away (open for CI's `Screenshots.opensList` shot).
-    @State private var columns: NavigationSplitViewVisibility = Self.opensOnList ? .all : .detailOnly
-    /// `settleList` has run, or isn't wanted: CI's shots stay where they open.
-    @State private var listSettled = Screenshots.isActive
+    /// front, the drawer a tap away (open where a scene starts with it, `LaunchStart.drawer`).
+    @State private var columns: NavigationSplitViewVisibility = Self.opensOnDrawer ? .all : .detailOnly
+    /// `settleList` has run, or isn't wanted: a scene that opens elsewhere stays where it opens.
+    @State private var listSettled = !Self.opensAsLeft
     /// The drawer as it was before Focus mode put it away, to put back after.
     @State private var columnsBeforeFocus: NavigationSplitViewVisibility?
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
     /// Regular unfolded, where the drawer slides over; compact folded, where it's a stack.
     @Environment(\.horizontalSizeClass) private var sizeClass
 
-    private static var startsInFocus: Bool { UserDefaults.standard.bool(forKey: "startInFocus") }
     /// The app opens on the drawer, for its first layout before the conversation takes its
-    /// place (`settleList`). CI's shots open where they're taken: on the drawer only for
-    /// `Screenshots.opensList`.
-    private static var opensOnList: Bool { !Screenshots.isActive || Screenshots.opensList }
+    /// place (`settleList`). A scene that opens elsewhere opens where it's shown: on the drawer
+    /// only if it shows the drawer.
+    private static var opensOnDrawer: Bool { opensAsLeft || LaunchStart.current.drawer }
+    /// The app opens as it was left: no scene, or one that starts where the app does.
+    private static var opensAsLeft: Bool { LaunchStart.current == LaunchStart() }
 
     /// In Focus mode everything but the writing hides (bars, status, home
     /// indicator, drawer) until a tap outside the text brings it back.
@@ -85,10 +86,9 @@ struct RootView: View {
             companion.loadWorldConversations(in: library)
             worldConversation = library.lastWorldConversation ?? companion.worldConversations.first?.page ?? UUID()
         }
-        // Another page opens to be read; the editor is for the page it was asked for on. CI's
-        // shots are taken in the editor, where Focus mode is.
+        // Another page opens to be read; the editor is for the page it was asked for on.
         .onChange(of: library.selection, initial: true) { _, page in
-            if Screenshots.isActive { editing = page } else if page != editing { editing = nil }
+            if page != editing { editing = nil }
         }
         // Applied at the root: status bar visibility is decided by the top controller.
         .statusBarHidden(chromeHidden)
@@ -108,13 +108,11 @@ struct RootView: View {
             }
         }
         .persistentSystemOverlays(chromeHidden ? .hidden : .automatic)
-        // CI shot of revealed controls: reveal after launch, the way a tap would,
-        // rather than starting revealed (a path no user ever takes).
-        .task {
-            guard UserDefaults.standard.bool(forKey: "focusControls") else { return }
-            try? await Task.sleep(for: .seconds(1.5))
-            focusControls = true
-        }
+        #if DEBUG
+        // A scene's revealed controls: revealed after launch, the way a tap would, rather
+        // than starting revealed (a path no user ever takes).
+        .sceneShows(.focusControls, $focusControls)
+        #endif
         .onChange(of: focusMode) { _, focus in
             // Entering, the controls show and then fade on their usual timer
             // (or as soon as you type), so Exit Focus is in sight at first (Kevin).
@@ -239,6 +237,27 @@ struct RootView: View {
     private func closeDrawer() {
         if sizeClass == .regular { withAnimation { columns = .detailOnly } }
     }
+}
+
+/// What the app opens on, for `RootView`'s first state: on a normal launch, the world's
+/// conversation as it was left; in a scene (`LaunchScene`, a debug build in the simulator), what
+/// the scene shows. What will replace RootView's shell reads the same.
+struct LaunchStart: Equatable, Sendable {
+    enum Mode: Sendable { case read, edit, focus }
+    /// What's in front when no page is open.
+    var screen = RootView.Screen.conversation
+    /// The drawer is out: folded, in front; unfolded, over the screen.
+    var drawer = false
+    /// The page open, and how.
+    var page: UUID?
+    var mode = Mode.read
+
+    static let current: LaunchStart = {
+        #if DEBUG
+        if let scene = LaunchScene.current { return scene.start }
+        #endif
+        return LaunchStart()
+    }()
 }
 
 /// The world's pages, by kind, with search and Recently Deleted: the Pages screen, opened from
@@ -372,6 +391,9 @@ struct PageList: View {
         .navigationTitle("Pages")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $editingFields) { TypeFieldsSheet(type: $0.id) }
+        #if DEBUG
+        .sceneShows(.deleted, $showingDeleted)   // a scene's (Scenes/), as a tap would
+        #endif
         .toolbar {
             // Kevin, 2026-11-24: search at the very bottom, New Page in its usual place at the
             // top. Search where iOS puts it (he asked for the Duo's best practice): in the
@@ -654,12 +676,9 @@ struct EditorView: View {
         } message: { field in
             Text("It becomes this page’s \(field.name).")
         }
-        .task {
-            // CI: open Mentions once the page is up and writing, as a tap would.
-            guard Screenshots.showsMentions else { return }
-            try? await Task.sleep(for: .seconds(1))
-            showMentions = true
-        }
+        #if DEBUG
+        .sceneShows(.mentions, $showMentions)   // a scene's (Scenes/), as a tap would
+        #endif
         .toolbar {
             if focusMode {
                 ToolbarItem(placement: .cancellationAction) {

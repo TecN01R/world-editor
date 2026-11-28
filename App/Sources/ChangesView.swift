@@ -13,12 +13,14 @@ struct ChangesView: View {
     @Environment(Library.self) private var library
     @Environment(Companion.self) private var companion
     @Environment(\.dismiss) private var dismiss
+    /// The field timelines opened from it.
+    @State private var path: [FieldKey] = []
 
     var body: some View {
         let conversation = companion.conversation
         // The author's messages that changed something, newest first.
         let moments = conversation.turns.reversed().filter { $0.filed?.isEmpty == false }
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 ForEach(Array(moments.enumerated()), id: \.element.id) { i, turn in
                     let message = turn.answer ?? ""
@@ -65,6 +67,9 @@ struct ChangesView: View {
             }
             .toolbarVerticalBehavior(.disabled)   // its bar across the top, not in the folded Duo's side column
         }
+        #if DEBUG
+        .sceneShows(.fieldTimeline) { path = [LaunchScene.timeline] }   // a scene's (Scenes/)
+        #endif
     }
 
     /// One thing a message changed, under its point; a field opens its own timeline.

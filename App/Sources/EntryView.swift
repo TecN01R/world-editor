@@ -34,6 +34,9 @@ struct EntryView: View {
                 if let type {
                     Text(type.name)
                         .role(.label)
+                        #if DEBUG
+                        .sceneMeasuresKind()   // measured in a scene (Scenes/)
+                        #endif
                         .pageKindLine()
                 }
                 if !facts.isEmpty {
@@ -257,6 +260,9 @@ final class ReadingTextView: UITextView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        #if DEBUG
+        SceneMetrics.report(self, as: .writing)   // measured in a scene (Scenes/)
+        #endif
         // Laid out in a column, or on a screen, it wasn't last measured for: set for this one,
         // and measured again.
         if bounds.width > 0, set(for: bounds.width) { invalidateIntrinsicContentSize() }

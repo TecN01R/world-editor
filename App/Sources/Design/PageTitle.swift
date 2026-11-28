@@ -71,6 +71,9 @@ final class PageTitleView: UITextView, UITextViewDelegate {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        #if DEBUG
+        SceneMetrics.report(self, as: .title)   // measured in a scene (Scenes/)
+        #endif
         placeholder.frame = CGRect(x: 0, y: 0, width: bounds.width, height: lineHeight)   // where its first line goes
     }
 

@@ -3,7 +3,7 @@
 #   changed: the app, or what it is built from, changed: build it and render its scenes
 #   tier:    core (the quick set in ci/scenes.txt) or full (all of them: a manual run, or
 #            the design system, ci/ or the manifests changed)
-#   only:    just these scenes: a "Screenshots: edit focus" line in the commit message
+#   only:    just these scenes: a "Screenshots: page-edit focus" line in the commit message
 #   layout:  manifest or file list changed, so check the xtool package layout builds
 # Usage: ci/changes.sh <before-sha> <after-sha> <event-name>
 set -euo pipefail

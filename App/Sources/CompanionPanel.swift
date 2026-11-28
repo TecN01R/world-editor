@@ -116,6 +116,10 @@ struct CompanionPanel: View {
         }
         .sheet(isPresented: $showingChanges) { ChangesView().environment(library).environment(companion) }
         .sheet(isPresented: $editingInstructions) { CompanionInstructions().environment(companion) }
+        #if DEBUG
+        .sceneShows(.changes, $showingChanges)   // a scene's (Scenes/)
+        .sceneShows(.instructions, $editingInstructions)
+        #endif
     }
 
     /// Content that reads what changes as a reply is written (each word, the reading bar)

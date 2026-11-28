@@ -40,7 +40,14 @@ struct PageFields: View {
         let gapBelow = type == nil ? PageMetrics.kindLineToWriting : PageMetrics.aboveWriting
         VStack(alignment: .leading, spacing: 0) {
             typeMenu(Label {
-                if let type { Text(type.name) } else { Text("Add Type") }
+                if let type {
+                    Text(type.name)
+                        #if DEBUG
+                        .sceneMeasuresKind()   // measured in a scene (Scenes/)
+                        #endif
+                } else {
+                    Text("Add Type")
+                }
             } icon: {
                 Image(systemName: "square.text.square")
             })
