@@ -112,7 +112,7 @@ shoot() {
   local shot="$OUT/$name"
   echo "$name" >> "$OUT/expected.txt"
   local began=$SECONDS
-  xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE" "$@" >/dev/null
+  xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE" "$@" >/dev/null || { echo "   $name: didn't launch"; return 1; }
   if ! settle "$shot"; then echo "   $name: never settled (see $name.settle)"; fi
   if [ -n "$tap" ]; then
     local tries=0
@@ -142,14 +142,16 @@ while IFS='|' read -r name tier poses variants arguments tap; do
   wanted "$name" "$tier" || continue
   eval "args=($arguments)"   # the file is this repository's own
   for variant in $variants; do
+    # One shot that fails (the app didn't launch, a tap found nothing) is reported and the
+    # rest go on: a full run stopped dead at its first tapped scene (2026-11-27).
     case "$variant" in
-      default)  shoot "$name" "$tap" "${args[@]}" ;;
-      large)    xcrun simctl ui "$UDID" content_size accessibility-large
-                shoot "$name-large" "$tap" "${args[@]}"
-                xcrun simctl ui "$UDID" content_size large ;;
-      contrast) xcrun simctl ui "$UDID" increase_contrast enabled
-                shoot "$name-contrast" "$tap" "${args[@]}"
-                xcrun simctl ui "$UDID" increase_contrast disabled ;;
+      default)  shoot "$name" "$tap" "${args[@]}" || echo "   $name: FAILED" ;;
+      large)    xcrun simctl ui "$UDID" content_size accessibility-large || true
+                shoot "$name-large" "$tap" "${args[@]}" || echo "   $name-large: FAILED"
+                xcrun simctl ui "$UDID" content_size large || true ;;
+      contrast) xcrun simctl ui "$UDID" increase_contrast enabled || true
+                shoot "$name-contrast" "$tap" "${args[@]}" || echo "   $name-contrast: FAILED"
+                xcrun simctl ui "$UDID" increase_contrast disabled || true ;;
       *)        echo "   $name: unknown variant $variant" ;;
     esac
   done
