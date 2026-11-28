@@ -80,6 +80,7 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
     func downloadSize() async -> Int64? { Self.model.bytes }
     var seesPictures: Bool { Self.eyes.isInstalled }
     var picturesDownloadSize: Int64? { Self.eyes.bytes }
+    var filesApart: Bool { engine.filesApart }
 
     var version: String? {
         guard let installed = (try? FileManager.default.attributesOfItem(atPath: Self.model.file.path))?[.creationDate] as? Date
@@ -151,14 +152,16 @@ final class LlamaModel: CompanionModel, @unchecked Sendable {
     }
 
     /// Reads what the message states: the model writes it as JSON, as the prompt's example
-    /// shows, greedily (its most likely reading) and without thinking.
+    /// shows, greedily (its most likely reading) and without thinking; on a sequence of its
+    /// own where the model has one (`filesApart`), so the conversation's cache is left as it was.
     func file(_ prompt: FilingPrompt) async throws -> Filings {
         let text = GemmaChat.prompt(system: prompt.system, turns: [.init(speaker: .author, text: prompt.message)],
                                     tools: [], thinking: false)
         let began = ContinuousClock.now
         let pass = Pass()
         let run = try await Self.again(pass, startOver: true) {
-            try await self.engine.generate(text, written: [], sampling: nil, budget: nil, inThought: false, room: 300, maxNew: 600) {
+            try await self.engine.generate(text, written: [], sequence: Loaded.filing, sampling: nil, budget: nil,
+                                           inThought: false, room: 300, maxNew: 600) {
                 if case .token(let token, let piece) = $0 { pass.add(token, piece) }
             }
         }
@@ -404,13 +407,21 @@ private struct Run {
     }
 }
 
-/// The model as loaded, and what its KV cache holds (the prompt and output it last read and
-/// wrote, as tokens). Used by one job at a time (`Engine`), on the model's thread.
+/// The model as loaded, and what its KV cache holds for each of its sequences (the prompt and
+/// output it last read and wrote there, as tokens): the conversation's and, where the phone
+/// has the memory for one (`Engine.load`), filing's own, so that filing after every reply
+/// never puts its prompt over the conversation's. Used by one job at a time (`Engine`), on
+/// the model's thread.
 private final class Loaded: @unchecked Sendable {
+    /// The conversation's sequence (pictures are seen on it), and filing's.
+    static let conversation: llama_seq_id = 0
+    static let filing: llama_seq_id = 1
+
     let model: OpaquePointer
     let context: OpaquePointer
     let vocab: OpaquePointer
     let batch: OpaquePointer
+    /// The room each sequence has, in tokens.
     let maxContext: Int
     let batchSize: Int
     /// The sliding window of its local-attention layers, in tokens.
@@ -422,7 +433,8 @@ private final class Loaded: @unchecked Sendable {
     let thoughtEnd: [llama_token]
     let callStart: [llama_token]
     let thoughtOpened: [llama_token]
-    var cached: [llama_token] = []
+    /// What each sequence's cache holds.
+    var cached: [[llama_token]]
     /// What sees pictures (llama.cpp's mtmd, with `LlamaModel.eyes`), loaded with the first
     /// prompt that has one.
     private var eyes: OpaquePointer?
@@ -432,6 +444,7 @@ private final class Loaded: @unchecked Sendable {
         self.context = context
         self.maxContext = maxContext
         self.batchSize = batchSize
+        cached = Array(repeating: [], count: Int(llama_n_seq_max(context)))
         window = max(1, llama_model_n_swa(model))
         guard let vocab = llama_model_get_vocab(model), let batch = llama_batch_ext_init(context) else {
             throw LlamaFailed(what: "no vocabulary or batch")
@@ -477,11 +490,11 @@ private final class Loaded: @unchecked Sendable {
         return buffer.prefix(Int(max(n, 0))).map { UInt8(bitPattern: $0) }
     }
 
-    /// Reads `tokens` from position `at`, keeping logits for the last only.
-    func read(_ tokens: ArraySlice<llama_token>, at start: Int) throws {
+    /// Reads `tokens` into `sequence` from position `at`, keeping logits for the last only.
+    func read(_ tokens: ArraySlice<llama_token>, at start: Int, sequence: llama_seq_id) throws {
         llama_batch_ext_clear(batch)
         for (i, token) in tokens.enumerated() {
-            let index = llama_batch_ext_add_token(batch, 0, token)
+            let index = llama_batch_ext_add_token(batch, sequence, token)
             var position = llama_pos(start + i)
             guard index >= 0, llama_batch_ext_set_pos(batch, index, &position) else { throw LlamaFailed(what: "batch") }
         }
@@ -490,27 +503,28 @@ private final class Loaded: @unchecked Sendable {
         guard status == 0 else { throw LlamaFailed(what: "decode returned \(status)") }
     }
 
-    /// Where reading `ids` can start: after the beginning it shares with what the cache holds
+    /// Where reading `ids` into `sequence` can start: after the beginning it shares with what its cache holds
     /// (a prompt that only adds to the last reads only what's new), short of its last token,
     /// which is read again to write from, and never inside one of its `pictures`, which is
     /// seen whole. Going back further than that, the cache's
     /// sliding-window layers keep only their last positions (a window and a batch), so it can
     /// go back only as far as they still cover what follows; otherwise it reads from the start
     /// (llama.cpp's server checks the same).
-    func start(for ids: [llama_token], pictures: [Range<Int>]) -> Int {
+    func start(for ids: [llama_token], pictures: [Range<Int>], sequence: llama_seq_id) -> Int {
+        let cached = cached[Int(sequence)]
         var common = min(zip(cached, ids).prefix { $0.0 == $0.1 }.count, ids.count - 1)
         if let picture = pictures.first(where: { $0.lowerBound < common && common < $0.upperBound }) {
             common = picture.lowerBound
         }
         let memory = llama_get_memory(context)
         if common < cached.count {
-            let covered = common == 0 || llama_memory_seq_pos_min(memory, 0) <= max(0, llama_pos(common) - window)
-            guard covered, llama_memory_seq_rm(memory, 0, llama_pos(common), -1) else {
-                forget()
+            let covered = common == 0 || llama_memory_seq_pos_min(memory, sequence) <= max(0, llama_pos(common) - window)
+            guard covered, llama_memory_seq_rm(memory, sequence, llama_pos(common), -1) else {
+                forget(sequence)
                 return 0
             }
         }
-        cached = Array(cached.prefix(common))
+        self.cached[Int(sequence)] = Array(cached.prefix(common))
         return common
     }
 
@@ -559,11 +573,13 @@ private final class Loaded: @unchecked Sendable {
         return read
     }
 
-    /// Sees the picture `chunk` at position `start`: mtmd encodes it and reads it into the cache.
+    /// Sees the picture `chunk` at position `start` of the conversation's sequence: mtmd
+    /// encodes it and reads it into the cache.
     func see(_ chunk: OpaquePointer, at start: Int) throws {
         guard let eyes else { throw LlamaFailed(what: "no eyes") }
         var past: llama_pos = 0
-        let status = mtmd_helper_eval_chunk_single(eyes, context, chunk, llama_pos(start), 0, Int32(batchSize), false, &past)
+        let status = mtmd_helper_eval_chunk_single(eyes, context, chunk, llama_pos(start), Self.conversation, Int32(batchSize),
+                                                   false, &past)
         guard status == 0 else { throw LlamaFailed(what: "seeing a picture returned \(status)") }
     }
 
@@ -587,10 +603,11 @@ private final class Loaded: @unchecked Sendable {
         return eyes
     }
 
-    /// Forgets what the cache holds (after a failure, when it's no longer known).
-    func forget() {
-        llama_memory_clear(llama_get_memory(context), true)
-        cached = []
+    /// Forgets what `sequence`'s cache holds (after a failure, when it's no longer known);
+    /// the other's is its own, and stays.
+    func forget(_ sequence: llama_seq_id) {
+        _ = llama_memory_seq_rm(llama_get_memory(context), sequence, -1, -1)   // all of it, which never fails
+        cached[Int(sequence)] = []
     }
 }
 
@@ -609,7 +626,8 @@ private final class ReadPrompt {
     deinit { if let chunks { mtmd_input_chunks_free(chunks) } }
 }
 
-/// Runs the model: one job at a time, as the phone has one GPU and the model one KV cache.
+/// Runs the model: one job at a time, as the phone has one GPU, whichever of the model's
+/// sequences the job reads into.
 private final class Engine: @unchecked Sendable {
     enum Event {
         case reading(done: Int, total: Int)
@@ -621,18 +639,23 @@ private final class Engine: @unchecked Sendable {
     private var loaded: Loaded?
     /// A memory warning came while a job held the model.
     private let warned = OSAllocatedUnfairLock(initialState: false)
+    /// The model, as last loaded, has a sequence for filing beside the conversation's.
+    private let apart = OSAllocatedUnfairLock(initialState: false)
+    var filesApart: Bool { apart.withLock { $0 } }
     /// The model's own thread: loading the model, and waiting on the GPU token by token,
     /// block, which Swift's shared threads are not for.
     private static let thread = ModelThread()
 
     /// Runs the model on `prompt` (in the chat format, from after `<bos>`) and what it has
     /// `written` of this pass so far, handing each event to `onEvent`, until it ends its turn,
-    /// calls a tool or has written `maxNew` tokens. `budget`: its thought's cap, in tokens;
+    /// calls a tool or has written `maxNew` tokens. `sequence`: the conversation's, or filing's
+    /// own (the conversation's again where the model has only that). `budget`: its thought's cap, in tokens;
     /// `inThought`: the prompt opened its thought. Throws `PromptTooLong` when fewer than
     /// `room` tokens would be left for its output, and `Interrupted` when the author leaves
     /// the app meanwhile.
-    func generate(_ prompt: String, pictures: [URL] = [], written: [llama_token], sampling: Sampling?, budget: Int?,
-                  inThought: Bool, room: Int, maxNew: Int, onEvent: @escaping @Sendable (Event) -> Void) async throws -> Run {
+    func generate(_ prompt: String, pictures: [URL] = [], written: [llama_token], sequence: llama_seq_id = Loaded.conversation,
+                  sampling: Sampling?, budget: Int?, inThought: Bool, room: Int, maxNew: Int,
+                  onEvent: @escaping @Sendable (Event) -> Void) async throws -> Run {
         // iOS gives a background app no GPU, unless a reply's background task holds it
         // (`BackgroundReply`): a job asked for while the author is away (filing as they leave,
         // the first reply once the download finishes in the background) waits for them,
@@ -667,10 +690,12 @@ private final class Engine: @unchecked Sendable {
             } else {
                 model = try await Task(executorPreference: Self.thread) { try Self.load() }.value
                 loaded = model
+                apart.withLock { $0 = model.cached.count > 1 }
                 LlamaModel.removeRetired()
             }
             let job = Task(executorPreference: Self.thread) {
-                try Self.run(model, prompt: prompt, pictures: pictures, written: written, sampling: sampling, budget: budget,
+                try Self.run(model, sequence: Int(sequence) < model.cached.count ? sequence : Loaded.conversation,
+                             prompt: prompt, pictures: pictures, written: written, sampling: sampling, budget: budget,
                              inThought: inThought, room: room, maxNew: maxNew, stop: { stop() || Task.isCancelled },
                              onEvent: onEvent)
             }
@@ -682,10 +707,10 @@ private final class Engine: @unchecked Sendable {
         }
     }
 
-    /// The pass itself, on the model's thread.
-    private static func run(_ model: Loaded, prompt text: String, pictures: [URL], written: [llama_token], sampling: Sampling?,
-                            budget limit: Int?, inThought: Bool, room: Int, maxNew: Int, stop: () -> Bool,
-                            onEvent: (Event) -> Void) throws -> Run {
+    /// The pass itself, on the model's thread, reading and writing in `sequence`.
+    private static func run(_ model: Loaded, sequence: llama_seq_id, prompt text: String, pictures: [URL],
+                            written: [llama_token], sampling: Sampling?, budget limit: Int?, inThought: Bool, room: Int,
+                            maxNew: Int, stop: () -> Bool, onEvent: (Event) -> Void) throws -> Run {
         let prompt = try model.prompt(text, pictures: pictures)
         let ids = prompt.ids + written
         let left = model.maxContext - ids.count
@@ -702,20 +727,21 @@ private final class Engine: @unchecked Sendable {
         do {
             // Reading the prompt: what the cache doesn't hold, a batch at a time.
             let clock = ContinuousClock()
-            var at = model.start(for: ids, pictures: prompt.pictures.map(\.range))
+            let cache = Int(sequence)
+            var at = model.start(for: ids, pictures: prompt.pictures.map(\.range), sequence: sequence)
             run.cachedTokens = at
             let reading = clock.now
             while at < ids.count {
                 guard !stop() else { throw Interrupted() }
                 if let picture = prompt.pictures.first(where: { $0.range.lowerBound == at }) {
                     try model.see(picture.chunk, at: at)   // a picture, seen whole
-                    model.cached += ids[picture.range]
+                    model.cached[cache] += ids[picture.range]
                     at = picture.range.upperBound
                 } else {
                     let next = prompt.pictures.first { $0.range.lowerBound > at }?.range.lowerBound ?? ids.count
                     let end = min(at + model.batchSize, next)
-                    try model.read(ids[at..<end], at: at)
-                    model.cached += ids[at..<end]
+                    try model.read(ids[at..<end], at: at, sequence: sequence)
+                    model.cached[cache] += ids[at..<end]
                     at = end
                 }
                 onEvent(.reading(done: at - run.cachedTokens, total: ids.count - run.cachedTokens))
@@ -741,14 +767,14 @@ private final class Engine: @unchecked Sendable {
                 onEvent(.token(token, piece))
                 run.written += 1
                 guard !stop() else { throw Interrupted() }
-                try model.read([token], at: model.cached.count)
-                model.cached.append(token)
+                try model.read([token], at: model.cached[cache].count, sequence: sequence)
+                model.cached[cache].append(token)
             }
             run.writeSeconds = (clock.now - writing).seconds
             run.ended = "its length limit"
             return run
         } catch {
-            if !(error is Interrupted) { model.forget() }   // what the cache holds is no longer known
+            if !(error is Interrupted) { model.forget(sequence) }   // what its cache holds is no longer known
             throw error
         }
     }
@@ -767,9 +793,17 @@ private final class Engine: @unchecked Sendable {
         return chain
     }
 
+    /// Room for a whole conversation, its tools' answers and its reply, in tokens (Kevin,
+    /// 2026-11-25: "you WILL lift the limits"; 8,192 before): what each sequence has.
+    private static let sequenceRoom: UInt32 = 16384
+
+    /// What must be left to the app once the model is loaded with a sequence for filing: half
+    /// a gigabyte more than where a memory warning has it give its memory back (`nearLimit`).
+    private static let roomForFiling = 1_500_000_000
+
     /// Loads the installed model on the GPU, its per-layer embeddings left in storage and read
-    /// as needed, with room for a whole conversation, its tools' answers and its reply. Logs what
-    /// the phone offers it (TRIAL).
+    /// as needed, with room for a whole conversation, its tools' answers and its reply, and the
+    /// same again for filing where the phone has the memory. Logs what the phone offers it (TRIAL).
     private static func load() throws -> Loaded {
         let clock = ContinuousClock()
         let began = clock.now
@@ -787,31 +821,60 @@ private final class Engine: @unchecked Sendable {
         }
         let opened = clock.now
         var context = llama_context_default_params()
-        // Room for a whole conversation, its tools' answers and its reply (Kevin, 2026-11-25: "you
-        // WILL lift the limits"; 8,192 before): the higher memory limit has the room.
-        context.n_ctx = 16384
         context.n_batch = 512
         context.n_ubatch = 512
-        context.n_seq_max = 1
         // Memory kept small for the 15 Pro (Kevin's phone gives the app about 3.4 GB): its
-        // sliding-window layers keep only their window (168 MB of cache in all, not 448), and
-        // room is made for one token's output at a time, the only one read (117 MB, not 590).
+        // sliding-window layers keep only their window (168 MB of cache a sequence, not 448), and
+        // room is made for one token's output a sequence, the only one read (117 MB, not 590).
         context.swa_full = false
-        context.n_outputs_max = 1
-        guard let ctx = llama_init_from_model(model, context) else {
+        // Two sequences, the conversation's and filing's: filing after every reply reads its
+        // prompt into a cache of its own, so the next reply still finds the conversation in its
+        // own (with one, filing's prompt went over it, and the conversation was read again). Each
+        // has its own cells (not unified), so the context is twice a sequence's room. llama.cpp
+        // keeps an output's room for each sequence, and stops the app if it's given less.
+        context.kv_unified = false
+        context.n_ctx = 2 * sequenceRoom
+        context.n_seq_max = 2
+        context.n_outputs_max = 2
+        var made = llama_init_from_model(model, context)
+        // Not made, or too little memory left with it: the conversation's sequence alone, as
+        // before there were two.
+        var alone: String?
+        if let two = made {
+            let left = os_proc_available_memory()
+            if llama_n_ctx_seq(two) < sequenceRoom {
+                alone = "two had \(llama_n_ctx_seq(two)) each"
+            } else if left < roomForFiling {
+                alone = "two left \(gigabytes(left)), too little"
+            }
+            if alone != nil {
+                llama_free(two)
+                made = nil
+            }
+        } else {
+            alone = "two couldn't be made"
+        }
+        if made == nil {
+            context.n_ctx = sequenceRoom
+            context.n_seq_max = 1
+            context.n_outputs_max = 1
+            made = llama_init_from_model(model, context)
+        }
+        guard let ctx = made else {
             llama_model_free(model)
             throw LlamaFailed(what: "no context")
         }
         let loaded: Loaded
         do {
-            loaded = try Loaded(model: model, context: ctx, maxContext: Int(llama_n_ctx(ctx)), batchSize: Int(context.n_batch))
+            loaded = try Loaded(model: model, context: ctx, maxContext: Int(llama_n_ctx_seq(ctx)), batchSize: Int(context.n_batch))
         } catch {
             llama_free(ctx)   // a Loaded that failed to finish never frees them itself
             llama_model_free(model)
             throw error
         }
         trialLog("LOAD \(LlamaModel.name): model \(gigabytes(llama_model_size(model))) in \(opened - began), context "
-                 + "\(loaded.maxContext) in \(clock.now - opened); memory left \(gigabytes(before)) before, "
+                 + "\(loaded.maxContext) on " + (alone.map { "one sequence (\($0))" } ?? "each of two sequences (filing has its own)")
+                 + " in \(clock.now - opened); memory left \(gigabytes(before)) before, "
                  + "\(gigabytes(os_proc_available_memory())) after; the GPU after leaving the app "
                  + (BGTaskScheduler.supportedResources.contains(.gpu) ? "offered" : "not offered"))   // TRIAL
         return loaded

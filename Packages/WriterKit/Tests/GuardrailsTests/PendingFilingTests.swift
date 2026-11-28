@@ -72,6 +72,32 @@ final class PendingFilingTests: XCTestCase {
                         "The guild has forty members."])
     }
 
+    /// A pass over a world's other conversations: what they still have to be read, the oldest
+    /// message first whichever conversation it's in, and only what was sent since a date
+    /// (older messages that were never read are left alone).
+    func testOtherConversationsAreReadOldestMessageFirstAndOnlySinceADate() {
+        let first = Conversation(page: UUID(), turns: [said("Old Tamsin is a clockmaker.", minutes: 30),
+                                                        said("Is she?", minutes: 31),
+                                                        said("Mara is twelve.", filed: something, minutes: 32),
+                                                        said("She was expelled for mending clocks for free.", minutes: 50)])
+        let second = Conversation(page: UUID(), turns: [said("The guild has forty members.", minutes: 5),
+                                                         said("It meets at midnight.", minutes: 40),
+                                                         Conversation.Turn(question: "Where?", asked: start.addingTimeInterval(41 * 60))])
+        var undated = said("Brasswick is grey.", minutes: 45)
+        undated.answered = nil   // from before the time was kept
+        let third = Conversation(page: UUID(), turns: [undated])
+        func read(since minutes: Double) -> [String] {
+            Filer.pending(across: [first, second, third], since: start.addingTimeInterval(minutes * 60)).compactMap(\.turn.answer)
+        }
+        XCTAssertEqual(read(since: 0), ["The guild has forty members.", "Old Tamsin is a clockmaker.", "It meets at midnight.",
+                                        "She was expelled for mending clocks for free."])
+        XCTAssertEqual(read(since: 30), ["It meets at midnight.", "She was expelled for mending clocks for free."])
+        XCTAssertEqual(read(since: 50), [])
+        // Each comes with the conversation it's in.
+        let waiting = Filer.pending(across: [first, second], since: start)
+        XCTAssertEqual(waiting.map(\.talk.page), [second.page, first.page, second.page, first.page])
+    }
+
     /// Late: something filed from a message sent after it still stands, here or in another
     /// of the world's conversations.
     func testAMessageIsLateOnceSomethingFiledFromALaterOneStands() throws {
@@ -133,6 +159,45 @@ final class PendingFilingTests: XCTestCase {
         let inTime = try file(late: false)
         XCTAssertEqual(inTime.her.title, "Florica")
         XCTAssertEqual(inTime.her.values[vessel.id], .text("bireme"))
+    }
+
+    /// The app saves the pages a message changed before it saves the message's record, so the
+    /// app closing between the two leaves the pages changed and the record missing: the
+    /// message is still pending, and is read again. Reading it again files nothing twice: the
+    /// pages, type and fields it made are found by name, a field holding the same value is left
+    /// alone, and a sentence already in the page's writing isn't placed again. (The second
+    /// record is empty, so what the first reading did has no Undo of its own.)
+    func testAMessageReadAgainAfterItsRecordWasLostFilesNothingTwice() throws {
+        let age = FieldDefinition(name: "Age", kind: .text)
+        let character = PageType(name: "Character", fields: [age.id])
+        let tamsin = Document(title: "Old Tamsin", paragraphs: [Paragraph(text: "She keeps the brass bench.")],
+                              type: character.id, values: [age.id: .text("61")])
+        let message = "old Tamsin is a clockmaker in the Clockmakers' Guild, a hall of brass by the river. Actually she is 62, not 61"
+        let filings = Filings(facts: [.init(page: "Old Tamsin", field: "Trade", value: "clockmaker"),
+                                      .init(page: "Old Tamsin", field: "Guild", value: "Clockmakers' Guild"),
+                                      .init(page: "Old Tamsin", field: "Age", value: "62"),
+                                      .init(page: "Clockmakers' Guild", field: "Stands", value: "by the river")],
+                              pages: [.init(title: "Old Tamsin", type: "Character"),
+                                      .init(title: "Clockmakers' Guild", type: "Group", about: "a hall of brass by the river")])
+        let world = UUID()
+        var pages = [tamsin], schema = Schema(fields: [age], types: [character])
+        let first = Filer.file(filings, message: message, open: world, pages: &pages, schema: &schema)
+        XCTAssertEqual(first.actions.count, 7)   // a page made, four fields (one corrected), a sentence or two on each page
+        XCTAssertEqual(pages.map(\.title), ["Old Tamsin", "Clockmakers' Guild"])
+        XCTAssertEqual(pages[0].values[age.id], .text("62"))
+        let (filed, filedSchema) = (pages, schema)
+
+        // Its record lost, the turn is pending again: the same reading, then one that names her by "she".
+        let pending = Conversation(page: world, turns: [Conversation.Turn(question: "", answer: message)], aboutWorld: true)
+        XCTAssertEqual(Filer.pending(in: pending).count, 1)
+        let byPronoun = Filings(facts: filings.facts.map { .init(page: $0.page == "Old Tamsin" ? "she" : $0.page, field: $0.field, value: $0.value) },
+                                pages: filings.pages)
+        for reading in [filings, byPronoun, Filings()] {
+            let again = Filer.file(reading, message: message, open: world, pages: &pages, schema: &schema, focus: [tamsin.id])
+            XCTAssertTrue(again.entries.isEmpty)
+            XCTAssertEqual(pages, filed)
+            XCTAssertEqual(schema, filedSchema)
+        }
     }
 
     /// All of it together, as the app is to do it: each message of the world's conversation

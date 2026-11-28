@@ -545,6 +545,18 @@ extension Filer {
         conversation.turns.filter { $0.filed == nil && $0.answer.map(states) == true }
     }
 
+    /// The messages still to be read across `conversations` (`pending(in:)`), each with its
+    /// conversation, the oldest first, and only those sent since `date`: what a pass over a
+    /// world's other conversations reads. A message with no time kept (from before it was) is
+    /// older than any date.
+    public static func pending(across conversations: [Conversation], since date: Date) -> [(turn: Conversation.Turn, talk: Conversation)] {
+        func sent(_ turn: Conversation.Turn) -> Date { turn.answered ?? .distantPast }
+        return conversations.filter { ($0.lastActive ?? .distantPast) > date }   // none other can hold one
+            .flatMap { talk in pending(in: talk).map { (turn: $0, talk: talk) } }
+            .filter { sent($0.turn) > date }
+            .sorted { sent($0.turn) < sent($1.turn) }
+    }
+
     /// Whether `turn`'s message is read late: something filed from a message the author
     /// sent after it still stands, further on in `conversation` or in any of `elsewhere`
     /// (the world's other conversations; this one is left out of them). What a late message

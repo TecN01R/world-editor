@@ -72,11 +72,11 @@ struct CompanionPanel: View {
                     if !turn.question.isEmpty { reply(turn) }   // empty: the author began
                     // What was filed from the author's message before this reply shows under the
                     // reply, as the companion's doing, in the order it happens: filing runs after
-                    // the reply, once the conversation pauses (Kevin, 2026-11-24).
-                    if i > 0, let record = turns[i - 1].filed, !record.isEmpty { filed(record, from: turns[i - 1].id) }
+                    // the reply (Kevin, 2026-11-24), straight after it since 2026-11-27.
+                    if i > 0 { filing(from: turns[i - 1]) }
                     if let answer = turn.answer { mine(answer, attached: turn.attached ?? []) }
                     // No reply after it (being tried again): under the message meanwhile.
-                    if i == turns.count - 1, let record = turn.filed, !record.isEmpty { filed(record, from: turn.id) }
+                    if i == turns.count - 1 { filing(from: turn) }
                 }
                 Live { status }   // as the reply is written, only this redraws, not every message
             }
@@ -108,9 +108,11 @@ struct CompanionPanel: View {
             if ready { composer }
         }
         .task { companion.readModelVersion() }
-        // Back in the app after the download dropped: it picks up where it stopped.
+        // Back in the app: a download that dropped picks up where it stopped; otherwise the
+        // companion readies itself as on opening, and files what was still waiting to be.
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active, companion.state == .downloadPaused { resume() }
+            guard phase == .active else { return }
+            if companion.state == .downloadPaused { resume() } else { companion.returned() }
         }
         .sheet(isPresented: $showingChanges) { ChangesView().environment(library).environment(companion) }
         .sheet(isPresented: $editingInstructions) { CompanionInstructions().environment(companion) }
@@ -407,12 +409,34 @@ struct CompanionPanel: View {
             ? Text("\(filed(line)) · changed since") : filed(line)
     }
 
+    /// What became of the author's message, under the companion's reply to it: what was filed
+    /// from it (`filed`), or, while filing is on its way to it or the model is reading it, one
+    /// quiet line saying so.
+    @ViewBuilder private func filing(from turn: Conversation.Turn) -> some View {
+        switch companion.filingStatus(of: turn.id) {
+        case .filed: if let record = turn.filed { filed(record, from: turn.id) }
+        case .waiting, .reading: pagesNote("Adding to your pages\u{2026}") { EmptyView() }
+        case .none, .nothing: EmptyView()
+        }
+    }
+
+    /// A note about the author's pages under a reply, left-aligned with it: what it says,
+    /// then its lines.
+    private func pagesNote<Lines: View>(_ title: LocalizedStringKey, @ViewBuilder lines: () -> Lines) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(title, systemImage: "square.stack.3d.up")
+            lines()
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     /// What was filed from the author's message, under the companion's reply to it,
     /// left-aligned with the reply: each page made, type given and field filled, in
     /// their words, with its own Undo.
     private func filed(_ record: FilingRecord, from turn: UUID) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label("Added to Your Pages", systemImage: "square.stack.3d.up")
+        pagesNote("Added to Your Pages") {
             ForEach(library.describe(record), id: \.self) { line in
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     // A line opens its page: what was just added, where it now lives (Kevin,
@@ -428,9 +452,6 @@ struct CompanionPanel: View {
                 }
             }
         }
-        .font(.footnote)
-        .foregroundStyle(.secondary)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// "New page: Myriddea (Place)", "Casperica · Character", "Casperica · Origin: Myriddea":

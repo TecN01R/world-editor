@@ -289,9 +289,9 @@ as they remember each other.
 **Who "she" is: the subject in focus.** With no page open, "she" had no page to
 mean, so it wasn't filed (found in the log of Kevin's phone, 2026-11-27): after "Old
 Tamsin is a clockmaker", "She was expelled for mending clocks for free." never
-reached Old Tamsin's page. The logic for it is in WriterKit since 2026-11-27 and
-tested there; the app hands it over with the first install of the correction
-(`docs/todo.md`). `Filer.focus` finds who they were last talking about, from their
+reached Old Tamsin's page. The logic for it is in WriterKit and tested there, and
+the app hands it over as it files (`Companion.file`), since the correction's first
+install. `Filer.focus` finds who they were last talking about, from their
 three messages before the one being read, the newest first, and from each: the pages
 its filing put facts or sentences on, then the pages it made or linked, then the
 pages it names by title (so "What do I have on the Clockmakers' Guild?" counts,
@@ -332,17 +332,59 @@ reads "A thalassocratic nation" (its Mentions show Casperica, through the
 link). His rulings: it happens on its own, with **Undo**; only what's said to
 the companion is filed, never the page's writing.
 
-- **When:** once the conversation pauses: the companion closed, another page
-  or conversation opened, or two minutes after a reply with no message (Kevin,
-  2026-11-24). Filing reads its own prompt on the model's one cache, so filing
-  after every reply made the next reply read the whole conversation again
-  (20–30 s on the 26B). A message sent, or Try Again, while it files stops
-  it; it picks up at the next pause. A reply prepared on opening a page waits
-  for it.
+- **When:** after every reply (approved by Kevin on 2026-11-27). Until then it
+  waited for the conversation to pause, two minutes after a reply or on
+  leaving it (his call, 2026-11-24): filing read its own prompt on the model's
+  one cache, so filing after every reply made the next reply read the whole
+  conversation again (20–30 s on the 26B). What waited was kept only in
+  memory, so whatever was still waiting when the app closed was never filed.
+  Now nothing waits in memory: `Companion.fileWaiting` reads off the saved
+  conversation which of the author's messages the model hasn't read
+  (`Filer.pending`: no record yet, and stating something) and files them
+  oldest first, looking again after each one, since the one before has left
+  its record and may be who the next one's "she" means. It runs after every
+  reply, when the conversation is opened or the author comes back to the app
+  with it in front, and when they leave it. A message sent, or Try Again,
+  stops it (the reply goes first; one the companion begins itself waits for
+  the message being read), and it goes on from the saved conversation at the
+  next of those moments: a message the app closed on is filed at the next
+  launch. One the model fails on is left for the next launch too. Every
+  message read keeps its record, even an empty one, so none is read twice, but
+  by Try Again when nothing came of it.
+- **Saved in order:** the pages a message changed are on disk before its
+  record is (`Library.file`), where the record used to be saved at once and
+  the pages a moment later. If the app closes between the two, the pages are
+  changed and the record is missing, so the message is read again at the next
+  launch, and that files nothing twice: the pages, type and fields it made are
+  found by name, a field holding the same value is left alone, and a sentence
+  already in the page's writing isn't placed again (tested in WriterKit). What
+  the first reading did then has no Undo of its own; its sentences are still
+  marked as placed.
+- **A cache of its own:** the model is loaded with two sequences where the
+  phone has the memory (`Engine.load`: llama.cpp's `n_seq_max` 2, not unified,
+  16,384 tokens each), the conversation's and filing's. Filing's prompt then
+  never goes over the conversation's, and the next reply reads only the new
+  message. After a reply what the author said is filed first, so its line shows
+  within a second or two, and then the model reads the conversation up to
+  there (the reply as its next prompt will have it), ready for the next
+  message (`Companion.settle`); a message sent meanwhile stops either. If
+  the two-sequence context can't be made, or less than 1.5 GB is left to the
+  app with it, the model is loaded with the one sequence, as before: filing's
+  prompt then goes over the conversation's, which is read again after it. The phone's log
+  says which (`LOAD … on each of two sequences`, or `on one sequence` and
+  why).
+- **The other conversations:** once the open conversation has nothing left to
+  read, the same pass reads what the world's other saved conversations still
+  have, oldest message first (`Companion.sweep`): at most 20 messages in a
+  launch, only ones sent in the last 30 days (older ones that were never read
+  are left as they are), and not while the phone is hot or in Low Power Mode.
+  A message read after something was filed from a later one only adds
+  (`Filer.isLate`).
 - **How:** a second, short request on the same model, without thinking and
   greedy (its most likely reading): `FilingPrompt` (instructions with one
   worked example; the open page, the world's types and fields, the other
-  pages' titles, what the companion said, and the message). The model writes
+  pages' titles, what the companion said, and the message; in the world's
+  conversation also who they were last talking about, above). The model writes
   JSON as the example shows, and `Filings.parse` reads each list on its own.
   Not constrained decoding: AnyLanguageModel's took a minute on the phone and
   looped (Kevin's first try, 2026-11-24); plain JSON took 2 to 3 seconds there
@@ -359,7 +401,7 @@ the companion is filed, never the page's writing.
   a value written as a name mid-sentence ("a sword called Mercy") gets a page
   of its own if it has none (the model often files the name without listing
   the page).
-- **What shows:** under the companion's reply to the author's message, left-aligned (Kevin, 2026-11-24: filing comes after the reply), *Added to Your Pages*: each
+- **What shows:** under the companion's reply to the author's message, left-aligned (Kevin, 2026-11-24: filing comes after the reply): while filing is on its way to the message or the model is reading it, one quiet line, "Adding to your pages…" (`Companion.filingStatus`); then *Added to Your Pages*: each
   page made, type given and field filled on its own line with its own Undo
   (Kevin: "each discrete action has its own undo"). Undo takes back what the
   author hasn't changed since; a new type or field nothing uses any more goes
@@ -372,6 +414,29 @@ the companion is filed, never the page's writing.
   (`Conversation.changedLater`). Without it, undoing "Vessel: trireme" and
   then "bireme (was trireme)" brought the trireme back. What one message did
   to a page it made goes with that page.
+
+**Checking it on the phone.** Debug builds check filing against the phone's
+own model (`FilingSelfCheck`, in WriterKit): once for each build installed,
+and whenever a file named `selfcheck` is put in the app's Documents, with the
+conversation open, the model loaded and nothing left to file. Five made-up
+exchanges are read by the model and filed as real ones are, into a small world
+of their own in memory, never the author's pages: Old Tamsin, a Character aged
+61, and The Clockmakers' Guild, a Group. They're written as messages to the
+companion often are, a sentence at a time with no capital or full stop: a
+plain statement naming its pages; "she was expelled from the guild for mending
+clocks for free", which has to land on Old Tamsin's page as written; "the
+guild meets in the old customs house", on the guild's; a question, from which
+nothing is filed; and "Actually Old Tamsin is 71 not 61. Does that change
+anything?", after which her Age is 71. A reply stops the check as it stops
+filing, and it starts over. The log (`candidates.log`, each line with the time
+it was written) gets `SELF-CHECK a pass` or `SELF-CHECK b FAIL:` and why, then
+`SELF-CHECK 5/5`. For each message filed it gets a `FILING` line: which turn
+by its position, how long it took and what was filed in counts, never its
+words; `FILING BACKLOG` and a number when a launch finds messages waiting; and
+`FILING SWEEP` for a message of another conversation. One thing the check's
+last exchange shows by being two sentences: run together with a comma ("…71
+not 61, does that change anything?") it is one sentence and a question, so
+none of it is filed.
 
 Kevin's try on the phone (2026-11-24) filed the facts but left Myriddea blank:
 the model rarely gave a new page its text, so the prompt now asks for it

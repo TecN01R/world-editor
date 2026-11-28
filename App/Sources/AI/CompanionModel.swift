@@ -38,6 +38,9 @@ protocol CompanionModel: Sendable {
     /// What the author's message states, read out for filing (types, fields,
     /// new pages); `Filer` then keeps only what's in their words.
     func file(_ prompt: FilingPrompt) async throws -> Filings
+    /// Filing reads its prompt apart from the conversation's, in a cache of its own: once
+    /// the model has read the conversation, filing doesn't make it read it again.
+    var filesApart: Bool { get }
 }
 
 extension CompanionModel {
@@ -55,6 +58,7 @@ extension CompanionModel {
     var version: String? { nil }
     /// Files nothing: filing is built for the companion's own model (Apple's runs only on the simulator).
     func file(_ prompt: FilingPrompt) async throws -> Filings { Filings() }
+    var filesApart: Bool { false }
 }
 
 extension Reasoned {

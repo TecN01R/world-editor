@@ -182,32 +182,43 @@ final class Library {
 
     /// What the model is asked, to read types, fields and pages out of the
     /// author's `message` in `page`'s conversation, answering `asked`;
-    /// `aboutWorld`: in a conversation about the whole world, with no page open.
-    func filingPrompt(for page: WriterCore.Document, aboutWorld: Bool, asked: String?, message: String) -> FilingPrompt {
-        aboutWorld ? FilingPrompt(world: pages, schema: schema, asked: asked, message: message)
+    /// `aboutWorld`: in a conversation about the whole world, with no page open, where
+    /// `focus` is who they were last talking about (`Filer.focus`) and `saidBefore` their
+    /// message just before (`Filer.said`).
+    func filingPrompt(for page: WriterCore.Document, aboutWorld: Bool, asked: String?, message: String,
+                      focus: [UUID] = [], saidBefore: String? = nil) -> FilingPrompt {
+        aboutWorld ? FilingPrompt(world: pages, schema: schema, asked: asked, message: message, focus: focus, saidBefore: saidBefore)
                    : FilingPrompt(open: page, pages: pages, schema: schema, asked: asked, message: message)
     }
 
     /// Files what the model read out of `message` (`Filer` keeps only the
-    /// author's own words, and replaces nothing) and saves it.
+    /// author's own words, and replaces nothing) and saves it. The pages it changed are on
+    /// disk when it returns, before the caller saves the message's record: if the app closes
+    /// between the two, the message is read again at the next launch (which files nothing
+    /// twice), rather than keeping a record of changes the pages never got.
     /// - Parameter again: the record of an earlier reading that found nothing (Try Again
     ///   reads the message again): only values still as it saw them may be corrected.
     /// - Parameter sent: the open page's fields and title when the author sent the
     ///   message: only what's still as it was then on that page is changed.
+    /// - Parameter late: something was filed from a later message already (`Filer.isLate`):
+    ///   this one only adds.
+    /// - Parameter focus: in a conversation about the whole world, who they were last
+    ///   talking about, as the model was told (`filingPrompt`).
     func file(_ filings: Filings, message: String, on page: UUID, again: FilingRecord? = nil,
-              sent: (values: [UUID: FieldValue], title: String)? = nil) -> FilingRecord {
+              sent: (values: [UUID: FieldValue], title: String)? = nil, late: Bool = false, focus: [UUID] = []) -> FilingRecord {
         var pages = pages, schema = schema
         let open = pages.first { $0.id == page }
         let seen = again?.seen ?? sent?.values ?? open?.values ?? [:]
         let seenTitle = again.map { $0.seenTitle } ?? sent?.title ?? open?.title
         var record = Filer.file(filings, message: message, open: page, pages: &pages, schema: &schema,
                                 replaceable: { p, field, was in p == page ? seen[field] == was : again == nil },
-                                renames: seenTitle != nil && seenTitle == open?.title)
+                                renames: seenTitle != nil && seenTitle == open?.title, late: late, focus: focus)
         record.seen = seen
         record.seenTitle = seenTitle
         record.date = Date()
         if !record.isEmpty {
             commit(pages, schema)
+            flushAll()   // not left to the save a moment later, which the record would be saved ahead of
             unseen.formUnion(record.actions.compactMap(\.page).filter { $0 != selection })   // the open page is seen
         }
         return record

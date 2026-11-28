@@ -8,7 +8,7 @@ import WriterCore
 /// they think out loud with. What it says comes from the model alone, stock, with its
 /// tools (`CompanionPrompt.plain`): nothing checks or filters a reply
 /// afterwards (Kevin's ruling, 2026-11-23). It never writes into the page (docs/ai-charter.md);
-/// once the conversation pauses, what the author said is filed into the world's
+/// after each reply, what the author said is filed into the world's
 /// types, fields and pages, in their words, with Undo (`Filer`; Kevin's ruling,
 /// 2026-11-23).
 @MainActor @Observable
@@ -33,8 +33,8 @@ final class Companion {
     /// or sent back to the model (its makers' advice).
     private(set) var thoughts: [String: String] = [:]
     /// Its conversation is on screen (the world's, in `RootView`). Opening it prepares the
-    /// open conversation's reply, if one is due (`prepareSoon`); closing it pauses the
-    /// conversation, so what the author said is filed (`fileWaiting`).
+    /// open conversation's reply, if one is due (`prepareSoon`); leaving it files what they
+    /// said that's still to be (`fileWaiting`), if a reply had stopped that.
     var isOpen = false {
         didSet {
             if isOpen, !oldValue { prepareSoon() }
@@ -114,17 +114,25 @@ final class Companion {
     private var opened: (page: WriterCore.Document, library: Library)?
     /// The model's download, while it runs.
     private var downloading: Task<Void, Never>?
-    /// Filing what the author said; the next reply waits for it (one model, one job at a time).
+    /// Filing what the author said, while it's under way (`fileWaiting`); a reply stops it
+    /// (`stopFiling`) and waits for it to stop (one GPU, one job at a time).
     private var filing: Task<Void, Never>?
-    /// What the author said that's still to be filed, and the world it was said in. Filing
-    /// reads a prompt of its own on the model's one cache, so filing after every reply made
-    /// the next reply read the whole conversation again (20–30 s). It's filed once the
-    /// conversation pauses: the companion closed, another page or conversation opened, or two
-    /// minutes after a reply with no message (Kevin's call, 2026-11-24; at one minute it
-    /// often began as he was sending).
-    private var unfiled: [(turn: Conversation.Turn, page: UUID, aboutWorld: Bool, world: URL?, library: Library)] = []
-    /// The two minutes after a reply, before what's `unfiled` is filed.
-    private var pause: Task<Void, Never>?
+    /// The message the model is reading now, to file it.
+    private(set) var filingTurn: UUID?
+    /// Messages whose filing failed in this session (the model's error, or their page gone):
+    /// left for the next launch, so filing doesn't go round on one.
+    private var skipped: Set<UUID> = []
+    /// The message Try Again's reply answers, when its first reading found nothing: read once
+    /// more (`Turn.needsFiling`; a weaker model had read "trireme" for "bireme").
+    private var readAgain: UUID?
+    /// How many messages of the world's other conversations were read since launch (`sweepLimit`).
+    private var swept = 0
+    /// TRIAL: the launch's `FILING BACKLOG` line is written.
+    @ObservationIgnored private var countedBacklog = false
+    /// The model has replied, read the conversation or filed since launch, so it's loaded.
+    @ObservationIgnored private var modelWarm = false
+    /// Debug builds' self-check failed on the model's own error, so it's left for the next launch.
+    @ObservationIgnored private var selfCheckFailed = false
     private static let log = Logger(subsystem: "com.tecn01r.worldeditor", category: "companion")
 
     init() {
@@ -230,7 +238,6 @@ final class Companion {
         // The same page again (folding or unfolding rebuilds the editor): leave a reply or
         // Try Again in progress alone.
         guard page.id != conversation.page || directory != store?.directory else { return }
-        fileWaiting()   // the conversation it leaves paused
         opened = (page, library)
         preparing?.cancel()
         store = directory.flatMap { try? ConversationStore(directory: $0) }
@@ -240,18 +247,24 @@ final class Companion {
         others = (store?.all() ?? []).filter { $0.page != page.id }
         retracted = nil
         if state != .downloadPaused { state = .idle }   // a paused download stays on offer
+        if !countedBacklog {
+            // TRIAL: what the last launch left to be read (a reply stopped its filing, or the app closed first).
+            countedBacklog = true
+            let backlog = waiting(in: conversation).count + sweep().count
+            if backlog > 0 { trialLog("FILING BACKLOG \(backlog)") }
+        }
         prepareSoon(after: .seconds(2))   // settle: the author may be passing through
     }
 
     /// Prepares the open page's reply after `pause`, if one is due (a blank page too: it
-    /// helps you start), or else has the model ready for the author's message (`warmUp`);
-    /// only while the companion is open: a reply is seconds of the GPU's work, too much to
-    /// spend on every page passed through with it closed. Not while the phone is hot or in
-    /// Low Power Mode either: the author begins instead.
+    /// helps you start), or else has the model ready for the author's message and files what
+    /// they've said (`settle`); only while the companion is open: a reply is seconds of the
+    /// GPU's work, too much to spend on every page passed through with it closed. Not while
+    /// the phone is hot or in Low Power Mode either: the author begins instead, and only
+    /// what they've said already is filed.
     private func prepareSoon(after pause: Duration = .zero) {
-        let phone = ProcessInfo.processInfo
-        guard isOpen, download == nil, state == .idle, let opened,
-              phone.thermalState != .serious, phone.thermalState != .critical, !phone.isLowPowerModeEnabled else { return }
+        guard isOpen, download == nil, state == .idle, let opened else { return }
+        guard !Self.sparing else { fileWaiting(); return }
         preparing?.cancel()
         preparing = Task {
             try? await Task.sleep(for: pause)
@@ -259,9 +272,32 @@ final class Companion {
             if replyDue {
                 await ask(about: opened.page, in: opened.library)
             } else {
-                await warmUp(opened.page, in: opened.library)
+                await settle(opened.page, in: opened.library)
             }
         }
+    }
+
+    /// The phone is hot or in Low Power Mode: the model isn't run for what the author didn't ask for.
+    private static var sparing: Bool {
+        let phone = ProcessInfo.processInfo
+        return phone.thermalState == .serious || phone.thermalState == .critical || phone.isLowPowerModeEnabled
+    }
+
+    /// The author is back in the app with the conversation in front: as on opening it; and
+    /// after a reply that failed, what they said is still filed.
+    func returned() {
+        if state == .failed { fileWaiting() } else { prepareSoon() }
+    }
+
+    /// The conversation is at rest, a reply just written or none due: what the author has said
+    /// is filed (`fileWaiting`), so its line shows as soon as it can, and then the model reads
+    /// the conversation up to here, ready for their next message (`warmUp`). On one cache
+    /// filing reads its prompt over the conversation's, so `warmUp` waits for it and reads the
+    /// conversation again; where filing has a cache of its own (`filesApart`) neither disturbs
+    /// the other. A message sent meanwhile stops both.
+    private func settle(_ page: WriterCore.Document, in library: Library) async {
+        fileWaiting()
+        await warmUp(page, in: library)
     }
 
     /// Whether the companion's turn is next: nothing it asked is waiting for the author, and
@@ -275,11 +311,12 @@ final class Companion {
     /// so its reply to the author's next message starts from their words. Loading on sending
     /// cost 2–3 s of most replies' first words (the Duo's log, 2026-11-26).
     private func warmUp(_ page: WriterCore.Document, in library: Library) async {
-        guard model.isInstalled, !needsDownload, await model.unavailableReason == nil else { return }
-        await filing?.value
+        guard !Self.sparing, model.isInstalled, !needsDownload, await model.unavailableReason == nil else { return }
+        if !model.filesApart { await filing?.value }   // on one cache, read after filing has read its own prompt over it
         guard !Task.isCancelled, conversation.page == page.id else { return }
         let page = library.pages.first { $0.id == page.id } ?? page   // as it is now, not when it opened
         await model.warmUp(prompt(about: page, in: library), tools: tools(for: page, in: library), thinking: thinks)
+        modelWarm = true
     }
 
     /// The reply's prompt: the conversation (`kept`: the most of it, in characters, that it keeps),
@@ -439,16 +476,14 @@ final class Companion {
         if !reply.reasoning.isEmpty { thoughts[reply.reply] = reply.reasoning }
         save()
         state = .idle
-        // Replied: what the author said is filed once the conversation pauses (`unfiled`).
-        if let answered = conversation.turns.dropLast().last,
-           answered.needsFiling, let message = answered.answer, Filer.states(message) {
-            unfiled.append((answered, page.id, conversation.aboutWorld, store?.directory, library))
-            pause?.cancel()
-            pause = Task {
-                try? await Task.sleep(for: .seconds(120))
-                if !Task.isCancelled { fileWaiting() }
-            }
-        }
+        modelWarm = true
+        // Try Again's reply: what the author said is read once more if nothing came of it the first time.
+        if let answered = conversation.turns.dropLast().last, answered.filed?.filedNothing == true { readAgain = answered.id }
+        // Replied: what the author said is filed now, after every reply (approved by Kevin,
+        // 2026-11-27). It used to wait for two minutes of quiet (his call, 2026-11-24, when
+        // filing cost the next reply the whole conversation read again), and whatever was still
+        // waiting when the app closed was lost.
+        await settle(page, in: library)
     }
 
     /// Whether a word is one of the language's, by the phone's own English dictionary.
@@ -460,74 +495,228 @@ final class Companion {
         }
     }
 
-    /// Files what's waiting to be, in order, after any filing already under way.
+    /// Files what the author has said that the model hasn't read yet (`Filer.pending`: read
+    /// off the saved conversations, so nothing waits only in memory, where closing the app
+    /// lost it): the open conversation's messages, oldest first, then the world's other
+    /// conversations' (`sweep`). Each is looked for afresh, the one before having left its
+    /// record. Run after every reply and whenever the conversation comes to rest (`settle`:
+    /// on opening it, and on coming back to the app), and when the author leaves the
+    /// conversation; a reply stops it (`stopFiling`), and the next of those goes on from
+    /// wherever it had got to.
     private func fileWaiting() {
-        pause?.cancel()
-        guard !unfiled.isEmpty else { return }
-        let waiting = unfiled, previous = filing
-        unfiled = []
+        guard filing == nil, model.isInstalled, !needsDownload, download == nil,
+              state == .failed || (state == .idle && !replyDue), let library = opened?.library else { return }
+        var due = nextToFile(in: library) != nil
+        #if DEBUG
+        due = due || selfCheckDue
+        #endif
+        guard due else { return }
         filing = Task {
-            await previous?.value
-            for (n, item) in waiting.enumerated() {
-                // Stopped for a reply: the rest waits for the next pause.
-                guard await file(item.turn, page: item.page, aboutWorld: item.aboutWorld, world: item.world, in: item.library)
-                else {
-                    unfiled.insert(contentsOf: waiting[n...], at: 0)
-                    return
-                }
+            defer { filing = nil }
+            // (A reply the companion began itself waits for the message being read, not for the rest.)
+            while !Task.isCancelled, state != .thinking, let next = nextToFile(in: library) {
+                guard await file(next.turn, of: next.talk, in: library) else { return }
             }
-            // Filing read its own prompt over the conversation's: the conversation is read again
-            // before the author's next message, if the companion is still open (not when filing
-            // was stopped for a reply).
-            if !Task.isCancelled { prepareSoon() }
+            #if DEBUG
+            await selfCheck()
+            #endif
         }
     }
 
     /// The author sent a message (or asked again): the reply goes first, filing after.
     private func stopFiling() {
-        pause?.cancel()
         filing?.cancel()
     }
 
-    /// Files what the author said in `turn` of `page`'s conversation in `world`; false when
-    /// stopped for a reply before it could.
-    private func file(_ turn: Conversation.Turn, page: UUID, aboutWorld: Bool, world: URL?, in library: Library) async -> Bool {
+    /// The messages of `talk` still to be read, but for those whose filing failed this session.
+    private func waiting(in talk: Conversation) -> [Conversation.Turn] {
+        Filer.pending(in: talk).filter { !skipped.contains($0.id) }
+    }
+
+    /// The author's next message to read, with its conversation as it is now: the one Try
+    /// Again's reply answers (`readAgain`), the open conversation's oldest, then the sweep's.
+    private func nextToFile(in library: Library) -> (turn: Conversation.Turn, talk: Conversation)? {
+        // Only while this world's conversations are still the ones open (the author may switch worlds).
+        guard let store, store.directory == library.conversationsDirectory else { return nil }
+        if let again = conversation.turns.first(where: { $0.id == readAgain }),
+           again.needsFiling, again.answer.map(Filer.states) == true, !skipped.contains(again.id) {
+            return (again, conversation)
+        }
+        if let turn = waiting(in: conversation).first { return (turn, conversation) }
+        return sweep().first
+    }
+
+    /// The most messages of other conversations read in one launch, and how far back they go.
+    private static let sweepLimit = 20
+    private static let sweepReach: TimeInterval = 30 * 86_400
+
+    /// The sweep: what is still to be read in the world's other conversations, as saved (one
+    /// the author left while a reply held its filing up, or the app closed first), oldest
+    /// message first. Not while the phone is hot or in Low Power Mode, at most `sweepLimit` in a
+    /// launch, and only messages of the last 30 days: older ones that were never read (lost
+    /// while what waited was kept only in memory, before 2026-11-27) are left alone, rather
+    /// than bring words from months ago into the pages unasked.
+    private func sweep() -> [(turn: Conversation.Turn, talk: Conversation)] {
+        guard !Self.sparing else { return [] }
+        let waiting = Filer.pending(across: others, since: Date.now.addingTimeInterval(-Self.sweepReach))
+            .filter { !skipped.contains($0.turn.id) }
+        return Array(waiting.prefix(max(0, Self.sweepLimit - swept)))
+    }
+
+    /// Files what the author said in `turn` of `talk`: the model reads it out (`filingPrompt`),
+    /// what it read goes into the pages in their words (`Library.file`), and the record is kept
+    /// on the turn whatever came of it, so it isn't read twice. False when stopped for a reply
+    /// before it could.
+    private func file(_ turn: Conversation.Turn, of talk: Conversation, in library: Library) async -> Bool {
         guard !Task.isCancelled else { return false }
-        // Still the open world (the author may have switched worlds since). A world
-        // conversation has no page of its own; it files into the pages it names.
-        guard world == library.conversationsDirectory, let message = turn.answer,
+        let page = talk.page, world = library.conversationsDirectory
+        let aboutWorld = Self.isAboutWorld(talk, in: library), elsewhere = page != conversation.page
+        if readAgain == turn.id { readAgain = nil }
+        // Not tried again this session, whatever stops it short of a record (the model's error,
+        // its page or conversation gone): only a reply stopping it, or its record, lifts this.
+        skipped.insert(turn.id)
+        // A world conversation has no page of its own; it files into the pages it names.
+        guard let message = turn.answer,
               let doc = aboutWorld ? library.worldSubject(page) : library.pages.first(where: { $0.id == page }) else { return true }
+        // TRIAL: which message, by its place and never its words.
+        let place = (elsewhere ? "SWEEP conversation \(page.uuidString.prefix(8)), " : "")
+            + "turn \((talk.turns.firstIndex { $0.id == turn.id } ?? 0) + 1) of \(talk.turns.count)"
+        // Who they were last talking about, as the model is told and as its answer is then taken.
+        let focus = aboutWorld ? Filer.focus(before: turn.id, in: talk, pages: library.pages) : []
+        let prompt = library.filingPrompt(for: doc, aboutWorld: aboutWorld, asked: turn.question, message: message,
+                                          focus: focus, saidBefore: Filer.said(before: turn.id, in: talk))
+        let began = ContinuousClock.now
+        filingTurn = turn.id
+        defer { filingTurn = nil }
         let filings: Filings
         do {
-            filings = try await model.file(library.filingPrompt(for: doc, aboutWorld: aboutWorld, asked: turn.question,
-                                                                message: message))
+            filings = try await model.file(prompt)
         } catch {
-            if Task.isCancelled { return false }
+            if Task.isCancelled {
+                skipped.remove(turn.id)   // stopped for a reply: read once that has come
+                return false
+            }
+            if elsewhere { swept += 1 }
             Self.log.error("Filing failed: \(String(describing: error), privacy: .public)")
-            trialLog("FILING ERROR: \(String(describing: error))")   // TRIAL
+            trialLog("FILING ERROR \(place): \(String(describing: error))")   // TRIAL
             return true
         }
-        // Gone meanwhile (a new conversation, another world): nothing to file into.
-        let there = conversation.page == page ? conversation.turns.contains { $0.id == turn.id }
-                                              : (try? store?.load(page))?.turns.contains { $0.id == turn.id } == true
-        guard there, world == library.conversationsDirectory,
+        if elsewhere { swept += 1 }
+        modelWarm = true
+        // Another world opened meanwhile: read when its own conversations are open again.
+        guard world == library.conversationsDirectory else {
+            skipped.remove(turn.id)
+            return true
+        }
+        // Gone meanwhile (its conversation deleted, or its page): nothing to file into.
+        guard let now = page == conversation.page ? conversation : others.first(where: { $0.page == page }),
+              now.turns.contains(where: { $0.id == turn.id }),
               aboutWorld || library.pages.contains(where: { $0.id == page }) else { return true }
-        // Kept even when empty: Try Again reads the message again only if nothing came of it.
+        // Read after something was filed from a later message (it waited through a launch or
+        // two): it only adds.
+        let late = Filer.isLate(turn.id, in: now, elsewhere: others + [conversation])
         let sent = turn.seen.map { (values: $0, title: turn.seenTitle ?? "") }
-        setFiled(library.file(filings, message: message, on: page, again: turn.filed, sent: sent), turn: turn.id, page: page)
+        // Its record is kept even when empty: it has been read. (The pages are on disk before it.)
+        let record = library.file(filings, message: message, on: page, again: turn.filed, sent: sent, late: late, focus: focus)
+        guard setFiled(record, turn: turn.id, page: page) else { return true }   // its conversation couldn't be saved
+        skipped.remove(turn.id)
+        trialLog("FILING \(place): \(ContinuousClock.now - began); \(Self.counts(record))" + (late ? "; read late, so it only added" : ""))   // TRIAL
         return true
     }
 
-    private func setFiled(_ record: FilingRecord, turn: UUID, page: UUID) {
+    /// TRIAL: what a filing did, in counts and never its words: pages made, types given, fields
+    /// filled and corrected, pages renamed, and pages its sentences were placed on.
+    private static func counts(_ record: FilingRecord) -> String {
+        var counts: [(name: String, count: Int)] = [("made", 0), ("typed", 0), ("filled", 0), ("corrected", 0), ("renamed", 0), ("placed", 0)]
+        for action in record.actions {
+            switch action {
+            case .created: counts[0].count += 1
+            case .typed: counts[1].count += 1
+            case .value: counts[2].count += 1
+            case .replaced: counts[3].count += 1
+            case .renamed: counts[4].count += 1
+            case .placed, .described: counts[5].count += 1
+            case .newType, .newField, .fieldAdded: break
+            }
+        }
+        let done = counts.filter { $0.count > 0 }.map { "\($0.count) \($0.name)" }
+        return done.isEmpty ? "nothing" : done.joined(separator: ", ")
+    }
+
+    /// Where filing has got to with what the author said in a turn of the open conversation.
+    enum FilingStatus {
+        /// Nothing to file, or nothing on its way: it stated nothing, or filing isn't under way.
+        case none
+        /// Filing is under way and will come to it.
+        case waiting
+        /// The model is reading it now.
+        case reading
+        /// Read, and something of it is in the pages.
+        case filed
+        /// Read, and nothing came of it (or all of it was undone).
+        case nothing
+    }
+
+    func filingStatus(of turn: UUID) -> FilingStatus {
+        if filingTurn == turn { return .reading }
+        guard let turn = conversation.turns.first(where: { $0.id == turn }) else { return .none }
+        if let record = turn.filed { return record.isEmpty ? .nothing : .filed }
+        // Still to be read (as `Filer.pending` has it), and filing is on its way to it.
+        return filing != nil && !skipped.contains(turn.id) && turn.answer.map(Filer.states) == true ? .waiting : .none
+    }
+
+    #if DEBUG
+    /// Debug builds check that filing works with the model on this phone (`FilingSelfCheck`:
+    /// five made-up exchanges filed into a small world of its own, never the author's pages):
+    /// once for each build installed (by when its executable was made), and whenever a file
+    /// named "selfcheck" is in the app's Documents. With the conversation open, the model
+    /// loaded, nothing left to file and the phone neither hot nor in Low Power Mode; a reply
+    /// stops it as it stops filing, and it starts over the next time. TRIAL: a line for each
+    /// exchange, then how many of the five passed.
+    private func selfCheck() async {
+        guard selfCheckDue, isOpen, state == .idle, !Self.sparing, !Task.isCancelled else { return }
+        do {
+            let outcomes = try await FilingSelfCheck.run { [model] in try await model.file($0) }
+            for outcome in outcomes {
+                trialLog("SELF-CHECK \(outcome.letter) " + (outcome.passed ? "pass" : "FAIL: \(outcome.reason)"))
+            }
+            trialLog("SELF-CHECK \(outcomes.count { $0.passed })/\(outcomes.count)")
+            UserDefaults.standard.set(Self.build, forKey: Self.selfCheckKey)
+        } catch {
+            if Task.isCancelled { return }   // stopped for a reply
+            trialLog("SELF-CHECK stopped: \(String(describing: error))")
+            selfCheckFailed = true
+        }
+        try? FileManager.default.removeItem(at: Self.selfCheckFile)
+    }
+
+    private var selfCheckDue: Bool {
+        guard modelWarm else { return false }
+        return FileManager.default.fileExists(atPath: Self.selfCheckFile.path)
+            || (!selfCheckFailed && UserDefaults.standard.double(forKey: Self.selfCheckKey) != Self.build)
+    }
+
+    private static let selfCheckKey = "filingSelfCheck"
+    private static let selfCheckFile = URL.documentsDirectory.appendingPathComponent("selfcheck")
+    /// When this build's executable was made: another for each install.
+    private static let build = (try? Bundle.main.executableURL?.resourceValues(forKeys: [.contentModificationDateKey]))?
+        .contentModificationDate?.timeIntervalSinceReferenceDate ?? 0
+    #endif
+
+    /// Keeps `record` on `turn` of `page`'s conversation, the open one or a saved one; false if it couldn't.
+    @discardableResult private func setFiled(_ record: FilingRecord, turn: UUID, page: UUID) -> Bool {
         if conversation.page == page, let i = conversation.turns.firstIndex(where: { $0.id == turn }) {
             conversation.turns[i].filed = record
             save()
         } else if var talk = try? store?.load(page), let i = talk.turns.firstIndex(where: { $0.id == turn }) {
             talk.turns[i].filed = record   // the author has moved on to another page
-            try? store?.save(talk)
+            guard (try? store?.save(talk)) != nil else { return false }
             others.removeAll { $0.page == talk.page }   // so Undo here sees it
             others.append(talk)
+        } else {
+            return false
         }
+        return true
     }
 
     /// Takes back one thing filed from `turn` (what the author changed since stays), unless
@@ -582,9 +771,11 @@ final class Companion {
 }
 
 // TRIAL: every reply, and the model's speed and memory, pulled off the phone
-// to see how it does there.
+// to see how it does there; each line with the time of day it was written.
 func trialLog(_ line: String) {
     let url = URL.documentsDirectory.appendingPathComponent("candidates.log")
-    let data = Data((line.replacingOccurrences(of: "\n", with: " ") + "\n").utf8)
+    let now = Calendar.current.dateComponents([.hour, .minute, .second, .nanosecond], from: Date())
+    let time = String(format: "%02ld:%02ld:%02ld.%03ld ", now.hour ?? 0, now.minute ?? 0, now.second ?? 0, (now.nanosecond ?? 0) / 1_000_000)
+    let data = Data((time + line.replacingOccurrences(of: "\n", with: " ") + "\n").utf8)
     if let h = try? FileHandle(forWritingTo: url) { h.seekToEndOfFile(); h.write(data); try? h.close() } else { try? data.write(to: url) }
 }
