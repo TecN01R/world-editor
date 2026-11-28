@@ -41,6 +41,16 @@ final class DocumentTests: XCTestCase {
         XCTAssertEqual(Document(title: " ", paragraphs: [Paragraph(text: "  ")]).displayName, "Untitled")
     }
 
+    func testAPagesOwnTitleIsShownWhole() {
+        let long = "The Night the Harbour Bell Rang Thirteen Times and Nobody on the Quay Would Say Who Had Pulled Its Rope"
+        let page = Document(title: "  \(long) ")
+        XCTAssertEqual(page.heading, String(long.prefix(80)))   // rows and links stop there
+        XCTAssertEqual(page.displayTitle, long)                 // its own page shows all of it
+        // Without a title, as it's named everywhere: its first line, or "Untitled".
+        XCTAssertEqual(Document(paragraphs: [Paragraph(text: "The salt road")]).displayTitle, "The salt road")
+        XCTAssertEqual(Document().displayTitle, "Untitled")
+    }
+
     func testEmptyDocumentAlwaysHasOneParagraph() {
         XCTAssertEqual(Document(paragraphs: []).paragraphs.count, 1)
     }

@@ -26,7 +26,7 @@ enum Look {
     static let margin: CGFloat = 20
 
     /// The reading column's greatest width: 33 em of the page font, about 66 characters a line.
-    @MainActor static var measure: CGFloat { 33 * PageEditor.font.pointSize }
+    @MainActor static var measure: CGFloat { 33 * Role.writing.font.pointSize }
 
     /// The one reading column in `width`: the page, read or edited, and the conversation with its
     /// message bar. The width less the margins, up to `measure`; centred.

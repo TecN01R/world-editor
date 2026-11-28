@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import DesignTokens
 import WriterCore
 
 /// Edit mode: the whole page, with real paragraph spacing, lists and a
@@ -38,9 +39,10 @@ struct PageEditor: UIViewRepresentable {
         tv.linkTextAttributes = Look.link
         tv.allowsEditingTextAttributes = true      // ⌘B, ⌘I and the Format menu
         tv.textFormattingConfiguration = RichText.formatting
-        tv.titleField = context.coordinator.titleField
+        tv.titleView = context.coordinator.titleView
         tv.onFocus = { [weak coordinator = context.coordinator] in coordinator?.onFocus() }
-        let fields = UIHostingController(rootView: PageFields { [weak tv] in tv?.fieldsHeight = $0 }.environment(library))
+        tv.onReadingChange = { [weak coordinator = context.coordinator] in coordinator?.readingChanged() }
+        let fields = UIHostingController(rootView: PageFields { [weak tv] in tv?.fieldsExtent = $0 }.environment(library))
         fields.view.backgroundColor = .clear
         fields.safeAreaRegions = []
         tv.fieldsController = fields
@@ -57,52 +59,15 @@ struct PageEditor: UIViewRepresentable {
         context.coordinator.onFocus = onFocus
         // Renamed from elsewhere (the companion filing "Her name is Florica", or its Undo):
         // the title shows it, unless the author is typing in it.
-        let title = context.coordinator.titleField
-        if !title.isFirstResponder, title.text != library.document.title { title.text = library.document.title }
+        let title = context.coordinator.titleView
+        if !title.isFirstResponder { title.show(library.document.title) }
         context.coordinator.showChanges()
     }
 
-    /// Bold New York, scaled with Dynamic Type.
-    static var titleFont: UIFont { newYork(34, weight: .bold, scaledAs: .largeTitle) }   // a large title
-
-    /// New York at 19 pt for the default text size, scaled with Dynamic Type.
-    static var font: UIFont { newYork(19, weight: .regular, scaledAs: .body) }
-
-    private static func newYork(_ size: CGFloat, weight: UIFont.Weight, scaledAs style: UIFont.TextStyle) -> UIFont {
-        let base = UIFont.systemFont(ofSize: size, weight: weight)
-        let serif = UIFont(descriptor: base.fontDescriptor.withDesign(.serif) ?? base.fontDescriptor, size: size)
-        return UIFontMetrics(forTextStyle: style).scaledFont(for: serif)
-    }
-
-    /// A paragraph as the page shows it, read or edited: line height ×1.35, 14 pt between
-    /// paragraphs, light hyphenation (a long word breaks only where the ragged edge would
-    /// otherwise gape), ragged right, in the author's ink.
-    static func attributes(_ kind: ParagraphKind) -> [NSAttributedString.Key: Any] {
-        let p = NSMutableParagraphStyle()
-        p.lineHeightMultiple = 1.35
-        p.paragraphSpacing = kind.isList ? 4 : 14
-        p.hyphenationFactor = 0.4
-        if let list = RichText.list(for: kind) { p.textLists = [list] }
-        return [.font: font, .foregroundColor: Look.ink, .paragraphStyle: p]
-    }
-
-    /// `paragraphs` as the page sets them, read or edited: each made by `paragraph` from it and
-    /// its kind's `attributes`, with a line break in those attributes between one and the next.
-    static func text(of paragraphs: [Paragraph],
-                     _ paragraph: (Paragraph, [NSAttributedString.Key: Any]) -> NSAttributedString) -> NSAttributedString {
-        let s = NSMutableAttributedString()
-        for (i, p) in paragraphs.enumerated() {
-            let attrs = attributes(p.kind)
-            s.append(paragraph(p, attrs))
-            if i < paragraphs.count - 1 { s.append(NSAttributedString(string: "\n", attributes: attrs)) }
-        }
-        return s
-    }
-
     @MainActor
-    final class Coordinator: NSObject, UITextViewDelegate, UITextFieldDelegate {
+    final class Coordinator: NSObject, UITextViewDelegate {
         let library: Library
-        weak var textView: UITextView?
+        weak var textView: PageTextView?
         /// Replacing the text moves the selection; that isn't the user moving the caret.
         private var isRendering = false
         /// The paragraphs the text view holds, as last shown or typed: the page differing
@@ -114,29 +79,14 @@ struct PageEditor: UIViewRepresentable {
         var onEditing: (Bool) -> Void = { _ in }
         lazy var formatBar = FormatBar(onAction: { [weak self] action in self?.perform(action) })
 
-        lazy var titleField: UITextField = {
-            let f = UITextField()
-            f.font = PageEditor.titleFont
-            f.adjustsFontForContentSizeCategory = true
-            f.textColor = Look.ink   // the writing's colour: it's the user's too
-            f.placeholder = "Title"
-            f.clearButtonMode = .never   // the fields' clear buttons are for short values, not the title
-            f.text = library.document.title
-            f.returnKeyType = .next
-            f.autocapitalizationType = .words
-            f.accessibilityLabel = "Title"
-            f.delegate = self
-            f.addAction(UIAction { [weak self, weak f] _ in
-                self?.library.update { $0.setTitle(f?.text ?? "") }
-            }, for: .editingChanged)
-            return f
+        /// The page's title above its writing, wrapping as it does where the page is read.
+        lazy var titleView: PageTitleView = {
+            let title = PageTitleView(editable: true)
+            title.show(library.document.title)
+            title.onChange = { [weak self] text in self?.library.update { $0.setTitle(text) } }
+            title.onReturn = { [weak self] in self?.textView?.becomeFirstResponder() }   // on to the writing
+            return title
         }()
-
-        /// Return in the title moves on to the writing.
-        func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-            textView?.becomeFirstResponder()
-            return false
-        }
 
         init(library: Library, onFocus: @escaping () -> Void) {
             self.library = library
@@ -144,7 +94,7 @@ struct PageEditor: UIViewRepresentable {
             super.init()
             // UIKit posts these on the main thread; selector observers go away with the coordinator.
             let center = NotificationCenter.default
-            // Text size changed in Settings: show the page at the new size.
+            // Text size changed in Settings: set the page at the new size.
             center.addObserver(self, selector: #selector(textSizeChanged), name: UIContentSizeCategory.didChangeNotification, object: nil)
             // The page's writing, title or a field (all inside the text view) taking the
             // keyboard or giving it up.
@@ -161,10 +111,11 @@ struct PageEditor: UIViewRepresentable {
             }
         }
 
+        /// The writing's column and its type are the new size's: laying the page out again
+        /// finds them changed and sets the writing by them (`readingChanged`). The title sets
+        /// itself.
         @objc private func textSizeChanged() {
-            guard let tv = textView else { return }
-            titleField.font = PageEditor.titleFont
-            render(selection: tv.selectedRange)
+            textView?.setNeedsLayout()
         }
 
         @objc private func beganEditing(_ note: Notification) { editing(note, begins: true) }
@@ -193,7 +144,7 @@ struct PageEditor: UIViewRepresentable {
             isRendering = true
             defer { isRendering = false }
             let doc = library.document
-            let s = PageEditor.text(of: doc.paragraphs) { RichText.attributed($0, attributes: $1) }
+            let s = tv.reading.text(of: doc.paragraphs) { RichText.attributed($0, attributes: $1) }
             tv.attributedText = s
             shown = doc.paragraphs
             if let selection {   // within the text, which may now be shorter
@@ -214,14 +165,31 @@ struct PageEditor: UIViewRepresentable {
             tv.undoManager?.removeAllActions()   // its steps were for the old text
         }
 
+        /// The writing's column, its screen or the text size changed (the Duo folded, unfolded
+        /// or turned; a new size in Settings): the writing set for it, with what's typed next.
+        func readingChanged() {
+            restyle()
+            updateTypingAttributes()
+        }
+
+        /// Sets the writing again by the text view's `reading` and as its paragraphs now follow
+        /// one another, in place (`ReadingType.restyle`): the string isn't replaced, so Undo,
+        /// the caret and text still being composed stay as they are.
+        private func restyle() {
+            guard let tv = textView else { return }
+            let selection = tv.selectedRange
+            guard tv.reading.restyle(tv.textStorage, trailingKind: library.document.paragraphs.last?.kind) else { return }
+            if tv.selectedRange != selection { tv.selectedRange = selection }
+        }
+
         /// New text takes the style before the caret and the caret paragraph's kind.
         private func updateTypingAttributes() {
             guard let tv = textView else { return }
+            let paragraphs = library.document.paragraphs
             let (i, offset) = library.document.locate(tv.selectedRange.location)
-            let p = library.document.paragraphs[i]
-            var attrs = PageEditor.attributes(p.kind)
-            attrs[.font] = RichText.font(PageEditor.font, p.style(at: offset))
-            tv.typingAttributes = attrs
+            let p = paragraphs[i]
+            let next = i + 1 < paragraphs.count ? paragraphs[i + 1].kind : nil
+            tv.typingAttributes = tv.reading.typingAttributes(kind: p.kind, before: next, style: p.style(at: offset))
         }
 
         // MARK: View → model
@@ -245,6 +213,9 @@ struct PageEditor: UIViewRepresentable {
             let paragraphs = RichText.paragraphs(from: tv.attributedText, trailingKind: trailing)
             library.update { $0.setParagraphs(paragraphs) }
             shown = library.document.paragraphs
+            // A paragraph made, joined or brought back by Undo: the room under each goes by what
+            // now follows it. Not mid-word, where an edit would disturb the keyboard.
+            if tv.markedTextRange == nil { restyle() }
             updateFormatBar()
         }
 
@@ -446,8 +417,8 @@ struct PageEditor: UIViewRepresentable {
             // from Focus, which hands it over).
             let startInTitle = doc.isEmpty && !Screenshots.isActive
             guard !Screenshots.opensMara || Screenshots.showsMentions else { return }   // CI: the page at rest
-            DispatchQueue.main.async { [titleField, keepsKeyboard] in
-                if startInTitle { titleField.becomeFirstResponder(); return }
+            DispatchQueue.main.async { [titleView, keepsKeyboard] in
+                if startInTitle { titleView.becomeFirstResponder(); return }
                 if keepsKeyboard { tv.becomeFirstResponder() }
                 tv.scrollRangeToVisible(tv.selectedRange)
             }
@@ -635,21 +606,10 @@ final class PageView: UIView {
     }
 }
 
-/// Where a page's parts sit, read (`EntryView`) or edited (`PageTextView`), so going between the
-/// two nothing moves (docs/design.md: "Read and Edit are the same page").
-enum PageLayout {
-    /// From the top of the page to the title's line.
-    static let titleTop: CGFloat = 6
-    /// From the title's line to the kind under it.
-    static let kindGap: CGFloat = 14
-    /// From what's above the writing to its first line.
-    static let writingGap: CGFloat = 14
-    /// Below the writing's last line.
-    static let bottom: CGFloat = 40
-}
-
-/// The page's text view. Lays out the title above the writing whenever its
-/// width changes (rotation, fold), in the reading column (`Look.column`).
+/// The page's text view: the writing, with the title and fields above it in the reading column
+/// (`Look.column`), down the page by `PageMetrics` as where the page is read (`EntryView`). It
+/// lays them out whenever its width changes (rotation, fold), and says when the writing's lines
+/// are to be set again for it (`onReadingChange`).
 final class PageTextView: PlainPasteTextView {
     /// HIG text fields: a Clear button at the trailing end. SwiftUI has no modifier for it,
     /// so the page's fields take UIKit's own, set once for every page.
@@ -678,8 +638,8 @@ final class PageTextView: PlainPasteTextView {
     }
     @objc private func enterFocus() { onFocus?() }
 
-    var titleField: UITextField? {
-        didSet { oldValue?.removeFromSuperview(); titleField.map(addSubview) }   // scrolls with the page
+    var titleView: PageTitleView? {
+        didSet { oldValue?.removeFromSuperview(); titleView.map(addSubview) }   // scrolls with the page
     }
 
     /// The page's type and fields (SwiftUI), under the title; scrolls with the page.
@@ -703,30 +663,40 @@ final class PageTextView: PlainPasteTextView {
         parent.addChild(fields)
         fields.didMove(toParent: parent)
     }
-    var fieldsHeight: CGFloat = 0 { didSet { if fieldsHeight != oldValue { setNeedsLayout() } } }
+    /// Where the fields end, so the writing starts after them.
+    var fieldsExtent = PageFields.Extent() { didSet { if fieldsExtent != oldValue { setNeedsLayout() } } }
 
+    /// How the writing is set for the column it has (`ReadingType`).
+    private(set) var reading = ReadingType(columnWidth: 0, displayScale: 0)
+    /// `reading` changed: the column's width (the Duo folded, unfolded or turned), the screen
+    /// or the text size. The writing is to be set by it again.
+    var onReadingChange: (() -> Void)?
 
     /// The format bar's height while it floats over the bottom of the page.
     var barHeight: CGFloat = 0 { didSet { setNeedsLayout() } }
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        guard let title = titleField else { return }
+        guard let title = titleView else { return }
         // The title, fields and writing share the reading column's left edge.
         let column = Look.column(bounds.width)
         let side = (bounds.width - column) / 2
-        // The field centres the title's line in 8 pt more than its height.
-        let titleHeight = ceil(title.font?.lineHeight ?? 34) + 8
-        title.frame = CGRect(x: side, y: PageLayout.titleTop - 4, width: column, height: titleHeight)
-        var top = title.frame.maxY - 4   // where the title's line ends
+        title.frame = CGRect(x: side, y: PageMetrics.aboveTitle, width: column, height: title.height(in: column))
+        var top = title.frame.maxY + PageMetrics.aboveWriting   // where the writing starts
         if let fields = fieldsController?.view {
-            // The kind's line lands `kindGap` under the title; its menu has 4 pt above it.
-            fields.frame = CGRect(x: side, y: top + PageLayout.kindGap - 4, width: column, height: fieldsHeight)
-            top = fields.frame.maxY
+            // The fields start at the title: the kind's line keeps its own gap above it.
+            fields.frame = CGRect(x: side, y: title.frame.maxY, width: column, height: fieldsExtent.height)
+            top = fields.frame.maxY + fieldsExtent.gapBelow
         }
 
-        let inset = UIEdgeInsets(top: top + PageLayout.writingGap, left: side, bottom: PageLayout.bottom, right: side)
+        let inset = UIEdgeInsets(top: top, left: side, bottom: PageMetrics.bottom, right: side)
         if textContainerInset != inset { textContainerInset = inset }
+
+        let reading = ReadingType(columnWidth: column, displayScale: traitCollection.displayScale)
+        if reading != self.reading {
+            self.reading = reading
+            onReadingChange?()
+        }
 
         // The format bar floats over the bottom of the page (which stops at the
         // keyboard, though any part still under it counts); keep everything

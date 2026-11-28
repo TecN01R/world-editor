@@ -1,5 +1,5 @@
 /// A page from top to bottom, in points: one set whether the page is read or edited, so nothing
-/// moves when Edit turns typing on. Each is a step of `Spacing`.
+/// moves when Edit turns typing on. Each gap is a step of `Spacing`.
 public enum PageMetrics {
     /// Above the title.
     public static let aboveTitle = 8.0
@@ -7,8 +7,11 @@ public enum PageMetrics {
     public static let titleToKind = 8.0
     /// From the kind to the facts.
     public static let kindToFacts = 16.0
-    /// Between one row of facts and the next.
-    public static let factRowSpacing = 12.0
+    /// The least a row of facts is tall, its name and its value centred on it: a touch target,
+    /// since where the page is edited each of the two is tapped.
+    public static let factRowMinHeight = Sizing.minimumTarget
+    /// Between one row of facts and the next: nothing. Their own height parts them.
+    public static let factRowSpacing = 0.0
     /// Between the facts' columns.
     public static let factColumnSpacing = 16.0
     /// Above the writing, after what heads the page.

@@ -19,7 +19,7 @@ Kevin doesn't choose between design options. Decisions here come from Apple's gu
 | Part | State |
 |---|---|
 | Lint and its baseline | built |
-| Tokens, text roles, reading type | install 1 |
+| Tokens, text roles, reading type | built for the page, read and edited (`Ink`, `Role`, `ReadingType`, `PageTitleView`); other screens install 2 |
 | Scenes and the render checks | install 1 |
 | Talk and World tabs, navigation, bars, shared parts on every screen | install 2 |
 | World's front page (new, only mentioned), search | install 3 |
@@ -118,7 +118,7 @@ The page, read or edited, and the conversation share one column.
 - **Hyphenation** more freely on short lines (0.9, 0.6, 0.4 for those three, eased the same way); ragged right; a lone last word pushed out where possible.
 - **Between paragraphs** half a line of type (0.5 em); list items a quarter, half after the last.
 - **Punctuation** shown as print sets it (`Typeset`: curly quotes, true dashes, ellipses). What he typed is kept as typed.
-- **The page, top to bottom:** 8 above the title; 8 to its kind; 16 to its facts (rows 12 apart, columns 16); 24 to the writing; 32 before a heading in the content and 12 after; 32 at the bottom. Read and Edit use the same numbers, and the title wraps in both.
+- **The page, top to bottom:** 8 above the title; 8 to its kind; 16 to its facts (each row at least 44 tall, a touch target, its name and value centred on it, with nothing between rows; columns 16); 24 to the writing; 32 before a heading in the content and 12 after; 32 at the bottom. Read and Edit use the same numbers, and the title wraps in both.
 - Focus mode keeps its own layout (docs/focus-mode.md).
 
 ## Space, shape and motion

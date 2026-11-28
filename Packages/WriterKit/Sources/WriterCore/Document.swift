@@ -358,6 +358,11 @@ public struct Document: Identifiable, Codable, Hashable, Sendable {
     /// The page's name wherever it's shown: its heading, or "Untitled" until it has one.
     public var displayName: String { heading.isEmpty ? Self.untitled : heading }
 
+    /// The page's title at the top of the page itself, where it is read: all of it, however long,
+    /// as the editor shows it (`heading` stops at 80 characters, for rows and links). Until it
+    /// has a title, `displayName`.
+    public var displayTitle: String { trimmedTitle.isEmpty ? displayName : trimmedTitle }
+
     /// The first line of writing not already used as the heading.
     public var preview: String {
         let lines = trimmedTitle.isEmpty ? nonEmptyLines.dropFirst() : nonEmptyLines[...]

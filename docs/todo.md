@@ -89,6 +89,7 @@ pages first today; this makes the conversation the place he writes and the pages
   - [ ] Whichever model wins, the conversation has to show what such replies contain (headings, lists, tables), and the bar to replace Nemotron stays faster and stronger (Kevin, 2026-11-25)
   - The suite stays afterwards as the companion's test suite (Kevin, 2026-11-25: "an open standard or way to properly set up a test suite for our own app and the way our app is meant to be used"). His ChatGPT instructions and memories would go into Instructions; the export holds none
 - [ ] Search: built on Nemotron (search_pages, thinking capped); check it finds things on the phone
+- [ ] A statement run into a question in one sentence ("Old Tamsin is 71 not 61, does that change anything?") isn't filed: the whole sentence counts as a question, so nothing of it is read (found building the filing check, 2026-11-28; a few in a hundred of his messages are shaped so). Read the statement before the comma
 - [ ] The early part of a long conversation: once a conversation outgrows what the model reads at once, its older turns are neither read nor searchable (search covers his pages and his other conversations, not the one it's in). Long-running conversations are how he works (2026-11-27, from his ChatGPT history), so the turns that no longer fit should be searchable too
 - [ ] Filing through tools (make page, set field, rename, set page text), each with Undo
 - [ ] Live Activity: does tapping it reach the app? If never, our own Live Activity

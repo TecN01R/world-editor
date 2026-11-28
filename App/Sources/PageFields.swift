@@ -1,4 +1,5 @@
 import SwiftUI
+import DesignTokens
 import WriterCore
 
 /// The open page's type and its fields, under the title in Edit mode. The
@@ -8,11 +9,20 @@ import WriterCore
 /// Only fields with something in them show, as Contacts shows a contact (Kevin,
 /// 2026-11-24: not every field of a type fits every page); Add Field's menu
 /// lists the empty ones. Stock controls throughout, without glass: the HIG
-/// keeps Liquid Glass out of the content layer.
+/// keeps Liquid Glass out of the content layer. They sit down the page as where
+/// it is read (`EntryView`), and each thing tapped is a touch target tall
+/// (`pageKindLine`, `inFactRow`).
 struct PageFields: View {
+    /// Where the fields end, for the writing under them: how tall they are, and the room to
+    /// leave between them and it.
+    struct Extent: Equatable {
+        var height: CGFloat = 0
+        var gapBelow: CGFloat = PageMetrics.aboveWriting
+    }
+
     @Environment(Library.self) private var library
-    /// Its height, so the writing below starts after it.
-    let onHeight: (CGFloat) -> Void
+    /// Where it ends, so the writing below starts after it.
+    let onExtent: (Extent) -> Void
     /// Empty fields shown anyway until the page closes: picked from Add Field's menu,
     /// added to the type here, or emptied here (so none vanishes under the cursor).
     @State private var shown: Set<UUID> = []
@@ -25,7 +35,10 @@ struct PageFields: View {
         let filled = Set(all.lazy.map(\.id).filter { page.values[$0] != nil })
         let visible = filled.union(shown)
         let fields = all.filter { visible.contains($0.id) }
-        VStack(alignment: .leading, spacing: 10) {
+        // The writing starts `aboveWriting` under the last row; under the kind's line alone,
+        // which keeps part of that room under itself (`pageKindLine`).
+        let gapBelow = type == nil ? PageMetrics.kindLineToWriting : PageMetrics.aboveWriting
+        VStack(alignment: .leading, spacing: 0) {
             typeMenu(Label {
                 if let type { Text(type.name) } else { Text("Add Type") }
             } icon: {
@@ -34,21 +47,26 @@ struct PageFields: View {
             if let type {
                 if !fields.isEmpty {
                     ViewThatFits(in: .horizontal) {   // HIG layout: stack only where the columns don't fit
-                        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 10) {   // each row centred on its control
+                        // Each row a touch target tall, its name and value centred on it.
+                        Grid(alignment: .leading, horizontalSpacing: PageMetrics.factColumnSpacing,
+                             verticalSpacing: PageMetrics.factRowSpacing) {
                             ForEach(fields) { field in
                                 GridRow { name(field); valueView(field) }
                                     .modifier(FieldRow(field: field, type: type))
                             }
                         }
-                        VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: PageMetrics.factRowSpacing) {
                             ForEach(fields) { field in
-                                VStack(alignment: .leading, spacing: 2) { name(field); valueView(field) }
-                                    .modifier(FieldRow(field: field, type: type))
+                                VStack(alignment: .leading, spacing: Spacing.tight) {
+                                    name(field, alignment: .bottomLeading)   // by its own value
+                                    valueView(field)
+                                }
+                                .modifier(FieldRow(field: field, type: type))
                             }
                         }
                     }
                 }
-                addField(type, empty: all.filter { !visible.contains($0.id) })
+                addField(type, empty: all.filter { !visible.contains($0.id) })   // the last row
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -59,31 +77,30 @@ struct PageFields: View {
         // Not animated: the page's writing below moves to the fields' new height at once, so
         // rows growing or fading in overlapped it until they settled.
         .fixedSize(horizontal: false, vertical: true)   // its own height, whatever the frame
-        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onHeight($0) }
+        .onGeometryChange(for: Extent.self) { Extent(height: $0.size.height, gapBelow: gapBelow) } action: { onExtent($0) }
     }
 
-    /// Add Field: a menu of the type's empty fields (one picked shows, ready to fill in), then
-    /// New Field…; just New Field when none is empty.
+    /// Add Field, a row under the fields: a menu of the type's empty fields (one picked shows,
+    /// ready to fill in), then New Field…; just New Field when none is empty.
     @ViewBuilder private func addField(_ type: PageType, empty: [FieldDefinition]) -> some View {
         let newField = { library.fieldsRequest = .addField(type: type.id) }
-        Group {
-            if empty.isEmpty {
-                Button("Add Field", systemImage: "plus", action: newField)
-            } else {
-                Menu("Add Field", systemImage: "plus") {
-                    ForEach(empty) { field in
-                        Button(field.name) {
-                            shown.insert(field.id)
-                            Task { focused = field.id }   // once its row exists
-                        }
+        let label = Label("Add Field", systemImage: "plus").role(.label).inFactRow()
+        if empty.isEmpty {
+            Button(action: newField) { label }
+        } else {
+            Menu {
+                ForEach(empty) { field in
+                    Button(field.name) {
+                        shown.insert(field.id)
+                        Task { focused = field.id }   // once its row exists
                     }
-                    Divider()
-                    Button("New Field…", systemImage: "plus", action: newField)
                 }
+                Divider()
+                Button("New Field…", systemImage: "plus", action: newField)
+            } label: {
+                label
             }
         }
-        .font(.subheadline)
-        .tint(.secondary)
     }
 
     private func typeMenu(_ label: some View) -> some View {
@@ -103,19 +120,17 @@ struct PageFields: View {
                 }
             }
         } label: {
-            label.padding(.vertical, 4).contentShape(.rect)
+            label.role(.label).pageKindLine().contentShape(.rect)
         }
-        .font(.subheadline)
-        .tint(.secondary)
         .accessibilityLabel("Type")
         .sensoryFeedback(.selection, trigger: library.document.type)
     }
 
     /// The field's name: tap to edit the field (Kevin, 2026-11-24); hold for the row's
     /// menu, which also removes it from the type.
-    private func name(_ field: FieldDefinition) -> some View {
+    private func name(_ field: FieldDefinition, alignment: Alignment = .leading) -> some View {
         Button { library.fieldsRequest = .editField(field.id) } label: {
-            Text(field.name).font(.subheadline).foregroundStyle(.secondary)
+            Text(field.name).role(.label).inFactRow(alignment: alignment)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(field.name)
@@ -123,7 +138,9 @@ struct PageFields: View {
     }
 
     private func valueView(_ field: FieldDefinition) -> some View {
-        FieldValueView(field: field, value: value(field), focused: $focused).frame(maxWidth: .infinity, alignment: .leading)
+        FieldValueView(field: field, value: value(field), focused: $focused, inRow: true)
+            .inFactRow()
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func value(_ field: FieldDefinition) -> Binding<FieldValue?> {
@@ -155,20 +172,23 @@ private struct FieldValueView: View {
     let field: FieldDefinition
     @Binding var value: FieldValue?
     let focused: FocusState<UUID?>.Binding
+    /// In a fact's row on a page, where each of its buttons and menus is a row tall to the
+    /// touch. A sample of the control (the Kind picker's) keeps its own size.
+    var inRow = false
 
     var body: some View {
         switch field.kind {
         case .text:
             TextField(field.name, text: text, prompt: Text("Add").font(.body))
-                .font(.authored(.body))
+                .role(.value)
                 .focused(focused, equals: field.id)
         case .longText:
             TextField(field.name, text: text, prompt: Text("Add").font(.body), axis: .vertical)
-                .font(.authored(.body))
+                .role(.value)
                 .focused(focused, equals: field.id)
         case .number:
             TextField(field.name, value: number, format: .number, prompt: Text("Add").font(.body))
-                .font(.authored(.body))
+                .role(.value)
                 .keyboardType(.decimalPad)
                 .focused(focused, equals: field.id)
         case .date:
@@ -177,7 +197,7 @@ private struct FieldValueView: View {
                     .labelsHidden()
                     .sensoryFeedback(.selection, trigger: date)
             } else {
-                Button("Add Date") { value = .date(Date()) }
+                Button { value = .date(Date()) } label: { target(Text("Add Date")) }
             }
         case .choice:
             dropdown(text, current: text.wrappedValue.isEmpty ? nil : text.wrappedValue) {
@@ -187,9 +207,10 @@ private struct FieldValueView: View {
         case .toggle:
             Toggle(field.name, isOn: Binding { if case .toggle(true)? = value { true } else { false } } set: { value = .toggle($0) })
                 .labelsHidden()
+                .stockSwitch()   // iOS's own colour when on: in white, as the other controls are, on looked like off
                 .sensoryFeedback(.selection, trigger: value)
         case .page:
-            HStack(spacing: 8) {
+            HStack(spacing: Spacing.gap) {
                 let name = page.wrappedValue.flatMap { id in library.pages.first { $0.id == id }?.heading }
                 dropdown(page, current: name) {
                     Text("None").tag(UUID?.none)
@@ -200,11 +221,17 @@ private struct FieldValueView: View {
                     }
                 }
                 if let id = page.wrappedValue {
-                    Button("Open", systemImage: "arrow.up.right") { library.selection = id }
-                        .labelStyle(.iconOnly)
+                    Button { library.selection = id } label: {
+                        target(Label("Open", systemImage: "arrow.up.right").labelStyle(.iconOnly))
+                    }
                 }
             }
         }
+    }
+
+    /// A button's or menu's label: a row tall to the touch where it's in a fact's row.
+    @ViewBuilder private func target(_ label: some View) -> some View {
+        if inRow { label.inFactRow() } else { label }
     }
 
     /// A pull-down like a menu-style Picker (value in the tint, white here, per
@@ -217,10 +244,10 @@ private struct FieldValueView: View {
             Picker(field.name, selection: selection, content: options).pickerStyle(.inline)
             more()
         } label: {
-            HStack(spacing: 4) {
-                if let current { Text(current).font(.authored(.body)).lineLimit(1) } else { Text("Choose") }
+            target(HStack(spacing: Spacing.tight) {
+                if let current { Text(current).role(.value).lineLimit(1) } else { Text("Choose") }
                 Image(systemName: "chevron.up.chevron.down").imageScale(.small)
-            }
+            })
         }
         .sensoryFeedback(.selection, trigger: selection.wrappedValue)
         .accessibilityLabel(field.name)

@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import DesignTokens
 import WriterCore
 
 /// A page read (Kevin, 2026-11-27: "I do love reading a good wiki", but not keeping one: "I want to
@@ -17,42 +18,43 @@ struct EntryView: View {
     let edit: () -> Void
 
     var body: some View {
+        let type = library.type(of: page)
         let facts = library.fields(of: page).compactMap { field in page.values[field.id].map { (field: field, value: $0) } }
         let mentions = WikiEntry.mentions(of: page, in: library.pages, schema: library.schema)
         let written = page.paragraphs.contains { !$0.text.allSatisfy(\.isWhitespace) }
+        // The writing starts `aboveWriting` under what heads the page. The kind's line, where it's
+        // the last of that, keeps part of the room under itself (`pageKindLine`).
+        let aboveWriting = type != nil && facts.isEmpty ? PageMetrics.kindLineToWriting : PageMetrics.aboveWriting
         ScrollView {
+            // Down the page by `PageMetrics`, as the editor has it (`PageTextView`, `PageFields`).
             VStack(alignment: .leading, spacing: 0) {
-                Text(Typeset.printed(page.displayName))
-                    .font(Font(PageEditor.titleFont))
-                    .foregroundStyle(Color(Look.ink))
-                    .padding(.top, PageLayout.titleTop)
-                    .accessibilityAddTraits(.isHeader)
-                if let type = library.type(of: page) {
+                // The whole title, as the editor shows it: a page's name elsewhere stops at 80 characters.
+                PageTitle(title: Typeset.printed(page.displayTitle))
+                    .padding(.top, PageMetrics.aboveTitle)
+                if let type {
                     Text(type.name)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .padding(.top, PageLayout.kindGap)
+                        .role(.label)
+                        .pageKindLine()
                 }
                 if !facts.isEmpty {
                     factRows(facts)
-                        .padding(.top, 14)   // as the editor's fields sit under the kind (`PageFields`)
                 }
                 if written {
                     PageWriting(text: writing)
-                        .padding(.top, PageLayout.writingGap)
+                        .padding(.top, aboveWriting)
                 } else if facts.isEmpty {
                     Text("Nothing more is known of it yet. Talk about it, and what you say gathers here.")
-                        .foregroundStyle(.secondary)
-                        .padding(.top, PageLayout.writingGap)
+                        .foregroundStyle(.ink2)
+                        .padding(.top, aboveWriting)
                 }
                 if !mentions.isEmpty {
                     mentionedIn(mentions)
-                        .padding(.top, 32)
+                        .padding(.top, PageMetrics.beforeHeading)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .readingColumn()
-            .padding(.bottom, PageLayout.bottom)
+            .padding(.bottom, PageMetrics.bottom)
         }
         // A fact's page link opens its page; the writing's links go through `PageWriting`.
         .environment(\.openURL, OpenURLAction { url in
@@ -68,13 +70,14 @@ struct EntryView: View {
         }
     }
 
-    /// The writing as the editor sets it (`PageEditor.attributes`, with its bold, italic and
-    /// lists), its own `@` links and the names of the world's other pages linked, and its
-    /// punctuation as print sets it. What's stored stays as typed.
+    /// The writing as the editor sets it (`ReadingType`, with its bold, italic and lists), its
+    /// own `@` links and the names of the world's other pages linked, and its punctuation as
+    /// print sets it. What's stored stays as typed.
     private var writing: NSAttributedString {
         // Empty lines at the end are where the next words would go: nothing to read.
         let paragraphs = Array(page.paragraphs.reversed().drop { $0.text.allSatisfy(\.isWhitespace) }.reversed())
-        return PageEditor.text(of: paragraphs) { paragraph, attributes in
+        // Not in a column yet: the text view sets it for the one it's given (`ReadingTextView`).
+        return ReadingType(columnWidth: 0, displayScale: 0).text(of: paragraphs) { paragraph, attributes in
             let text = RichText.attributed(paragraph.text, runs: paragraph.runs, links: paragraph.links, attributes: attributes)
             var at = 0
             for piece in WikiEntry.pieces(of: paragraph.text, linking: library.pages, except: page.id) {
@@ -94,25 +97,30 @@ struct EntryView: View {
         }
     }
 
-    /// The facts as the editor's field rows (`PageFields`): each name beside its value while
-    /// the two columns fit, else above it.
+    /// The facts as the editor's field rows (`PageFields`), in the same rows (`inFactRow`): each
+    /// name beside its value, the two centred on the row, while the two columns fit; else the
+    /// name above its value.
     private func factRows(_ facts: [(field: FieldDefinition, value: FieldValue)]) -> some View {
         ViewThatFits(in: .horizontal) {
-            Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 16, verticalSpacing: 10) {
+            Grid(alignment: .leading, horizontalSpacing: PageMetrics.factColumnSpacing,
+                 verticalSpacing: PageMetrics.factRowSpacing) {
                 ForEach(facts, id: \.field.id) { fact in
-                    GridRow { name(fact.field); value(fact.value) }
+                    GridRow { name(fact.field).inFactRow(); value(fact.value).inFactRow() }
                 }
             }
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: PageMetrics.factRowSpacing) {
                 ForEach(facts, id: \.field.id) { fact in
-                    VStack(alignment: .leading, spacing: 2) { name(fact.field); value(fact.value) }
+                    VStack(alignment: .leading, spacing: Spacing.tight) {
+                        name(fact.field).inFactRow(alignment: .bottomLeading)   // by its own value
+                        value(fact.value).inFactRow()
+                    }
                 }
             }
         }
     }
 
     private func name(_ field: FieldDefinition) -> some View {
-        Text(field.name).font(.subheadline).foregroundStyle(.secondary)
+        Text(field.name).role(.label)
     }
 
     /// A value as print sets it; a page it holds, linked to it.
@@ -124,27 +132,27 @@ struct EntryView: View {
                 Text(Typeset.printed(value.display { pageName($0) } ?? ""))
             }
         }
-        .font(.authored(.body))
-        .foregroundStyle(Color(Look.ink))
-        .tint(Color(Look.ink))   // a link underlined, not coloured
+        .role(.value)
+        .tint(.ink)   // a link underlined, not coloured
     }
 
     /// Where else the world mentions it: each page as the pages list shows it, with the sentence
     /// there that does, in the author's words.
     private func mentionedIn(_ mentions: [WikiEntry.Mention]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: PageMetrics.afterHeading) {
             Text("Mentioned In")
-                .font(.headline)
-                .foregroundStyle(.secondary)
+                .role(.heading)
                 .accessibilityAddTraits(.isHeader)
-            ForEach(mentions, id: \.page) { mention in
-                if let other = library.pages.first(where: { $0.id == mention.page }) {
-                    Button { library.selection = other.id } label: {
-                        PageRow(page: other, line: mention.quote.map { Typeset.printed("\"\($0)\"") }, lineLimit: nil)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .contentShape(.rect)
+            VStack(alignment: .leading, spacing: Spacing.row) {
+                ForEach(mentions, id: \.page) { mention in
+                    if let other = library.pages.first(where: { $0.id == mention.page }) {
+                        Button { library.selection = other.id } label: {
+                            PageRow(page: other, line: mention.quote.map { Typeset.printed("\"\($0)\"") }, lineLimit: nil)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
@@ -172,8 +180,8 @@ private struct PageWriting: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(library: library) }
 
-    func makeUIView(context: Context) -> UITextView {
-        let tv = UITextView(usingTextLayoutManager: true)
+    func makeUIView(context: Context) -> ReadingTextView {
+        let tv = ReadingTextView(usingTextLayoutManager: true)
         tv.isEditable = false
         tv.isScrollEnabled = false
         tv.backgroundColor = .clear
@@ -185,14 +193,13 @@ private struct PageWriting: UIViewRepresentable {
         return tv
     }
 
-    func updateUIView(_ tv: UITextView, context: Context) {
-        if tv.attributedText != text { tv.attributedText = text }
+    func updateUIView(_ tv: ReadingTextView, context: Context) {
+        tv.show(text)
     }
 
-    func sizeThatFits(_ proposal: ProposedViewSize, uiView tv: UITextView, context: Context) -> CGSize? {
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView tv: ReadingTextView, context: Context) -> CGSize? {
         guard let width = proposal.width, width.isFinite else { return nil }
-        let fitted = tv.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
-        return CGSize(width: width, height: ceil(fitted.height))
+        return CGSize(width: width, height: tv.height(in: width))
     }
 
     @MainActor final class Coordinator: NSObject, UITextViewDelegate {
@@ -221,5 +228,46 @@ private struct PageWriting: UIViewRepresentable {
             guard library.pages.contains(where: { $0.id == page }) else { return }
             DispatchQueue.main.async { [library] in library.selection = page }   // this page goes away
         }
+    }
+}
+
+/// The text view of the page's writing where the page is read. It keeps the writing set for the
+/// column it's given (`ReadingType`), setting it again in place when that changes, as the
+/// editor's does (`PageTextView`).
+final class ReadingTextView: UITextView {
+    /// The writing as it was handed over, before it was set for a column: what the next is
+    /// compared with.
+    private var source: NSAttributedString?
+    /// How the writing is set now; nil until it's measured for a column.
+    private var reading: ReadingType?
+
+    /// Shows `text`, unless it's what is showing.
+    func show(_ text: NSAttributedString) {
+        guard text != source else { return }
+        source = text
+        attributedText = text
+        reading = nil
+    }
+
+    /// How tall the writing is in a column `width` wide, its lines set for that column.
+    func height(in width: CGFloat) -> CGFloat {
+        set(for: width)
+        return ceil(sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // Laid out in a column, or on a screen, it wasn't last measured for: set for this one,
+        // and measured again.
+        if bounds.width > 0, set(for: bounds.width) { invalidateIntrinsicContentSize() }
+    }
+
+    /// Sets the writing for a column `width` wide, if it isn't; returns whether it had to.
+    @discardableResult private func set(for width: CGFloat) -> Bool {
+        let reading = ReadingType(columnWidth: width, displayScale: traitCollection.displayScale)
+        guard reading != self.reading else { return false }
+        self.reading = reading
+        reading.restyle(textStorage)
+        return true
     }
 }
