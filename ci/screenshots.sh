@@ -7,9 +7,11 @@
 #
 #   TIER=core|full    which scenes (default full); core is the quick set
 #   ONLY="a b c"      only these scenes, whatever their tier
+#   SHARD=1 SHARDS=2  this runner's share: every SHARDS-th scene (default all), so a
+#                     pose's scenes can be split across runners
 #
 # Output: shots/<pose>/<scene>[-<variant>].png and .json, .metrics.json where the scene shows a
-# page (its type, as the app measured it), and shots/<pose>/expected.txt (every shot that
+# page (its type, as the app measured it), and shots/<pose>/expected-<shard>.txt (every shot that
 # should exist, so a missing one is noticed).
 #
 # A shot is taken when the app says its scene is on screen (it makes Documents/scene-ready in
@@ -23,10 +25,13 @@ APP="${1:?the built app}"
 POSE="${2:?closed or open}"
 TIER="${TIER:-full}"
 ONLY="${ONLY:-}"
+SHARD="${SHARD:-1}"
+SHARDS="${SHARDS:-1}"
 BUNDLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")"
 OUT="shots/$POSE"
 mkdir -p "$OUT"
-: > "$OUT/expected.txt"
+EXPECTED="$OUT/expected-$SHARD.txt"
+: > "$EXPECTED"
 
 # Show the on-screen keyboard instead of assuming a hardware keyboard.
 defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false
@@ -60,14 +65,14 @@ fi
 # The screen's accessibility tree, as JSON with its keys in order: axe writes them in no
 # fixed order, so two dumps of the same screen differed byte for byte. Folded, axe can
 # first see the Duo's displays mid-change ("inconsistent screen layout. Try again."), so
-# it is asked again; what it said when it failed is kept in axe-errors.txt.
+# it is asked again; what it said when it failed is kept in axe-errors-<shard>.txt.
 tree() {
   local tries=0
   until axe describe-ui --udid "$UDID" 2> "$OUT/axe.err" \
         | python3 -c 'import json, sys; json.dump(json.load(sys.stdin), sys.stdout, sort_keys=True, indent=1)' > "$1" 2>/dev/null \
         && [ -s "$1" ]; do
     if (( ++tries >= ${2:-3} )); then
-      { echo "== $1"; cat "$OUT/axe.err"; } >> "$OUT/axe-errors.txt"; rm -f "$1"
+      { echo "== $1"; cat "$OUT/axe.err"; } >> "$OUT/axe-errors-$SHARD.txt"; rm -f "$1"
       return 1
     fi
     sleep 1
@@ -108,7 +113,7 @@ settle() {
   start=$SECONDS
   if [ "$TREES" = unknown ]; then
     sleep 2
-    if tree "$shot.tmp" 6; then TREES=yes; else TREES=no; echo "   (no accessibility trees in this pose: see axe-errors.txt)"; fi
+    if tree "$shot.tmp" 6; then TREES=yes; else TREES=no; echo "   (no accessibility trees in this pose: see axe-errors-$SHARD.txt)"; fi
     rm -f "$shot.tmp"
   fi
   [ "$marked" = yes ] && return 0
@@ -142,7 +147,7 @@ settle() {
 shoot() {
   local name="$1" tap="$2"; shift 2
   local shot="$OUT/$name"
-  echo "$name" >> "$OUT/expected.txt"
+  echo "$name" >> "$EXPECTED"
   local began=$SECONDS data
   rm -f "$shot.settle"
   data=$(container)
@@ -176,11 +181,14 @@ wanted() {   # scene tier
 trim() { sed -E 's/^[[:space:]]+|[[:space:]]+$//g' <<<"$1"; }
 
 # name | tier | poses | variants | launch arguments | tap
+count=0
 while IFS='|' read -r name tier poses variants arguments tap; do
   name=$(trim "$name"); [[ -z "$name" || "$name" == \#* ]] && continue
   tier=$(trim "$tier"); poses=$(trim "$poses"); variants=$(trim "$variants"); tap=$(trim "${tap:-}")
   [[ " $poses " == *" $POSE "* ]] || continue
   wanted "$name" "$tier" || continue
+  count=$((count + 1))
+  [ $(((count - 1) % SHARDS)) -eq $((SHARD - 1)) ] || continue
   eval "args=($arguments)"   # the file is this repository's own
   for variant in $variants; do
     # One shot that fails (the app didn't launch, a tap found nothing) is reported and the

@@ -104,16 +104,18 @@ jobs:
             CODE_SIGNING_ALLOWED=NO > spm.log || { tail -40 spm.log; exit 1; }
 
   # Boots the Duo while the other Mac builds, then renders the scenes (ci/scenes.txt) in
-  # one pose each: the outer display, and the inner one.
+  # one pose each (the outer display, and the inner one), each pose's scenes split between
+  # two Macs: sixty shots at about twenty seconds each overran one runner's time limit.
   shots:
     needs: changes
-    timeout-minutes: 25
+    timeout-minutes: 40
     if: needs.changes.outputs.changed == 'true'
     runs-on: xcode-27
     strategy:
       fail-fast: false
       matrix:
         pose: [closed, open]
+        shard: [1, 2]
     permissions:
       actions: read
       contents: read
@@ -182,11 +184,11 @@ jobs:
         env:
           TIER: ${{ needs.changes.outputs.tier }}
           ONLY: ${{ needs.changes.outputs.only }}
-        run: ci/screenshots.sh app/WorldEditor.app ${{ matrix.pose }}
+        run: SHARD=${{ matrix.shard }} SHARDS=2 ci/screenshots.sh app/WorldEditor.app ${{ matrix.pose }}
       - uses: actions/upload-artifact@v7
-        if: ${{ !cancelled() }}   # what was captured, even when a shot failed
+        if: always()   # what was captured, even when a shot failed or the job ran out of time
         with:
-          name: shots-${{ matrix.pose }}
+          name: shots-${{ matrix.pose }}-${{ matrix.shard }}
           path: shots
           retention-days: 1
           compression-level: 0
